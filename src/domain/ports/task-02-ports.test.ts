@@ -15,11 +15,15 @@ function projectFile(relPath: string): string {
 }
 
 function grepForbidden(dir: string, pattern: RegExp): string {
-  const { stdout } = spawnSync(
+  const { stdout, error, status } = spawnSync(
     'grep',
-    ['-r', '--include=*.ts', pattern.source, dir],
+    ['-r', '-E', '--include=*.ts', pattern.source, dir],
     { encoding: 'utf-8', cwd: ROOT }
   );
+  if (error !== undefined || (status !== null && status > 1)) {
+    const detail = error ? `spawn error: ${error.message}` : `grep exit status ${status}`;
+    throw new Error(`grepForbidden failed (${detail})`);
+  }
   return stdout.trim();
 }
 
@@ -321,14 +325,6 @@ describe('ClockPort contract', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     const importLines = source.split('\n').filter(line => line.startsWith('import'));
     assert.equal(importLines.length, 0, 'ClockPort must have no imports');
-  });
-
-  test('declares now() with no arguments and returns number', () => {
-    const source = readFileSync(projectFile(sourceFile), 'utf-8');
-    assert.ok(
-      /now\s*\(\s*\)\s*:\s*number/.test(source),
-      'must have now(): number'
-    );
   });
 
   test('now() accepts no arguments', () => {
