@@ -1,14 +1,14 @@
 Task: 07
-Title: Domain-layer unit tests
-Phase: 5
+Title: Application ensemble services
+Phase: 2
 Route: full
-Slice: Observability, Tests, and Documentation
+Slice: Panel Fan-out + Synthesis, Judge Analysis
 Dependencies: 06
-Scope: Write pure domain-layer unit tests requiring zero mocks. Test `Analysis` schema validation (rejects missing required fields, rejects malformed JSON, accepts valid full Analysis, accepts Analysis with empty arrays). Test prompt builder output shapes (`buildSynthesisPrompt` includes panel content strings, `buildJudgePrompt` returns system and user prompts with panel content references). Test `FusionError` constructor sets code, message, and details correctly. All tests are colocated in `__tests__/` subdirectories adjacent to the source files under test.
-Acceptance Criteria: AC-14 (domain portion)
-NFRs: NFR-1
-Gate Criteria: Phase 5 Gate 2 (≥80% branch coverage on src/domain/)
+Scope: Implement the three application services that form the ensemble pipeline: PanelRunner (dispatches parallel ChatModelPort.complete() calls via Promise.allSettled, collects failed_models, throws FusionError('all_panels_failed') when every model rejects), JudgeStep (calls ChatModelPort.complete() with responseFormat json_object, parses via safeParseAnalysis, returns Analysis | null on failure without throwing, logs errors via LoggerPort), and SynthesizeStep (calls ChatModelPort.complete() with synthesis prompt, accepts optional Analysis parameter). All services depend only on ChatModelPort and domain types — zero infrastructure imports.
+Acceptance Criteria: AC-7 (partial — PanelRunner logic), AC-8 (partial — JudgeStep logic), AC-9 (partial — SynthesizeStep)
+NFRs: NFR-1, NFR-5
+Gate Criteria: Phase 2 Gate 1 (services ready for orchestration), Phase 2 Gate 2 (JudgeStep returns null on failure)
 Files:
-  - src/domain/model/__tests__/fusion-types.spec.ts (CREATE) — FusionError constructor sets code/message/details; ModelRef shape; ProviderType union
-  - src/domain/services/__tests__/analysis-schema.spec.ts (CREATE) — analysisSchema.safeParse rejects missing consensus, missing contradictions, malformed JSON; accepts valid full Analysis; accepts Analysis with empty arrays
-  - src/domain/services/__tests__/prompt-builders.spec.ts (CREATE) — buildSynthesisPrompt includes panel content strings in output; buildJudgePrompt returns system and user prompts with panel content references
+  - src/application/usecases/panel-runner.ts (CREATE) — PanelRunner: run(request, panelModels) → { responses: PanelResponse[]; failedModels: FailedModelInfo[] }; throws FusionError('all_panels_failed') on total failure
+  - src/application/usecases/judge-step.ts (CREATE) — JudgeStep: analyze(panelResponses) → Promise<Analysis | null>; uses ChatModelPort.complete() with responseFormat json_object, safeParseAnalysis, logs errors without throwing
+  - src/application/usecases/synthesize-step.ts (CREATE) — SynthesizeStep: synthesize(request, panelResponses, analysis?) → Promise<string>; builds prompt from panel outputs and optional analysis, calls ChatModelPort.complete() (non-streamed)

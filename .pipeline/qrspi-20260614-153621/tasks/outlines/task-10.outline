@@ -1,0 +1,13 @@
+Task: 10
+Title: Streaming in application layer
+Phase: 3
+Route: full
+Slice: Streaming Synthesis + Timeouts
+Dependencies: 09
+Scope: Modify SynthesizeStep to use ChatModelPort.stream() instead of complete(), returning AsyncIterable<ChatStreamEvent>. Modify RunFusionUseCase to yield progress events during panel and judge phases, pipe ChatStreamEvent tokens into FusionStreamEvent.content_delta events, and yield done with usage and failed_models. The use case is revisited cross-phase (originally created Task 03, modified Task 08) to add streaming orchestration — the AsyncIterable return type was defined from the start, making this a natural extension.
+Acceptance Criteria: AC-10 (partial — progress events, content_delta streaming)
+NFRs: NFR-1, NFR-4
+Gate Criteria: Phase 3 Gate 1 (use case yields progress and content_delta events)
+Files:
+  - src/application/usecases/synthesize-step.ts (MODIFY) — Change synthesize() to call ChatModelPort.stream() instead of complete(); return AsyncIterable<ChatStreamEvent>
+  - src/application/usecases/run-fusion-use-case.ts (MODIFY) — Yield FusionStreamEvent.progress events during panel and judge phases; pipe ChatStreamEvent.token → FusionStreamEvent.content_delta; yield done with usage and failed_models

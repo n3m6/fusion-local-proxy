@@ -1,63 +1,4 @@
-All ten outlines and the plan are fully loaded. Now I will cross-reference every outline field against the goals, requirements, design, structure, and phase manifest.
-
----
-
-## Review Cross-Check
-
-**AC coverage mapping** (goals.md → outlines):
-
-| AC | Outline |
-|----|---------|
-| AC‑1 | Task 01 |
-| AC‑2 | Task 01 (establishes), all later tasks maintain |
-| AC‑3 | Task 01 (`complete`), Task 04 (`stream`) |
-| AC‑4 | Task 01 |
-| AC‑5 | Task 01 |
-| AC‑6 | Task 01 |
-| AC‑7 | Task 02 |
-| AC‑8 | Task 03 |
-| AC‑9 | Task 02 (panel), Task 03 (judge) |
-| AC‑10 | Task 04 |
-| AC‑11 | Task 05 |
-| AC‑12 | Task 04 |
-| AC‑13 | Task 06 |
-| AC‑14 | Task 07 (domain), Task 08 (application) |
-| AC‑15 | Task 09 |
-
-**NFR coverage mapping** (goals.md → outlines):
-
-| NFR | Outline(s) |
-|-----|------------|
-| NFR‑1 (dependency rule) | Tasks 01–09 |
-| NFR‑2 (Hono confinement) | Tasks 01, 04, 05 |
-| NFR‑3 (SDK confinement) | Tasks 01, 05 |
-| NFR‑4 (streaming guarantees) | Task 04 |
-| NFR‑5 (graceful degradation) | Tasks 02, 03 |
-| NFR‑6 (ConfigPort abstraction) | Task 01 |
-| NFR‑7 (observability) | Task 06 |
-
-**Replan gate traceability** (phase-manifest.md → outlines):
-
-| Gate | Outline(s) |
-|------|------------|
-| Phase 1 Gate 1 | Task 01 |
-| Phase 1 Gate 2 | Task 01 |
-| Phase 2 Gate 1 | Task 02 (panel), Task 03 (judge) |
-| Phase 2 Gate 2 | Task 03 |
-| Phase 3 Gate 1 | Task 04 |
-| Phase 3 Gate 2 | Task 04 |
-| Phase 4 Gate 1 | Task 05 |
-| Phase 4 Gate 2 | Task 05 |
-| Phase 5 Gate 1 | Task 06 |
-| Phase 5 Gate 2 | Tasks 07, 08 |
-
-**Dependency graph**: 01 ← 02 ← 03 ← 04 ← 05 ← 06 ← 07, 08; 05 ← 09. All backward, acyclic.
-
-**Slice/phase labels**: Every outline’s `Slice` field matches a design-document slice verbatim; every `Phase` field matches the phase manifest.
-
-**File paths**: All are exact (`src/domain/model/message.ts`, not `src/domain/`). Every entry carries CREATE or MODIFY.
-
-**Placeholder scan**: Zero occurrences of `TBD`, `TODO`, `similar to`, or `see design.md` in any outline’s substantive fields.
+Now I have all the information I need. Let me compile the final review.
 
 ---
 
@@ -66,30 +7,30 @@ All ten outlines and the plan are fully loaded. Now I will cross-reference every
 ### Review Findings
 | Area | Status | Notes |
 |------|--------|-------|
-| Goals coverage | PASS | All 15 acceptance criteria map to at least one outline; plan overview’s Coverage Notes agree. |
-| NFR coverage | PASS | All 7 non-functional requirements appear in at least one outline’s NFRs field with a traceable verification path. |
-| Dependency correctness | PASS | Every dependency points to an earlier task; no cycles; wave analysis is consistent. |
-| Phase and wave coherence | PASS | Phase grouping matches the phase manifest; wave numbering correctly reflects the linear chain with parallel Tasks 06/09 and 07/08 at the end. |
-| Phase cohesion | PASS | Each phase serves a single proof goal (Phase 2 bundles two co-dependent slices; the coupling is explict and justified). |
-| Cross-phase coupling | PASS | Every late-phase MODIFY of an earlier-phase file is documented and justified in the outline’s Scope (e.g., Task 03 and Task 04 explicitly note they “revisit” files from Tasks 01/02). |
-| Outline completeness | PASS | Scope, Files, Acceptance Criteria, NFRs, and Gate Criteria are populated with concrete, non-vague content in all nine outlines. |
-| Acceptance traceability | PASS | Each outline names the AC IDs it advances; those references are consistent with the plan overview. |
-| Outline traceability | PASS | AC IDs exist in goals.md; Slice names match design‑doc slices exactly; Phase numbers match the phase manifest. |
-| File specificity | PASS | Every Files entry is an exact path with CREATE or MODIFY; no directories or buckets. |
-| Test coverage scope | PASS | AC and NFR fields in each outline define a testable surface that includes error/edge paths (e.g., all‑panel‑fail, judge‑safe‑parse‑fallback, timeout‑abort). |
-| Test strategy depth | PASS | Each phase has an integration‑level verification path: Phase 1 passthrough, Phase 2 ensemble pipeline with degradation, Phase 3 SSE stream, Phase 4 Anthropic event sequence, Phase 5 per‑stage logging and stubbed‑port tests. |
-| Replan gate traceability | PASS | Every concrete replan gate criterion from the phase manifest is referenced in at least one outline’s Gate Criteria field. |
-| Completed-phase preservation | N/A | No loopback context. |
-| AGENTS compliance | N/A | No AGENTS.md provided. |
-| Placeholder-free quality | PASS | No TBD, TODO, “similar to”, or “see design.md” language in any outline or plan section. |
+| Goals coverage | PASS | All 15 acceptance criteria (AC-1 through AC-15) map to at least one outline. The plan's Coverage Notes table and outlines agree on every mapping. |
+| NFR coverage | PASS | All 7 non-functional requirements (NFR-1 through NFR-7) map to at least one outline with Gate Criteria providing verification scope. Minor note: Task 04 does not list NFR-1 in its NFRs field despite the plan's Coverage Notes claiming it — but NFR-1 is covered by Tasks 01, 02, 03, 05 and all later tasks, so no gap exists. |
+| Dependency correctness | PASS | All 18 dependencies point strictly backward. The graph is acyclic. Transitive dependencies ensure cross-phase MODIFY tasks (e.g., Task 11 modifying a Task 04 file) have the prerequisite chain satisfied. |
+| Phase and wave coherence | PASS | Wave analysis matches the dependency graph exactly — 16 waves, 2 parallel opportunities (Wave 3: Tasks 03/04; Wave 9: Tasks 10/11). Phase groupings (Phases 1–5) align with Design document phases. |
+| Phase cohesion | PASS | Every phase groups slices with a coherent proof goal: Phase 1 proves the hexagonal skeleton, Phase 2 proves the ensemble pipeline, Phase 3 proves streaming, Phase 4 proves Anthropic support, Phase 5 proves observability/test coverage. Task 06 combines Slice 2 and Slice 3 domain types, but this is justified by the Design grouping both slices into Phase 2. |
+| Cross-phase coupling | PASS | Every cross-phase file modification is explicitly identified and justified in the task Scope: Task 08 replaces passthrough with ensemble; Task 09 extends ChatModelPort with stream(); Tasks 10–14 add streaming/Anthropic behavior; Task 15 enhances logging. No unjustified revisiting. |
+| Outline completeness | PASS | All 18 outlines have concrete Scope descriptions, exact Files with CREATE/MODIFY actions, populated Acceptance Criteria, NFRs, and Gate Criteria. No outline relies on another for its own definition. |
+| Acceptance traceability | PASS | Every outline names the AC IDs it advances. The plan's Coverage Notes, phase manifest, and outlines are mutually consistent. For partial ACs (e.g., AC-3 shared by Tasks 02 and 09), the split is explicit. |
+| Outline traceability | PASS | All AC IDs reference real labels from goals.md (AC-1 through AC-15). Slice fields match Design document slices — Tasks 06–08 abbreviate the combined Slice 2/3 names slightly but the reference is unambiguous. Phase fields (1–5) match the phase manifest exactly. |
+| File specificity | PASS | Every file is an exact path with CREATE or MODIFY action (e.g., `src/domain/ports/chat-model-port.ts (CREATE)`, `src/application/usecases/run-fusion-use-case.ts (MODIFY)`). No directories or vague buckets. |
+| Test coverage scope | PASS | Every outline's ACs and NFRs define a testable surface. Error and edge cases are covered: judge failure returns null (AC-8), panel all-fail throws FusionError (AC-7), timeout cancellation surfaces error (AC-12), malformed JSON fails safeParse (AC-8). Test implementation is deferred to Tasks 16–17. |
+| Test strategy depth | PASS | Every phase has an integration-level verification path: Phase 1 (curl receives ChatCompletion JSON), Phase 2 (response references panel/judge content; graceful degradation when judge unreachable), Phase 3 (SSE stream with keep-alive + [DONE]; timeout cancellation), Phase 4 (6-event Anthropic SSE sequence), Phase 5 (structured log lines; npm test ≥80% branch coverage). |
+| Replan gate traceability | PASS | All 10 concrete replan gate criteria (2 per phase × 5 phases) are referenced in at least one outline's Gate Criteria field. Phase 1 Gate 1 appears in Task 05; Phase 3 Gate 1 appears in Tasks 09–12 with partial contributions; all others map cleanly. |
+| Completed-phase preservation | N/A | No loopback context provided (Next Remaining Phase = 1, no Prior Phase Manifest, Completed Phases Context, or Failure Context). |
+| AGENTS compliance | N/A | No AGENTS Guidance provided. |
+| Placeholder-free quality | PASS | Zero occurrences of TBD, TODO, "similar to", "see design.md", or any placeholder language in any outline or plan section. Verified by grep across all 18 outlines and plan.md. |
 
 ### Fix Guidance
 None.
 
 ### Weakest Areas
-1. **Test strategy depth for Phase 1** — Phase 1 consists of a single task whose integration path is the passthrough curl call. There is no cross-task integration test within the phase. Acceptable because the passthrough exercises every architectural layer end-to-end and later phases add the richer cross-component scenarios.
-2. **Wave granularity** — Waves 1–5 each contain exactly one task, meaning no parallelism is possible until Waves 6–7. Acceptable because the linear dependency chain (passthrough → panel → judge → stream → Anthropic) is inherent to the incremental vertical-slice approach; parallelising would create integration risk without benefit.
-3. **Task 06 dual responsibility** — Task 06 enhances the logger *and* creates `vitest.config.ts`. Acceptable because `vitest.config.ts` is a tiny boilerplate file (∼8 lines) that naturally belongs with the test-infrastructure setup and does not dilute the task’s observability focus.
+1. **NFR-1 mapping gap in Task 04** — The plan's Coverage Notes maps NFR-1 (dependency rule) to Tasks 01–05, but Task 04's NFRs field lists only NFR-3 and NFR-6. This is acceptable because NFR-1 is still covered by Tasks 01, 02, 03, 05 and maintained by all later tasks (06–18 all list NFR-1). The spec writer for Task 04 should still be aware that the adapter code must respect the dependency rule.
+2. **Task 06 domain scope breadth** — Task 06 creates domain types for both Slice 2 (PanelResponse, PanelResult, synthesis prompt builder) and Slice 3 (Analysis schema, judge prompt builder) in a single outline. This yields a relatively large task spanning two conceptual areas. Acceptable because the Design document groups both slices into Phase 2, the artifacts are all pure domain code, and the dependency chain is correct — no task depends on only half of Task 06's outputs.
+3. **Slice naming abbreviation in plan table** — The plan's Task Order table maps Tasks 06–08 to a combined Slice name "Panel Fan-out + Synthesis, Judge Analysis" rather than the Design document's exact names "Panel Fan-out + Non-streamed Synthesis" and "Judge Analysis with Graceful Degradation." Acceptable because the intent is unambiguous, the outlines reference correct Design slices, and the slight abbreviation loses no meaningful information.
 
 ### Summary
-PASS — the plan and all nine outlines are concrete, internally consistent, traceable to goals and design, free of placeholders, and sufficient for downstream task-spec generation.
+PASS — the plan and all 18 task outlines are concrete, internally consistent, fully traceable to goals and design, free of placeholders, and sufficient for downstream task-spec generation across all five phases.

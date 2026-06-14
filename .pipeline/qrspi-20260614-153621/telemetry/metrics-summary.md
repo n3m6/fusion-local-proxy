@@ -6,7 +6,7 @@
 - **Final status:** stopped-partial
 - **Total duration:** 6197 s
 - **Stages completed:** 5 of 10
-- **Resume count:** 0
+- **Resume count:** 1
 - **Backward loop count:** 0
 
 ## Stage Durations
@@ -19,6 +19,7 @@
 | structure | 1 | 514 | PASS |
 | plan | 1 | 937 | PARTIAL |
 | implement | 1 | 1624 | FAIL |
+| plan | 1 | 2615 | PARTIAL |
 
 ## Child Agent Calls
 
@@ -34,6 +35,8 @@
 | plan | qrspi-plan-writer | 1 | 1 | 0 |
 | plan | qrspi-plan-reviewer | 1 | 1 | 0 |
 | implement | qrspi-integration-checker | 1 | 1 | 0 |
+| plan | qrspi-plan-writer | 1 | 1 | 0 |
+| plan | qrspi-plan-reviewer | 1 | 1 | 0 |
 
 ## Review Rounds
 
@@ -44,6 +47,7 @@
 | design | reviewer | 1 |
 | structure | reviewer | 1 |
 | plan | reviewer | 1 |
+| plan | reviewer | 1 |
 
 ## Retry and Loop Counts
 
@@ -51,14 +55,14 @@
 - **E2E remediation rounds:** 0
 - **Regression remediation rounds:** 0
 - **Acceptance loop rounds:** 0
-- **Review round cap hits:** 1
+- **Review round cap hits:** 2
 - **Backward loops:** 0
 
 ## Human Gate Outcomes
 
 | Stage | Presentations | Rejections | Approvals |
 | ----- | ------------- | ---------- | --------- |
-| plan | 0 | 0 | 1 |
+| plan | 0 | 0 | 2 |
 
 ## Test Evidence Quality
 
@@ -69,4 +73,4 @@
 ## Code Health
 
 - **Coverage status:** SKIPPED
-- **Plan/Replan terminal review states:** plan:unclean-cap
+- **Plan/Replan terminal review states:** plan:unclean-cap, replan:unclean-cap

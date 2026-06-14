@@ -1,0 +1,15 @@
+Task: 14
+Title: Anthropic inbound adapter
+Phase: 4
+Route: full
+Slice: Anthropic API Support
+Dependencies: 13
+Scope: Create the Anthropic inbound HTTP adapter: route (POST /v1/messages), translator (anthropicRequestToFusion mapping ContentBlock arrays to canonical Message[], anthropicContentToText helper for flattening content blocks), and SSE encoder (state machine emitting all 6 Anthropic event types — message_start, content_block_start, content_block_delta, content_block_stop, message_delta, message_stop — each with event: and data: SSE fields). Mount the route in server.ts (cross-phase revisit of Task 05). The route calls the same FusionService unchanged — no application or domain code is modified.
+Acceptance Criteria: AC-11
+NFRs: NFR-1, NFR-2
+Gate Criteria: Phase 4 Gate 1 (6-event SSE sequence verified), Phase 4 Gate 2 (no Anthropic types leak to domain/app)
+Files:
+  - src/infrastructure/inbound/http/anthropic/route.ts (CREATE) — POST /v1/messages route: parses Anthropic-format body, translates to FusionRequest, calls FusionService.runFusion(), encodes response stream as Anthropic SSE
+  - src/infrastructure/inbound/http/anthropic/translator.ts (CREATE) — anthropicRequestToFusion() maps MessageCreateParams to FusionRequest; anthropicContentToText() helper for flattening content blocks to string
+  - src/infrastructure/inbound/http/anthropic/sse-encoder.ts (CREATE) — AnthropicStreamState interface and encodeAnthropicSSE() state machine emitting 6-event sequence with event: and data: SSE fields
+  - src/infrastructure/inbound/http/server.ts (MODIFY) — Mount POST /v1/messages route alongside existing OpenAI routes

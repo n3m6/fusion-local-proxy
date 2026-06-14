@@ -1,0 +1,13 @@
+Task: 13
+Title: Anthropic outbound adapter
+Phase: 4
+Route: full
+Slice: Anthropic API Support
+Dependencies: 12
+Scope: Implement AnthropicChatAdapter as a ChatModelPort via @anthropic-ai/sdk: complete() maps ChatRequest → Anthropic MessageCreateParams and SDK response → ChatResponse; stream() maps SDK MessageStream events → ChatStreamEvent tokens. Register it in ChatAdapterFactory for provider.type === 'anthropic'. The @anthropic-ai/sdk is confined entirely to this adapter (NFR-3). The factory modification is a cross-phase revisit (originally created Task 04) to add the Anthropic provider type.
+Acceptance Criteria: AC-11 (partial — outbound adapter)
+NFRs: NFR-1, NFR-3
+Gate Criteria: Phase 4 Gate 2 (no Anthropic types leak to domain/app)
+Files:
+  - src/infrastructure/outbound/llm/anthropic-chat-adapter.ts (CREATE) — AnthropicChatAdapter implements ChatModelPort via @anthropic-ai/sdk: maps ChatRequest → MessageCreateParams, SDK response → ChatResponse; stream() maps MessageStream events → ChatStreamEvent
+  - src/infrastructure/outbound/llm/chat-adapter-factory.ts (MODIFY) — Register AnthropicChatAdapter for provider.type === 'anthropic'

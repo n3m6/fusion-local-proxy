@@ -1,17 +1,15 @@
 Task: 02
-Title: Panel fan-out + non-streamed synthesis
-Phase: 2
+Title: Domain ports
+Phase: 1
 Route: full
-Slice: Panel Fan-out + Non-streamed Synthesis
+Slice: Passthrough Chat Completion (OpenAI)
 Dependencies: 01
-Scope: Introduce multi-model fan-out with parallel panel execution via `PanelRunner` (Promise.allSettled, failed_models collection, all_panels_failed FusionError) and a non-streamed `SynthesizeStep` that aggregates panel outputs via `ChatModelPort.complete()`. Replace the passthrough logic in `RunFusionUseCase` with the panel → synthesize orchestrated sequence. Add the `PanelResponse` domain type and the synthesis prompt builder. This task establishes the fan-out and aggregation path but does not yet include the judge or streaming.
-Acceptance Criteria: AC-7, AC-9 (panel-referencing portion)
-NFRs: NFR-1, NFR-5 (panel all-fail fatal, partial failure in metadata)
-Gate Criteria: Phase 2 Gate 1 (response references panel outputs)
+Scope: Define the four outbound port interfaces in the domain layer: ChatModelPort (with complete() signature only — stream() added in Phase 3), ConfigPort, LoggerPort, and ClockPort. All ports reference only domain model types. These interfaces are the contracts that infrastructure adapters will implement and application use cases will consume.
+Acceptance Criteria: AC-3 (partial — complete() signature)
+NFRs: NFR-1
+Gate Criteria: Phase 1 Gate 2 (zero SDK/framework imports in domain)
 Files:
-  - src/domain/model/panel-types.ts (CREATE) — PanelResponse (model ref, content, usage, latency) and PanelResult discriminated union (fulfilled/rejected per model)
-  - src/domain/services/prompt-builders.ts (CREATE) — buildSynthesisPrompt(panelResponses: PanelResponse[]): string — concatenates panel outputs
-  - src/application/usecases/panel-runner.ts (CREATE) — PanelRunner: calls ChatModelPort.complete() for each panel model via Promise.allSettled, collects failed_models, throws FusionError('all_panels_failed') when every model rejects
-  - src/application/usecases/synthesize-step.ts (CREATE) — SynthesizeStep: calls ChatModelPort.complete() with synthesis prompt built from panel responses (non-streamed); returns synthesized content string; accepts optional Analysis parameter (unused until Task 03)
-  - src/application/usecases/run-fusion-use-case.ts (MODIFY) — Replace passthrough with orchestrated sequence: PanelRunner.run() → SynthesizeStep.synthesize() → yield content_delta + done stream event
-  - fusion.config.json (MODIFY) — Expand providers array with multiple role: "panel" entries and one role: "synthesizer" entry
+  - src/domain/ports/chat-model-port.ts (CREATE) — ChatModelPort interface with complete(request: ChatRequest): Promise<ChatResponse>; stream() deferred to Task 09
+  - src/domain/ports/config-port.ts (CREATE) — ConfigPort interface: getPanelModels(), getJudgeModel(), getSynthesizerModel(), getTimeoutMs()
+  - src/domain/ports/logger-port.ts (CREATE) — LoggerPort interface: logStageStart, logStageEnd, logFailedModels, logError
+  - src/domain/ports/clock-port.ts (CREATE) — ClockPort interface: now(): number (wraps Date.now() for testability)

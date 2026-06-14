@@ -1,0 +1,15 @@
+Task: 17
+Title: Application-layer unit tests
+Phase: 5
+Route: full
+Slice: Observability, Tests, and Documentation
+Dependencies: 16
+Scope: Write application-layer unit tests using vitest stubs (vi.fn() with mockResolvedValue/mockRejectedValue) for ChatModelPort, ConfigPort, LoggerPort, and ClockPort. Tests cover: PanelRunner (all fulfill, partial reject + partial fulfill populates failed_models, all reject throws FusionError('all_panels_failed')), JudgeStep (valid JSON parses to Analysis, invalid JSON returns null and calls LoggerPort.logError, complete() rejection returns null), SynthesizeStep (stream() yields tokens, content references panel outputs, with Analysis available prompt includes analysis fields), and RunFusionUseCase (full pipeline yields progress for panel and judge, content_delta from synthesis, done with usage and failed_models).
+Acceptance Criteria: AC-14 (application tests)
+NFRs: NFR-1
+Gate Criteria: Phase 5 Gate 2 (application test coverage with ≥80% branch coverage target)
+Files:
+  - src/application/usecases/__tests__/panel-runner.spec.ts (CREATE) — Stubbed ChatModelPort: all fulfill returns all responses; 1 reject + 2 fulfill returns partial success; all reject throws FusionError('all_panels_failed'); failed_models populated correctly
+  - src/application/usecases/__tests__/judge-step.spec.ts (CREATE) — Stubbed ChatModelPort returning valid JSON parses to Analysis; returning invalid JSON returns null and calls LoggerPort.logError; complete() rejection returns null
+  - src/application/usecases/__tests__/synthesize-step.spec.ts (CREATE) — Stubbed ChatModelPort.stream() yields tokens; synthesize() returns content referencing panel outputs; with Analysis available, prompt includes analysis fields
+  - src/application/usecases/__tests__/run-fusion-use-case.spec.ts (CREATE) — Full pipeline with stubbed ports: yields progress for panel and judge; yields content_delta from synthesis; yields done with usage and failed_models

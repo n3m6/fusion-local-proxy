@@ -1,15 +1,13 @@
 Task: 08
-Title: Application-layer unit tests
-Phase: 5
+Title: Ensemble orchestration and config
+Phase: 2
 Route: full
-Slice: Observability, Tests, and Documentation
-Dependencies: 06
-Scope: Write application-layer unit tests using stubbed ports (vi.fn()-based stubs for `ChatModelPort`, `ConfigPort`, `LoggerPort`, `ClockPort`). Test `PanelRunner` edge cases (all fulfill, partial reject, all reject throws `FusionError('all_panels_failed')`, failed_models populated correctly). Test `JudgeStep` (valid JSON parses to `Analysis`, invalid JSON returns `null` and logs via `LoggerPort`, `complete()` rejection returns `null`). Test `SynthesizeStep` (stubbed `stream()` yields tokens, content references panel outputs and analysis when available). Test `RunFusionUseCase` full pipeline (yields progress events for panel and judge, yields content_delta from synthesis, yields done with usage and failed_models). All tests use colocated `__tests__/` directories.
-Acceptance Criteria: AC-14 (application portion)
-NFRs: NFR-1
-Gate Criteria: Phase 5 Gate 2 (≥80% branch coverage on src/application/)
+Slice: Panel Fan-out + Synthesis, Judge Analysis
+Dependencies: 07
+Scope: Modify RunFusionUseCase to orchestrate the full ensemble pipeline — PanelRunner.run() → JudgeStep.analyze() → SynthesizeStep.synthesize() — yielding progress, content_delta, and done FusionStreamEvents. Implement graceful degradation: judge failure omits analysis and synthesis proceeds with raw panel responses. Expand fusion.config.json with multiple panel providers (role: "panel"), one judge provider (role: "judge"), and one synthesizer provider (role: "synthesizer"). The use case's cross-phase modification (originally created in Task 03) replaces the passthrough logic with the ensemble sequence.
+Acceptance Criteria: AC-7, AC-8, AC-9
+NFRs: NFR-1, NFR-5
+Gate Criteria: Phase 2 Gate 1 (response references panel and judge content), Phase 2 Gate 2 (judge-unreachable graceful degradation verified)
 Files:
-  - src/application/usecases/__tests__/panel-runner.spec.ts (CREATE) — Stubbed ChatModelPort: all fulfill returns all responses; 1 reject + 2 fulfill returns partial success; all reject throws FusionError('all_panels_failed'); failed_models populated correctly
-  - src/application/usecases/__tests__/judge-step.spec.ts (CREATE) — Stubbed ChatModelPort returning valid JSON parses to Analysis; returning invalid JSON returns null and calls LoggerPort.logError; complete() rejection returns null
-  - src/application/usecases/__tests__/synthesize-step.spec.ts (CREATE) — Stubbed ChatModelPort.stream() yields tokens; synthesize() returns content referencing panel outputs; with Analysis available, prompt includes analysis fields
-  - src/application/usecases/__tests__/run-fusion-use-case.spec.ts (CREATE) — Full pipeline with stubbed ports: yields progress for panel and judge; yields content_delta from synthesis; yields done with usage and failed_models
+  - src/application/usecases/run-fusion-use-case.ts (MODIFY) — Replace passthrough with orchestrated sequence: PanelRunner.run() → JudgeStep.analyze() (with graceful degradation) → SynthesizeStep.synthesize(); yield progress, content_delta, done events; wire LoggerPort for judge failure logging; pass optional Analysis to SynthesizeStep
+  - fusion.config.json (MODIFY) — Expand providers array: multiple role: "panel" entries, one role: "judge" entry, one role: "synthesizer" entry

@@ -1,17 +1,18 @@
 Task: 05
-Title: Anthropic API support (inbound + outbound)
-Phase: 4
+Title: Infrastructure inbound HTTP, DI, and bootstrap
+Phase: 1
 Route: full
-Slice: Anthropic API Support
-Dependencies: 04
-Scope: Add full Anthropic API compatibility. Create `AnthropicChatAdapter` implementing `ChatModelPort` via `@anthropic-ai/sdk` (canonical ↔ Anthropic SDK type mapping for both `complete()` and `stream()`). Register it in `ChatAdapterFactory` for `provider.type === 'anthropic'`. Create the inbound `/v1/messages` route with Anthropic-format request translation to canonical `FusionRequest` and a state-machine SSE encoder that emits all 6 Anthropic SSE event types (`message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`) in the documented sequence. Mount the new route in the Hono server. No domain or application layer changes are required — the existing `FusionService` is reused unchanged.
-Acceptance Criteria: AC-11
-NFRs: NFR-1, NFR-2, NFR-3 (anthropic SDK only in AnthropicChatAdapter)
-Gate Criteria: Phase 4 Gate 1 (all 6 Anthropic SSE events in sequence via curl), Phase 4 Gate 2 (no Anthropic-specific types leak to domain/app)
+Slice: Passthrough Chat Completion (OpenAI)
+Dependencies: 03, 04
+Scope: Create the Hono HTTP server and all inbound adapters: server.ts (app factory), OpenAI route (POST /v1/chat/completions with request/response translator for non-streamed JSON), and /v1/models stub route. Wire everything together in the DI container (manual composition root) and bootstrap entry point (main.ts). Create fusion.config.json with a single provider entry for passthrough mode. This task delivers the first runnable end-to-end system: a real OpenAI-compatible client can call the passthrough endpoint.
+Acceptance Criteria: AC-2, AC-5 (partial — endpoint working), AC-6 (partial — /v1/models stub)
+NFRs: NFR-1, NFR-2
+Gate Criteria: Phase 1 Gate 1 (valid ChatCompletion JSON response), Phase 1 Gate 2 (dependency rule verification completed)
 Files:
-  - src/infrastructure/outbound/llm/anthropic-chat-adapter.ts (CREATE) — AnthropicChatAdapter implements ChatModelPort via @anthropic-ai/sdk: complete() maps ChatRequest → MessageCreateParams, SDK response → ChatResponse; stream() maps SDK MessageStream events → ChatStreamEvent
-  - src/infrastructure/outbound/llm/chat-adapter-factory.ts (MODIFY) — Register AnthropicChatAdapter for provider.type === 'anthropic'
-  - src/infrastructure/inbound/http/anthropic/route.ts (CREATE) — POST /v1/messages route: parses Anthropic-format body, translates to FusionRequest, calls FusionService.runFusion(), encodes response stream as Anthropic SSE
-  - src/infrastructure/inbound/http/anthropic/translator.ts (CREATE) — anthropicRequestToFusion() mapping MessageCreateParams to FusionRequest; anthropicContentToText() helper for flattening content blocks to string
-  - src/infrastructure/inbound/http/anthropic/sse-encoder.ts (CREATE) — AnthropicStreamState interface and encodeAnthropicSSE() state machine emitting 6-event sequence (message_start → content_block_start → content_block_delta* → content_block_stop → message_delta → message_stop) with event: and data: SSE fields
-  - src/infrastructure/inbound/http/server.ts (MODIFY) — Mount createAnthropicRoute() for POST /v1/messages alongside existing OpenAI routes
+  - src/infrastructure/inbound/http/server.ts (CREATE) — Hono app factory: creates app, mounts OpenAI routes and /v1/models, exports createServer()
+  - src/infrastructure/inbound/http/openai/route.ts (CREATE) — POST /v1/chat/completions route: parses OpenAI-format body, translates to FusionRequest, calls FusionService.runFusion(), encodes response as JSON
+  - src/infrastructure/inbound/http/openai/translator.ts (CREATE) — Pure functions: openAiRequestToFusion() and fusionStreamToOpenAiResponse() (non-streaming only in Phase 1)
+  - src/infrastructure/inbound/http/models-route.ts (CREATE) — GET /v1/models stub returning a JSON array with at least one model entry from ConfigPort
+  - src/infrastructure/di/container.ts (CREATE) — Manual composition root: instantiates config → logger → adapters → use case → routes → server
+  - src/main.ts (CREATE) — Bootstrap: imports container, calls createServer(), starts @hono/node-server listener
+  - fusion.config.json (CREATE) — Single-provider config (type: "openai", role: "panel") for passthrough mode

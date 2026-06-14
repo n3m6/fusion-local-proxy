@@ -6,4 +6,4 @@
 | Task spec review | PARTIAL | N/A |
 
 ### Failure Inventory
-Task spec review did not converge for task 01.
+Task spec review did not converge for task 04.

@@ -1,0 +1,14 @@
+Task: 12
+Title: Streaming inbound route and config
+Phase: 3
+Route: full
+Slice: Streaming Synthesis + Timeouts
+Dependencies: 10, 11
+Scope: Modify the OpenAI inbound route to detect stream: true in the request and use Hono's streamSSE() helper — emitting keep-alive comments via StreamingApi.write() during panel/judge phases and data events via writeSSE() for synthesis chunks. Update the OpenAI translator to expose fusionStreamToOpenAiSSE() (delegates to sse-encoder). Add timeoutMs: 30000 to fusion.config.json (default 30s per LLM call, consumed by ConfigPort.getTimeoutMs()). The route and translator modifications are cross-phase revisits (originally created Task 05) to add SSE streaming behavior.
+Acceptance Criteria: AC-10, AC-12
+NFRs: NFR-1, NFR-2, NFR-4
+Gate Criteria: Phase 3 Gate 1 (end-to-end SSE streaming verified), Phase 3 Gate 2 (timeout verified)
+Files:
+  - src/infrastructure/inbound/http/openai/route.ts (MODIFY) — Detect stream: true in request; use Hono streamSSE() helper with writeSSE() for data events and write(': comment\\n\\n') for keep-alive; iterate FusionService.runFusion() async iterable
+  - src/infrastructure/inbound/http/openai/translator.ts (MODIFY) — Add fusionStreamToOpenAiSSE(event: FusionStreamEvent): string | null (delegates to sse-encoder)
+  - fusion.config.json (MODIFY) — Add timeoutMs: 30000 field (default 30s per LLM call)

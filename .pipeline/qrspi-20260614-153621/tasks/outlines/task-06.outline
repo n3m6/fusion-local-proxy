@@ -1,14 +1,15 @@
 Task: 06
-Title: Observability: enhanced ConsoleLoggerAdapter
-Phase: 5
+Title: Domain types and services for ensemble
+Phase: 2
 Route: full
-Slice: Observability, Tests, and Documentation
+Slice: Panel Fan-out + Synthesis, Judge Analysis
 Dependencies: 05
-Scope: Enhance `ConsoleLoggerAdapter` to emit structured JSON log lines for each pipeline stage (panel, judge, synthesis) containing stage name, duration in milliseconds via `ClockPort`, token counts (prompt + completion), and for the panel stage a `failed_models` array with model identifier, error code, and error message truncated to ≤200 characters. Wire the enhanced logger through the DI container. Create `vitest.config.ts` to enable the test infrastructure for Tasks 07 and 08.
-Acceptance Criteria: AC-13
-NFRs: NFR-1, NFR-7
-Gate Criteria: Phase 5 Gate 1 (structured log lines per stage with duration, tokens, failed_models)
+Scope: Add domain types and pure services needed for the ensemble pipeline: PanelResponse and PanelResult discriminated union (fulfilled/rejected per model), synthesis prompt builder (concatenates panel outputs), Analysis zod schema (consensus, contradictions, uniqueInsights, blindSpots with safeParse export), and judge prompt builder (constructs system/user prompts requesting structured analysis). All additions are pure domain code with no application or infrastructure imports.
+Acceptance Criteria: AC-7 (partial — panel types, prompt), AC-8 (partial — analysis schema, judge prompt), AC-9 (partial — synthesis prompt builder)
+NFRs: NFR-1, NFR-5 (types support graceful degradation)
+Gate Criteria: Phase 2 Gate 1 (domain types ready for ensemble), Phase 2 Gate 2 (schema supports safeParse degradation)
 Files:
-  - src/infrastructure/outbound/logging/console-logger-adapter.ts (MODIFY) — Enhance with per-stage child labels, Date.now() latency deltas via ClockPort, structured failed_models entries (modelId, errorCode, errorMessage truncated ≤200 chars); emit structured JSON lines: { stage, event, durationMs?, tokens?, failedModels? }
-  - src/infrastructure/di/container.ts (MODIFY) — Wire enhanced ConsoleLoggerAdapter with ClockPort; ensure all components receive correctly configured logger
-  - vitest.config.ts (CREATE) — Vitest configuration: globals: true, include: ['src/**/*.spec.ts'], environment: node
+  - src/domain/model/panel-types.ts (CREATE) — PanelResponse (model ref, content, usage, latency) and PanelResult discriminated union (fulfilled | rejected per model)
+  - src/domain/services/prompt-builders.ts (CREATE) — buildSynthesisPrompt(panelResponses: PanelResponse[], analysis?: Analysis): string — concatenates panel outputs and optional analysis fields into a synthesis prompt
+  - src/domain/services/analysis-schema.ts (CREATE) — Zod schema for Analysis (consensus, contradictions, uniqueInsights, blindSpots); safeParseAnalysis() export returning discriminated union; inferred Analysis, Contradiction, UniqueInsight types
+  - src/domain/services/judge-prompt-builder.ts (CREATE) — buildJudgePrompt(panelResponses: PanelResponse[]): { systemPrompt: string; userPrompt: string } — constructs structured-analysis prompt
