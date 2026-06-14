@@ -40,11 +40,7 @@ describe('Project scaffold files', () => {
 // ---------------------------------------------------------------------------
 
 describe('package.json', () => {
-  let pkg: Record<string, unknown>;
-
-  test('loads as JSON', () => {
-    pkg = readJson(projectFile('package.json')) as Record<string, unknown>;
-  });
+  const pkg = readJson(projectFile('package.json')) as Record<string, unknown>;
 
   test('sets "type": "module"', () => {
     assert.equal(pkg.type, 'module');
@@ -92,11 +88,7 @@ describe('package.json', () => {
 // ---------------------------------------------------------------------------
 
 describe('tsconfig.json', () => {
-  let cfg: Record<string, unknown>;
-
-  test('loads as JSON', () => {
-    cfg = readJson(projectFile('tsconfig.json')) as Record<string, unknown>;
-  });
+  const cfg = readJson(projectFile('tsconfig.json')) as Record<string, unknown>;
 
   test('compilerOptions.strict is true', () => {
     const co = cfg.compilerOptions as Record<string, unknown>;
@@ -178,35 +170,58 @@ describe('Domain model files', () => {
 // ---------------------------------------------------------------------------
 
 describe('Domain purity', () => {
-  const forbiddenPatterns: Array<[string, RegExp]> = [
-    ['SDK: openai', /from\s+['"]openai['"]/],
-    ['SDK: @anthropic-ai/sdk', /from\s+['"]@anthropic-ai\/sdk['"]/],
-    ['SDK: hono', /from\s+['"]hono['"]/],
-    ['SDK: zod', /from\s+['"]zod['"]/],
-    ['application layer', /from\s+['"].*application.*['"]/],
-    ['infrastructure layer', /from\s+['"].*infrastructure.*['"]/],
-  ];
-
   const domainDir = projectFile('src/domain');
 
-  for (const [label, pattern] of forbiddenPatterns) {
-    test(`no ${label} imports in src/domain/`, () => {
-      const { status, stdout, stderr } = spawnSync(
+  // SDK imports: use literal-string greps (single and double quote variants)
+  // to avoid BRE/ERE regex portability issues with \s, +, etc.
+  const sdkImports: Array<[string, string[]]> = [
+    ['openai', ["from 'openai'", 'from "openai"']],
+    ['@anthropic-ai/sdk', ["from '@anthropic-ai/sdk'", 'from "@anthropic-ai/sdk"']],
+    ['hono', ["from 'hono'", 'from "hono"']],
+    ['zod', ["from 'zod'", 'from "zod"']],
+  ];
+
+  for (const [sdk, patterns] of sdkImports) {
+    test(`no SDK: ${sdk} import in src/domain/`, () => {
+      for (const pat of patterns) {
+        const { stdout } = spawnSync(
+          'grep',
+          ['-r', '--include=*.ts', '--exclude=*.test.ts', pat, domainDir],
+          { encoding: 'utf-8', cwd: ROOT }
+        );
+        const output = stdout.trim();
+        assert.equal(
+          output,
+          '',
+          `Forbidden SDK import ${sdk} found (${pat}):\n${output}`
+        );
+      }
+    });
+  }
+
+  // Layer imports: use grep -E with POSIX character classes
+  const layerImports: Array<[string, string]> = [
+    ['application', `from[[:space:]]+['"][^'"]*application[^'"]*['"]`],
+    ['infrastructure', `from[[:space:]]+['"][^'"]*infrastructure[^'"]*['"]`],
+  ];
+
+  for (const [layer, pattern] of layerImports) {
+    test(`no ${layer} layer import in src/domain/`, () => {
+      const { stdout } = spawnSync(
         'grep',
-        ['-r', '--include=*.ts', pattern.source, domainDir],
+        ['-E', '-r', '--include=*.ts', '--exclude=*.test.ts', pattern, domainDir],
         { encoding: 'utf-8', cwd: ROOT }
       );
       const output = stdout.trim();
       assert.equal(
         output,
         '',
-        `Forbidden ${label} imports found:\n${output}`
+        `Forbidden ${layer} layer import found:\n${output}`
       );
     });
   }
 });
 
-// ---------------------------------------------------------------------------
 // FusionStreamEvent variants
 // ---------------------------------------------------------------------------
 
