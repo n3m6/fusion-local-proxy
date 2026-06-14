@@ -1,0 +1,14 @@
+Task: 06
+Title: Observability: enhanced ConsoleLoggerAdapter
+Phase: 5
+Route: full
+Slice: Observability, Tests, and Documentation
+Dependencies: 05
+Scope: Enhance `ConsoleLoggerAdapter` to emit structured JSON log lines for each pipeline stage (panel, judge, synthesis) containing stage name, duration in milliseconds via `ClockPort`, token counts (prompt + completion), and for the panel stage a `failed_models` array with model identifier, error code, and error message truncated to ≤200 characters. Wire the enhanced logger through the DI container. Create `vitest.config.ts` to enable the test infrastructure for Tasks 07 and 08.
+Acceptance Criteria: AC-13
+NFRs: NFR-1, NFR-7
+Gate Criteria: Phase 5 Gate 1 (structured log lines per stage with duration, tokens, failed_models)
+Files:
+  - src/infrastructure/outbound/logging/console-logger-adapter.ts (MODIFY) — Enhance with per-stage child labels, Date.now() latency deltas via ClockPort, structured failed_models entries (modelId, errorCode, errorMessage truncated ≤200 chars); emit structured JSON lines: { stage, event, durationMs?, tokens?, failedModels? }
+  - src/infrastructure/di/container.ts (MODIFY) — Wire enhanced ConsoleLoggerAdapter with ClockPort; ensure all components receive correctly configured logger
+  - vitest.config.ts (CREATE) — Vitest configuration: globals: true, include: ['src/**/*.spec.ts'], environment: node

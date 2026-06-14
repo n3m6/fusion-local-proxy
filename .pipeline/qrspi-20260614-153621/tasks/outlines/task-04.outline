@@ -1,0 +1,19 @@
+Task: 04
+Title: Streaming synthesis + timeouts
+Phase: 3
+Route: full
+Slice: Streaming Synthesis + Timeouts
+Dependencies: 03
+Scope: Add streaming support so the synthesis stage streams tokens via SSE. Extend `ChatModelPort` with a `stream()` signature and define `ChatStreamEvent` domain types. Modify `SynthesizeStep` to use `stream()` instead of `complete()` and return `AsyncIterable<ChatStreamEvent>`. Update `RunFusionUseCase` to yield `progress` events during panel and judge phases, pipe `ChatStreamEvent` tokens into `content_delta` events, and yield `done` with usage and `failed_models`. Add OpenAI SSE encoder (`encodeOpenAiSSE`, `encodeKeepAlive`) and modify the OpenAI route to use Hono `streamSSE()` when `stream: true`. Implement `OpenAiChatAdapter.stream()` via `client.chat.completions.stream()` with `AbortSignal` wiring. Add configurable `timeoutMs` to `fusion.config.json`. This task revisits `chat-model-port.ts`, `run-fusion-use-case.ts`, `synthesize-step.ts`, the OpenAI route and translator, and `openai-chat-adapter.ts` — all created in prior tasks — to convert from buffered to streaming synthesis.
+Acceptance Criteria: AC-3 (stream signature), AC-10, AC-12
+NFRs: NFR-1, NFR-2, NFR-4
+Gate Criteria: Phase 3 Gate 1 (SSE chat.completion.chunk + keep-alive + [DONE]), Phase 3 Gate 2 (30s timeout aborts upstream and surfaces FusionError)
+Files:
+  - src/domain/ports/chat-model-port.ts (MODIFY) — Add ChatStreamEvent union type (token, done, error) and stream(request: ChatRequest): AsyncIterable<ChatStreamEvent> signature
+  - src/application/usecases/synthesize-step.ts (MODIFY) — Change synthesize() to use ChatModelPort.stream() instead of complete(); return AsyncIterable<ChatStreamEvent>
+  - src/application/usecases/run-fusion-use-case.ts (MODIFY) — Yield progress events during panel and judge phases; pipe ChatStreamEvent tokens into FusionStreamEvent.content_delta events; yield done with usage and failedModels
+  - src/infrastructure/inbound/http/openai/sse-encoder.ts (CREATE) — encodeOpenAiSSE(event: FusionStreamEvent): string | null maps content_delta → chat.completion.chunk JSON, done → [DONE]; encodeKeepAlive(stage: string): string emits keep-alive comments
+  - src/infrastructure/inbound/http/openai/route.ts (MODIFY) — Detect stream: true in request; use Hono streamSSE() with writeSSE() for data events and StreamingApi.write() for keep-alive; iterate FusionService.runFusion() async iterable
+  - src/infrastructure/inbound/http/openai/translator.ts (MODIFY) — Add fusionStreamToOpenAiSSE(event: FusionStreamEvent): string | null delegating to sse-encoder
+  - src/infrastructure/outbound/llm/openai-chat-adapter.ts (MODIFY) — Implement stream() using openai SDK client.chat.completions.stream(); wire AbortSignal from ChatRequest.options.signal; yield ChatStreamEvent tokens
+  - fusion.config.json (MODIFY) — Add timeoutMs: 30000 field (default 30s per LLM call)

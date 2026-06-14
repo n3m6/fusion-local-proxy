@@ -1,0 +1,17 @@
+Task: 05
+Title: Anthropic API support (inbound + outbound)
+Phase: 4
+Route: full
+Slice: Anthropic API Support
+Dependencies: 04
+Scope: Add full Anthropic API compatibility. Create `AnthropicChatAdapter` implementing `ChatModelPort` via `@anthropic-ai/sdk` (canonical ↔ Anthropic SDK type mapping for both `complete()` and `stream()`). Register it in `ChatAdapterFactory` for `provider.type === 'anthropic'`. Create the inbound `/v1/messages` route with Anthropic-format request translation to canonical `FusionRequest` and a state-machine SSE encoder that emits all 6 Anthropic SSE event types (`message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`) in the documented sequence. Mount the new route in the Hono server. No domain or application layer changes are required — the existing `FusionService` is reused unchanged.
+Acceptance Criteria: AC-11
+NFRs: NFR-1, NFR-2, NFR-3 (anthropic SDK only in AnthropicChatAdapter)
+Gate Criteria: Phase 4 Gate 1 (all 6 Anthropic SSE events in sequence via curl), Phase 4 Gate 2 (no Anthropic-specific types leak to domain/app)
+Files:
+  - src/infrastructure/outbound/llm/anthropic-chat-adapter.ts (CREATE) — AnthropicChatAdapter implements ChatModelPort via @anthropic-ai/sdk: complete() maps ChatRequest → MessageCreateParams, SDK response → ChatResponse; stream() maps SDK MessageStream events → ChatStreamEvent
+  - src/infrastructure/outbound/llm/chat-adapter-factory.ts (MODIFY) — Register AnthropicChatAdapter for provider.type === 'anthropic'
+  - src/infrastructure/inbound/http/anthropic/route.ts (CREATE) — POST /v1/messages route: parses Anthropic-format body, translates to FusionRequest, calls FusionService.runFusion(), encodes response stream as Anthropic SSE
+  - src/infrastructure/inbound/http/anthropic/translator.ts (CREATE) — anthropicRequestToFusion() mapping MessageCreateParams to FusionRequest; anthropicContentToText() helper for flattening content blocks to string
+  - src/infrastructure/inbound/http/anthropic/sse-encoder.ts (CREATE) — AnthropicStreamState interface and encodeAnthropicSSE() state machine emitting 6-event sequence (message_start → content_block_start → content_block_delta* → content_block_stop → message_delta → message_stop) with event: and data: SSE fields
+  - src/infrastructure/inbound/http/server.ts (MODIFY) — Mount createAnthropicRoute() for POST /v1/messages alongside existing OpenAI routes

@@ -1,0 +1,14 @@
+Task: 07
+Title: Domain-layer unit tests
+Phase: 5
+Route: full
+Slice: Observability, Tests, and Documentation
+Dependencies: 06
+Scope: Write pure domain-layer unit tests requiring zero mocks. Test `Analysis` schema validation (rejects missing required fields, rejects malformed JSON, accepts valid full Analysis, accepts Analysis with empty arrays). Test prompt builder output shapes (`buildSynthesisPrompt` includes panel content strings, `buildJudgePrompt` returns system and user prompts with panel content references). Test `FusionError` constructor sets code, message, and details correctly. All tests are colocated in `__tests__/` subdirectories adjacent to the source files under test.
+Acceptance Criteria: AC-14 (domain portion)
+NFRs: NFR-1
+Gate Criteria: Phase 5 Gate 2 (≥80% branch coverage on src/domain/)
+Files:
+  - src/domain/model/__tests__/fusion-types.spec.ts (CREATE) — FusionError constructor sets code/message/details; ModelRef shape; ProviderType union
+  - src/domain/services/__tests__/analysis-schema.spec.ts (CREATE) — analysisSchema.safeParse rejects missing consensus, missing contradictions, malformed JSON; accepts valid full Analysis; accepts Analysis with empty arrays
+  - src/domain/services/__tests__/prompt-builders.spec.ts (CREATE) — buildSynthesisPrompt includes panel content strings in output; buildJudgePrompt returns system and user prompts with panel content references

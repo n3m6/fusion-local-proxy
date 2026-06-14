@@ -1,0 +1,16 @@
+Task: 03
+Title: Judge analysis with graceful degradation
+Phase: 2
+Route: full
+Slice: Judge Analysis with Graceful Degradation
+Dependencies: 02
+Scope: Add a structured judge step between panel and synthesis. Define the `Analysis` zod schema (`consensus`, `contradictions`, `unique_insights`, `blind_spots`) and the judge prompt builder. Implement `JudgeStep` which calls `ChatModelPort.complete()` with `responseFormat: { type: 'json_object' }` and parses the response via `safeParse`. On judge failure or schema validation failure, the use case degrades gracefully — logs the failure via `LoggerPort` and passes `null` analysis to synthesis. Modify `RunFusionUseCase` to insert the judge stage and `SynthesizeStep` to incorporate optional `Analysis` into its prompt. This task revisits `synthesize-step.ts` and `run-fusion-use-case.ts` (both created in Task 02) to add the judge integration — the revisit is required because the judge is an intermediate stage in the existing panel→synthesis pipeline.
+Acceptance Criteria: AC-8, AC-9 (judge-referencing portion)
+NFRs: NFR-1, NFR-5 (judge never fatal)
+Gate Criteria: Phase 2 Gate 1 (response references judge analysis), Phase 2 Gate 2 (judge-unreachable graceful degradation with logged failure)
+Files:
+  - src/domain/services/analysis-schema.ts (CREATE) — Zod schema for Analysis with contradictionSchema, uniqueInsightSchema, analysisSchema; inferred Analysis/Contradiction/UniqueInsight types; safeParseAnalysis helper
+  - src/domain/services/judge-prompt-builder.ts (CREATE) — buildJudgePrompt(panelResponses: PanelResponse[]): { systemPrompt: string; userPrompt: string }
+  - src/application/usecases/judge-step.ts (CREATE) — JudgeStep: calls ChatModelPort.complete() with responseFormat json_object, parses via safeParse; returns Analysis | null on failure without throwing; logs failures via LoggerPort
+  - src/application/usecases/run-fusion-use-case.ts (MODIFY) — Insert JudgeStep.analyze() between PanelRunner and SynthesizeStep; pass optional Analysis to SynthesizeStep; log judge failure without aborting pipeline
+  - src/application/usecases/synthesize-step.ts (MODIFY) — Accept and incorporate optional analysis?: Analysis parameter; buildSynthesisPrompt includes analysis fields (consensus, contradictions, unique_insights, blind_spots) when available

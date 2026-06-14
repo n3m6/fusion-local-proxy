@@ -1,0 +1,13 @@
+Task: 09
+Title: README + example fusion.config.json
+Phase: 5
+Route: full
+Slice: Observability, Tests, and Documentation
+Dependencies: 05
+Scope: Replace the placeholder `README.md` with a comprehensive document covering architecture (Mermaid diagram and port inventory table), local development setup (prerequisites, clone, install, env configuration, dev server, verification), usage examples (curl commands for OpenAI and Anthropic endpoints, streaming and non-streaming), and an annotated configuration reference. Replace the single-provider `fusion.config.json` with a polished example that mixes at least one local provider (`baseURL: "http://localhost:11434/v1"`) and one remote provider (`api.openai.com` or `api.anthropic.com`), demonstrating all three roles (panel, judge, synthesizer).
+Acceptance Criteria: AC-15
+NFRs: NFR-1
+Gate Criteria: None (documentation artifact; verified by review)
+Files:
+  - README.md (MODIFY) — Replace one-liner with architecture section (Mermaid diagram + port inventory table), local development setup, usage examples, and configuration reference
+  - fusion.config.json (MODIFY) — Replace single-provider config with example mixing at least one local provider and one remote provider across panel, judge, and synthesizer roles

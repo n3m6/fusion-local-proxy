@@ -1,0 +1,35 @@
+Task: 01
+Title: Core Passthrough: hexagonal skeleton + OpenAI endpoint
+Phase: 1
+Route: full
+Slice: Passthrough Chat Completion (OpenAI)
+Dependencies: None
+Scope: Establish the complete hexagonal project skeleton: domain types, outbound port interfaces (`ChatModelPort` with `complete()`, `ConfigPort`, `LoggerPort`, `ClockPort`), the inbound `FusionService` port, a passthrough `RunFusionUseCase` that calls a single model via `ChatModelPort.complete()`, the `OpenAiChatAdapter`, `ChatAdapterFactory`, `JsonFileConfigAdapter`, minimal `ConsoleLoggerAdapter`, the Hono server with `/v1/chat/completions` and `/v1/models` routes, the DI container, bootstrap, and root project configuration. Proves the dependency rule, config loading, and real outbound LLM integration end-to-end with a passthrough response.
+Acceptance Criteria: AC-1, AC-2, AC-3 (complete signature), AC-4, AC-5, AC-6
+NFRs: NFR-1, NFR-2, NFR-3 (openai SDK only in OpenAiChatAdapter), NFR-6
+Gate Criteria: Phase 1 Gate 1 (real client receives valid ChatCompletion JSON via passthrough), Phase 1 Gate 2 (zero SDK/framework imports in domain and application layers)
+Files:
+  - package.json (CREATE) — Node 20+ ESM project manifest with hono, @hono/node-server, openai@^6.42.0, zod dependencies and tsx dev script
+  - tsconfig.json (CREATE) — strict TypeScript config, target ES2023, module NodeNext, moduleResolution NodeNext, resolveJsonModule true
+  - .env.example (CREATE) — template documenting apiKeyEnv variable names
+  - fusion.config.json (CREATE) — single-provider config with type: "openai", role: "panel", model, baseURL, apiKeyEnv
+  - src/domain/model/message.ts (CREATE) — Message type with role and content
+  - src/domain/model/chat-types.ts (CREATE) — ChatRequest, ChatResponse, ChatOptions, TokenUsage, ResponseFormat types
+  - src/domain/model/fusion-types.ts (CREATE) — ModelRef, ProviderType, FusionError class, FusionRequest types
+  - src/domain/model/stream-types.ts (CREATE) — FusionStreamEvent discriminated union, FailedModelInfo (full set; progress events unused until Slice 4)
+  - src/domain/ports/chat-model-port.ts (CREATE) — ChatModelPort interface with complete(request: ChatRequest): Promise<ChatResponse>
+  - src/domain/ports/config-port.ts (CREATE) — ConfigPort interface: getPanelModels(), getJudgeModel(), getSynthesizerModel(), getTimeoutMs()
+  - src/domain/ports/logger-port.ts (CREATE) — LoggerPort interface: logStageStart, logStageEnd, logFailedModels, logError
+  - src/domain/ports/clock-port.ts (CREATE) — ClockPort interface: now(): number
+  - src/application/ports/fusion-service.ts (CREATE) — FusionService inbound port: runFusion(request: FusionRequest): AsyncIterable<FusionStreamEvent>
+  - src/application/usecases/run-fusion-use-case.ts (CREATE) — RunFusionUseCase implementing FusionService as passthrough: calls ChatModelPort.complete() via synthesizer model, yields single content_delta + done stream event
+  - src/infrastructure/inbound/http/server.ts (CREATE) — Hono app factory: mounts OpenAI routes and /v1/models, exports createServer()
+  - src/infrastructure/inbound/http/openai/route.ts (CREATE) — POST /v1/chat/completions route: parses OpenAI body, translates to FusionRequest, calls FusionService.runFusion(), encodes non-streaming JSON response
+  - src/infrastructure/inbound/http/openai/translator.ts (CREATE) — openAiRequestToFusion() and fusionStreamToOpenAiResponse() (non-streaming only)
+  - src/infrastructure/inbound/http/models-route.ts (CREATE) — GET /v1/models stub returning JSON array with model entries from ConfigPort
+  - src/infrastructure/outbound/llm/openai-chat-adapter.ts (CREATE) — OpenAiChatAdapter implements ChatModelPort via openai SDK; maps ChatRequest ↔ SDK params, SDK response → ChatResponse
+  - src/infrastructure/outbound/llm/chat-adapter-factory.ts (CREATE) — ChatAdapterFactory: selects OpenAiChatAdapter when provider.type === 'openai'
+  - src/infrastructure/outbound/config/json-file-config-adapter.ts (CREATE) — JsonFileConfigAdapter implements ConfigPort: reads fusion.config.json, validates with zod, exposes typed accessors
+  - src/infrastructure/outbound/logging/console-logger-adapter.ts (CREATE) — ConsoleLoggerAdapter implements LoggerPort with console.log; minimal structured output
+  - src/infrastructure/di/container.ts (CREATE) — manual composition root: instantiates config → logger → clock → adapters → use case → routes → server
+  - src/main.ts (CREATE) — bootstrap: imports container, calls createServer(), starts @hono/node-server listener
