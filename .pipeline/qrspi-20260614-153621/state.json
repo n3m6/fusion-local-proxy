@@ -3,8 +3,8 @@
   "route": "full",
   "currentPhase": 1,
   "totalPhases": 5,
-  "lastCompletedStage": "plan",
-  "nextStage": "implement",
+  "lastCompletedStage": "structure",
+  "nextStage": "plan",
   "stagesCompleted": [
     "goals",
     "research",
