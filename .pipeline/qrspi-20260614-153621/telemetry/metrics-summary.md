@@ -4,7 +4,7 @@
 
 - **Route:** full
 - **Final status:** stopped-partial
-- **Total duration:** 6197 s
+- **Total duration:** 17942 s
 - **Stages completed:** 5 of 10
 - **Resume count:** 1
 - **Backward loop count:** 0
@@ -20,6 +20,7 @@
 | plan | 1 | 937 | PARTIAL |
 | implement | 1 | 1624 | FAIL |
 | plan | 1 | 2615 | PARTIAL |
+| implement | 1 | 3417 | FAIL |
 
 ## Child Agent Calls
 
@@ -37,6 +38,7 @@
 | implement | qrspi-integration-checker | 1 | 1 | 0 |
 | plan | qrspi-plan-writer | 1 | 1 | 0 |
 | plan | qrspi-plan-reviewer | 1 | 1 | 0 |
+| implement | generic-coding | 3 | 3 | 0 |
 
 ## Review Rounds
 
