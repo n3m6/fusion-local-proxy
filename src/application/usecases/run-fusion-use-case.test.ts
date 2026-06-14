@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RunFusionUseCase } from './run-fusion-use-case.js';
+import type { FusionService } from '../ports/fusion-service.js';
 import type { FusionRequest } from '../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
@@ -8,9 +9,10 @@ import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { ChatRequest, ChatResponse, TokenUsage } from '../../domain/model/chat-types.js';
+import type { ModelRef } from '../../domain/model/fusion-types.js';
 
 // ---------------------------------------------------------------------------
-// Helpers to collect async iterable results
+// Helpers
 // ---------------------------------------------------------------------------
 
 async function collectEvents(
@@ -24,7 +26,7 @@ async function collectEvents(
 }
 
 // ---------------------------------------------------------------------------
-// Stub / fake implementations
+// Stubs
 // ---------------------------------------------------------------------------
 
 interface StubChatModelPort extends ChatModelPort {
@@ -48,27 +50,26 @@ function stubChatModelPort(response?: ChatResponse): StubChatModelPort {
   return stub;
 }
 
-function stubChatModelPortThatThrows(error: Error): ChatModelPort {
+function stubConfigPort(synthesizerModel?: ModelRef): ConfigPort {
   return {
-    async complete(_request: ChatRequest): Promise<ChatResponse> {
-      throw error;
-    },
-  };
-}
-
-function stubConfigPort(panelModels?: Array<{ provider: 'openai'; model: string; baseURL: string; apiKey: string }>): ConfigPort {
-  const models = panelModels ?? [
-    { provider: 'openai' as const, model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
-  ];
-  return {
-    getPanelModels: () => models,
+    getPanelModels: () => [],
     getJudgeModel: () => null,
-    getSynthesizerModel: () => null,
+    getSynthesizerModel: () =>
+      synthesizerModel ?? {
+        provider: 'openai',
+        model: 'gpt-4o',
+        baseURL: 'https://api.openai.com/v1',
+        apiKey: 'sk-test',
+      },
     getTimeoutMs: () => 30000,
   };
 }
 
-function stubLoggerPort(): LoggerPort & { _calls: Array<{ method: string; args: unknown[] }> } {
+interface StubLoggerPort extends LoggerPort {
+  _calls: Array<{ method: string; args: unknown[] }>;
+}
+
+function stubLoggerPort(): StubLoggerPort {
   const calls: Array<{ method: string; args: unknown[] }> = [];
   return {
     _calls: calls,
@@ -87,184 +88,231 @@ function stubLoggerPort(): LoggerPort & { _calls: Array<{ method: string; args: 
   };
 }
 
-function stubClockPort(): ClockPort {
-  let current = 0;
-  return {
-    now: () => current++,
-    // allow setting for testing
+/**
+ * Returns a ClockPort whose `now()` returns the given times in order.
+ * If called more times than provided, repeats the last value.
+ */
+function stubClockPort(times: number[]): ClockPort & { _callCount: number } {
+  let idx = 0;
+  const port = {
+    _callCount: 0,
+    now(): number {
+      port._callCount++;
+      const t = times[idx] ?? times[times.length - 1];
+      if (idx < times.length) idx++;
+      return t;
+    },
   };
+  return port;
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-test('RunFusionUseCase yields content_delta, content_stop, and done events', async () => {
+test('FusionService interface shape', () => {
+  const chatModel = stubChatModelPort();
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 100]);
+
+  // RunFusionUseCase must satisfy the FusionService interface
+  const service: FusionService = new RunFusionUseCase(chatModel, config, logger, clock);
+
+  assert.ok(typeof service.runFusion === 'function');
+  assert.equal(service.runFusion.length, 1); // single parameter: FusionRequest
+});
+
+test('RunFusionUseCase constructor accepts four port arguments', () => {
+  const chatModel = stubChatModelPort();
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
+  assert.ok(useCase instanceof RunFusionUseCase);
+});
+
+test('passthrough happy path yields content_delta then done', async () => {
   const chatModel = stubChatModelPort({
-    content: 'Hello world',
-    usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-    model: 'gpt-4o',
+    content: 'hi',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'test',
   });
   const config = stubConfigPort();
   const logger = stubLoggerPort();
-  const clock = stubClockPort();
+  const clock = stubClockPort([100, 200]);
 
   const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
 
-  const request: FusionRequest = {
-    messages: [{ role: 'user', content: 'Hi' }],
-  };
+  const events = await collectEvents(
+    useCase.runFusion({ messages: [{ role: 'user', content: 'hello' }] }),
+  );
 
-  const events = await collectEvents(useCase.runFusion(request));
-
-  assert.ok(events.length >= 3, 'expected at least 3 events');
-
-  const contentDelta = events.find((e) => e.type === 'content_delta');
-  assert.ok(contentDelta);
-  assert.equal((contentDelta as { type: 'content_delta'; delta: string }).delta, 'Hello world');
-
-  const contentStop = events.find((e) => e.type === 'content_stop');
-  assert.ok(contentStop);
-
-  const done = events.find((e) => e.type === 'done');
-  assert.ok(done);
-  const doneEv = done as { type: 'done'; usage: TokenUsage; failedModels: unknown[]; model?: string };
-  assert.equal(doneEv.usage.promptTokens, 10);
-  assert.equal(doneEv.usage.completionTokens, 5);
-  assert.equal(doneEv.usage.totalTokens, 15);
-  assert.equal(doneEv.model, 'gpt-4o');
-  assert.deepEqual(doneEv.failedModels, []);
+  assert.equal(events.length, 2, 'expected exactly 2 events');
+  assert.deepStrictEqual(events[0], { type: 'content_delta', delta: 'hi' });
+  assert.deepStrictEqual(events[1], {
+    type: 'done',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+  });
 });
 
-test('RunFusionUseCase passes ChatRequest with messages and model ref', async () => {
-  const chatModel = stubChatModelPort();
-  const config = stubConfigPort([
-    { provider: 'openai', model: 'gpt-4o-mini', baseURL: 'https://example.com/v1', apiKey: 'sk-key' },
-  ]);
-  const logger = stubLoggerPort();
-  const clock = stubClockPort();
-
-  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
-
-  const request: FusionRequest = {
-    messages: [{ role: 'system', content: 'Be helpful' }, { role: 'user', content: 'Hello' }],
-    options: { temperature: 0.5, maxTokens: 100 },
-  };
-
-  await collectEvents(useCase.runFusion(request));
-
-  const lastRequest = (chatModel as StubChatModelPort)._lastRequest;
-  assert.ok(lastRequest);
-  assert.equal(lastRequest!.messages.length, 2);
-  assert.equal(lastRequest!.messages[0].role, 'system');
-  assert.equal(lastRequest!.messages[0].content, 'Be helpful');
-  assert.equal(lastRequest!.model.model, 'gpt-4o-mini');
-  assert.equal(lastRequest!.model.provider, 'openai');
-  assert.equal(lastRequest!.options?.temperature, 0.5);
-  assert.equal(lastRequest!.options?.maxTokens, 100);
-});
-
-test('RunFusionUseCase logs stage start and end', async () => {
+test('system prompt is prepended to messages', async () => {
   const chatModel = stubChatModelPort();
   const config = stubConfigPort();
   const logger = stubLoggerPort();
-  const clock = stubClockPort();
+  const clock = stubClockPort([0, 50]);
 
   const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
 
-  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+  await collectEvents(
+    useCase.runFusion({
+      messages: [{ role: 'user', content: 'hello' }],
+      systemPrompt: 'Be helpful',
+    }),
+  );
+
+  const req = chatModel._lastRequest;
+  assert.ok(req);
+  assert.equal(req!.messages.length, 2);
+  assert.deepStrictEqual(req!.messages[0], { role: 'system', content: 'Be helpful' });
+  assert.deepStrictEqual(req!.messages[1], { role: 'user', content: 'hello' });
+});
+
+test('temperature and maxTokens are forwarded to ChatRequest options', async () => {
+  const chatModel = stubChatModelPort();
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 50]);
+
+  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
+
+  await collectEvents(
+    useCase.runFusion({
+      messages: [{ role: 'user', content: 'x' }],
+      temperature: 0.7,
+      maxTokens: 200,
+    }),
+  );
+
+  const req = chatModel._lastRequest;
+  assert.ok(req);
+  assert.equal(req!.options?.temperature, 0.7);
+  assert.equal(req!.options?.maxTokens, 200);
+});
+
+test('ChatRequest omits options when neither temperature nor maxTokens is set', async () => {
+  const chatModel = stubChatModelPort();
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 50]);
+
+  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
+
+  await collectEvents(
+    useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
+  );
+
+  const req = chatModel._lastRequest;
+  assert.ok(req);
+  assert.equal(req!.options, undefined);
+});
+
+test('logger calls logStageStart before complete and logStageEnd after', async () => {
+  const chatModel = stubChatModelPort();
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([500, 750]);
+
+  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
+
+  await collectEvents(
+    useCase.runFusion({ messages: [{ role: 'user', content: 'hello' }] }),
+  );
 
   const startCalls = logger._calls.filter((c) => c.method === 'logStageStart');
   assert.equal(startCalls.length, 1);
-  assert.equal(startCalls[0].args[0], 'passthrough');
+  assert.deepStrictEqual(startCalls[0].args, ['synthesis']);
 
   const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
   assert.equal(endCalls.length, 1);
-  assert.equal(endCalls[0].args[0], 'passthrough');
-  assert.equal(typeof endCalls[0].args[1], 'number');
+  assert.equal(endCalls[0].args[0], 'synthesis');
+  assert.equal(endCalls[0].args[1], 250); // 750 - 500
+  assert.deepStrictEqual(endCalls[0].args[2], {
+    promptTokens: 2,
+    completionTokens: 3,
+    totalTokens: 5,
+  });
 });
 
-test('RunFusionUseCase throws on empty panel models', async () => {
-  const chatModel = stubChatModelPort();
-  const config = stubConfigPort([]); // empty panel
-  const logger = stubLoggerPort();
-  const clock = stubClockPort();
-
-  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
-
-  await assert.rejects(
-    async () => {
-      await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
-    },
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.ok((err as Error).message.includes('panel'));
-      return true;
-    },
-  );
-});
-
-test('RunFusionUseCase propagates chat adapter errors', async () => {
-  const chatModel = stubChatModelPortThatThrows(new Error('API key invalid'));
-  const config = stubConfigPort();
-  const logger = stubLoggerPort();
-  const clock = stubClockPort();
-
-  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
-
-  await assert.rejects(
-    async () => {
-      await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
-    },
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.equal((err as Error).message, 'API key invalid');
-      return true;
-    },
-  );
-
-  // verify error was logged
-  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
-  assert.equal(errorCalls.length, 1);
-  assert.equal(errorCalls[0].args[0], 'passthrough');
-});
-
-test('RunFusionUseCase handles non-Error throws from adapter', async () => {
+test('error propagation: complete rejects, iterator rejects with same error, no events yielded', async () => {
+  const upstreamError = new Error('upstream failure');
   const chatModel: ChatModelPort = {
     async complete(_request: ChatRequest): Promise<ChatResponse> {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw 'string error';
+      throw upstreamError;
     },
   };
   const config = stubConfigPort();
   const logger = stubLoggerPort();
-  const clock = stubClockPort();
+  const clock = stubClockPort([0, 50]);
 
   const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
 
   await assert.rejects(
     async () => {
-      await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+      await collectEvents(
+        useCase.runFusion({ messages: [{ role: 'user', content: 'hello' }] }),
+      );
     },
     (err: unknown) => {
-      assert.equal(err, 'string error');
+      assert.ok(err instanceof Error);
+      assert.equal((err as Error).message, 'upstream failure');
       return true;
     },
   );
+
+  // Use case does not catch errors — no logError call
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
+  assert.equal(errorCalls.length, 0);
 });
 
-test('RunFusionUseCase uses first panel model from config', async () => {
+test('synthesizer model ref is resolved from ConfigPort.getSynthesizerModel', async () => {
   const chatModel = stubChatModelPort();
-  const config = stubConfigPort([
-    { provider: 'openai', model: 'first-model', baseURL: 'http://a', apiKey: 'k1' },
-    { provider: 'openai', model: 'second-model', baseURL: 'http://b', apiKey: 'k2' },
-  ]);
+  const expectedModel: ModelRef = {
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    baseURL: 'https://example.com/v1',
+    apiKey: 'sk-key',
+  };
+  const config = stubConfigPort(expectedModel);
   const logger = stubLoggerPort();
-  const clock = stubClockPort();
+  const clock = stubClockPort([0, 10]);
 
   const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
 
-  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+  await collectEvents(
+    useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
+  );
 
-  assert.equal((chatModel as StubChatModelPort)._lastRequest?.model.model, 'first-model');
+  const req = chatModel._lastRequest;
+  assert.ok(req);
+  assert.deepStrictEqual(req!.model, expectedModel);
+});
+
+test('messages from request are shallow-copied (not mutated)', async () => {
+  const chatModel = stubChatModelPort();
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 50]);
+
+  const useCase = new RunFusionUseCase(chatModel, config, logger, clock);
+
+  const originalMessages = [{ role: 'user' as const, content: 'hello' }];
+  await collectEvents(
+    useCase.runFusion({ messages: originalMessages }),
+  );
+
+  // Original messages array must not be modified
+  assert.equal(originalMessages.length, 1);
+  assert.deepStrictEqual(originalMessages[0], { role: 'user', content: 'hello' });
 });
