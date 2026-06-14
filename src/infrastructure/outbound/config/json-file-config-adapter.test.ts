@@ -25,7 +25,7 @@ function writeConfig(dir: string, content: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Construction / validation
+// Construction / validation — valid configs
 // ---------------------------------------------------------------------------
 
 test('JsonFileConfigAdapter loads valid config', () => {
@@ -35,6 +35,13 @@ test('JsonFileConfigAdapter loads valid config', () => {
         {
           type: 'openai',
           role: 'panel',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
           model: 'gpt-4o',
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'OPENAI_API_KEY',
@@ -55,7 +62,13 @@ test('JsonFileConfigAdapter loads valid config', () => {
       assert.equal(panel[0].apiKey, 'sk-test-value');
 
       assert.equal(adapter.getJudgeModel(), null);
-      assert.equal(adapter.getSynthesizerModel(), null);
+
+      const synthesizer = adapter.getSynthesizerModel();
+      assert.ok(synthesizer !== null);
+      assert.equal(synthesizer.provider, 'openai');
+      assert.equal(synthesizer.model, 'gpt-4o');
+      assert.equal(synthesizer.apiKey, 'sk-test-value');
+
       assert.equal(adapter.getTimeoutMs(), 30000);
     } finally {
       delete process.env.OPENAI_API_KEY;
@@ -74,6 +87,13 @@ test('JsonFileConfigAdapter uses default timeoutMs when omitted', () => {
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'OPENAI_API_KEY',
         },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
     });
 
@@ -87,19 +107,32 @@ test('JsonFileConfigAdapter uses default timeoutMs when omitted', () => {
   });
 });
 
-test('JsonFileConfigAdapter returns empty panel array when providers is empty', () => {
+test('JsonFileConfigAdapter returns empty panel array when only synthesizer configured', () => {
   withTempDir((dir) => {
     const path = writeConfig(dir, {
-      providers: [],
+      providers: [
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
       timeoutMs: 10000,
     });
 
-    const adapter = new JsonFileConfigAdapter(path);
+    process.env.OPENAI_API_KEY = 'sk-test-value';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
 
-    assert.deepEqual(adapter.getPanelModels(), []);
-    assert.equal(adapter.getJudgeModel(), null);
-    assert.equal(adapter.getSynthesizerModel(), null);
-    assert.equal(adapter.getTimeoutMs(), 10000);
+      assert.deepEqual(adapter.getPanelModels(), []);
+      assert.equal(adapter.getJudgeModel(), null);
+      assert.ok(adapter.getSynthesizerModel() !== null);
+      assert.equal(adapter.getTimeoutMs(), 10000);
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
   });
 });
 
@@ -121,6 +154,13 @@ test('JsonFileConfigAdapter returns judge model when role judge configured', () 
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'OPENAI_API_KEY',
         },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
     });
 
@@ -130,14 +170,17 @@ test('JsonFileConfigAdapter returns judge model when role judge configured', () 
       const judge = adapter.getJudgeModel();
       assert.ok(judge !== null);
       assert.equal(judge!.model, 'gpt-4o-mini');
-      assert.equal(adapter.getSynthesizerModel(), null);
+
+      const synthesizer = adapter.getSynthesizerModel();
+      assert.ok(synthesizer !== null);
+      assert.equal(synthesizer.model, 'gpt-4o');
     } finally {
       delete process.env.OPENAI_API_KEY;
     }
   });
 });
 
-test('JsonFileConfigAdapter returns synthesizer as null when not configured', () => {
+test('JsonFileConfigAdapter constructor throws when no synthesizer configured', () => {
   withTempDir((dir) => {
     const path = writeConfig(dir, {
       providers: [
@@ -153,8 +196,15 @@ test('JsonFileConfigAdapter returns synthesizer as null when not configured', ()
 
     process.env.OPENAI_API_KEY = 'sk-test-value';
     try {
-      const adapter = new JsonFileConfigAdapter(path);
-      assert.equal(adapter.getSynthesizerModel(), null);
+      assert.throws(
+        () => new JsonFileConfigAdapter(path),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          const msg = (err as Error).message;
+          assert.ok(msg.includes('synthesizer'), `expected message to mention synthesizer, got: ${msg}`);
+          return true;
+        },
+      );
     } finally {
       delete process.env.OPENAI_API_KEY;
     }
@@ -173,6 +223,13 @@ test('JsonFileConfigAdapter throws on missing model field', () => {
           type: 'openai',
           role: 'panel',
           // model missing
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'OPENAI_API_KEY',
         },
@@ -197,6 +254,13 @@ test('JsonFileConfigAdapter throws on missing type field', () => {
       providers: [
         {
           role: 'panel',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
           model: 'gpt-4o',
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'OPENAI_API_KEY',
@@ -226,6 +290,13 @@ test('JsonFileConfigAdapter throws on missing role field', () => {
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'OPENAI_API_KEY',
         },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
     });
 
@@ -251,6 +322,13 @@ test('JsonFileConfigAdapter throws on missing baseURL field', () => {
           model: 'gpt-4o',
           apiKeyEnv: 'OPENAI_API_KEY',
         },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
     });
 
@@ -273,6 +351,13 @@ test('JsonFileConfigAdapter throws on invalid role value', () => {
         {
           type: 'openai',
           role: 'unknown-role',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
           model: 'gpt-4o',
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'OPENAI_API_KEY',
@@ -340,24 +425,37 @@ test('JsonFileConfigAdapter.getPanelModels throws when env var is not set', () =
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'MISSING_ENV_VAR_XYZ',
         },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
     });
 
-    // ensure the env var is not set
+    process.env.OPENAI_API_KEY = 'sk-synth';
+    // ensure the panel env var is not set
     delete process.env.MISSING_ENV_VAR_XYZ;
 
-    const adapter = new JsonFileConfigAdapter(path);
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
 
-    assert.throws(
-      () => adapter.getPanelModels(),
-      (err: unknown) => {
-        assert.ok(err instanceof Error);
-        const msg = (err as Error).message;
-        assert.ok(msg.includes('MISSING_ENV_VAR_XYZ'), `expected env var name in message, got: ${msg}`);
-        assert.ok(msg.includes('not set') || msg.includes('Environment'), `expected 'not set' message, got: ${msg}`);
-        return true;
-      },
-    );
+      assert.throws(
+        () => adapter.getPanelModels(),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          const msg = (err as Error).message;
+          assert.ok(msg.includes('MISSING_ENV_VAR_XYZ'), `expected env var name in message, got: ${msg}`);
+          assert.ok(msg.includes('not set') || msg.includes('Environment'), `expected 'not set' message, got: ${msg}`);
+          return true;
+        },
+      );
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.MISSING_ENV_VAR_XYZ;
+    }
   });
 });
 
@@ -372,10 +470,18 @@ test('JsonFileConfigAdapter.getPanelModels succeeds when env var is set', () => 
           baseURL: 'https://api.openai.com/v1',
           apiKeyEnv: 'MY_CUSTOM_KEY',
         },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
     });
 
     process.env.MY_CUSTOM_KEY = 'my-secret';
+    process.env.OPENAI_API_KEY = 'sk-synth';
     try {
       const adapter = new JsonFileConfigAdapter(path);
       const models = adapter.getPanelModels();
@@ -383,19 +489,99 @@ test('JsonFileConfigAdapter.getPanelModels succeeds when env var is set', () => 
       assert.equal(models[0].apiKey, 'my-secret');
     } finally {
       delete process.env.MY_CUSTOM_KEY;
+      delete process.env.OPENAI_API_KEY;
     }
   });
 });
 
-test('JsonFileConfigAdapter accepts empty providers with no env vars needed', () => {
+test('JsonFileConfigAdapter constructor throws on empty providers array', () => {
   withTempDir((dir) => {
     const path = writeConfig(dir, {
       providers: [],
     });
 
-    const adapter = new JsonFileConfigAdapter(path);
-    assert.deepEqual(adapter.getPanelModels(), []);
-    assert.equal(adapter.getJudgeModel(), null);
-    assert.equal(adapter.getSynthesizerModel(), null);
+    assert.throws(
+      () => new JsonFileConfigAdapter(path),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        const msg = (err as Error).message;
+        assert.ok(msg.includes('providers') || msg.includes('Array'), `expected message about empty providers, got: ${msg}`);
+        return true;
+      },
+    );
+  });
+});
+
+test('JsonFileConfigAdapter throws on empty model string', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'panel',
+          model: '',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    assert.throws(
+      () => new JsonFileConfigAdapter(path),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        const msg = (err as Error).message;
+        assert.ok(msg.includes('model') || msg.includes('String'), `expected message about empty model, got: ${msg}`);
+        return true;
+      },
+    );
+  });
+});
+
+test('JsonFileConfigAdapter throws on empty env var value', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'EMPTY_KEY_VAR',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-synth';
+    process.env.EMPTY_KEY_VAR = '';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      assert.throws(
+        () => adapter.getPanelModels(),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          const msg = (err as Error).message;
+          assert.ok(msg.includes('EMPTY_KEY_VAR'), `expected env var name in message, got: ${msg}`);
+          return true;
+        },
+      );
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.EMPTY_KEY_VAR;
+    }
   });
 });

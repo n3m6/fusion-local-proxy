@@ -6,13 +6,13 @@ import type { ModelRef } from '../../../domain/model/fusion-types.js';
 const providerSchema = z.object({
   type: z.enum(['openai']),
   role: z.enum(['panel', 'judge', 'synthesizer']),
-  model: z.string(),
-  baseURL: z.string(),
-  apiKeyEnv: z.string(),
+  model: z.string().min(1),
+  baseURL: z.string().min(1),
+  apiKeyEnv: z.string().min(1),
 });
 
 const configSchema = z.object({
-  providers: z.array(providerSchema),
+  providers: z.array(providerSchema).nonempty(),
   timeoutMs: z.number().int().positive().optional().default(30000),
 });
 
@@ -52,6 +52,11 @@ export class JsonFileConfigAdapter implements ConfigPort {
     }
 
     this.config = result.data;
+
+    const hasSynthesizer = this.config.providers.some((p) => p.role === 'synthesizer');
+    if (!hasSynthesizer) {
+      throw new Error('Invalid configuration: at least one provider must have role "synthesizer"');
+    }
   }
 
   getPanelModels(): ModelRef[] {
@@ -65,9 +70,9 @@ export class JsonFileConfigAdapter implements ConfigPort {
     return entry ? this.toModelRef(entry) : null;
   }
 
-  getSynthesizerModel(): ModelRef | null {
-    const entry = this.config.providers.find((p) => p.role === 'synthesizer');
-    return entry ? this.toModelRef(entry) : null;
+  getSynthesizerModel(): ModelRef {
+    const entry = this.config.providers.find((p) => p.role === 'synthesizer')!;
+    return this.toModelRef(entry);
   }
 
   getTimeoutMs(): number {
@@ -76,7 +81,7 @@ export class JsonFileConfigAdapter implements ConfigPort {
 
   private toModelRef(entry: ProviderEntry): ModelRef {
     const apiKey = process.env[entry.apiKeyEnv];
-    if (apiKey === undefined) {
+    if (apiKey === undefined || apiKey === '') {
       throw new Error(
         `Environment variable ${entry.apiKeyEnv} is not set (required for provider model "${entry.model}")`,
       );

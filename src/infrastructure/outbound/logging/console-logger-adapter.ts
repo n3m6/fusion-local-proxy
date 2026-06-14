@@ -8,21 +8,28 @@ export class ConsoleLoggerAdapter implements LoggerPort {
   }
 
   logStageEnd(stage: string, durationMs: number, usage?: TokenUsage): void {
-    console.log(
-      JSON.stringify({
-        stage,
-        event: 'end',
-        durationMs,
-        tokens: usage ?? undefined,
-      }),
-    );
+    const payload: Record<string, unknown> = {
+      stage,
+      event: 'end',
+      durationMs,
+    };
+    if (usage) {
+      payload.tokens = {
+        prompt: usage.promptTokens,
+        completion: usage.completionTokens,
+        total: usage.totalTokens,
+      };
+    }
+    console.log(JSON.stringify(payload));
   }
 
   logFailedModels(models: FailedModelInfo[]): void {
-    console.log(JSON.stringify({ event: 'failed_models', models }));
+    for (const m of models) {
+      console.log(JSON.stringify({ event: 'failed_model', modelId: m.modelId, errorCode: m.errorCode, errorMessage: m.errorMessage }));
+    }
   }
 
   logError(stage: string, error: Error): void {
-    console.log(JSON.stringify({ stage, event: 'error', error: error.message }));
+    console.log(JSON.stringify({ stage, event: 'error', message: error.message }));
   }
 }

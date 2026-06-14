@@ -49,10 +49,11 @@ test('ChatAdapterFactory creates adapter with correct client config', () => {
     apiKey: 'ollama',
   };
 
-  // The adapter wraps a client — we just verify it constructs without error
-  // and that the provider type dispatch works
   const adapter = factory.create(modelRef);
   assert.ok(adapter instanceof OpenAiChatAdapter);
-  // verify it has the complete method
-  assert.equal(typeof adapter.complete, 'function');
+
+  const client = (adapter as unknown as { client: { baseURL: string; apiKey: string | null } }).client;
+  assert.ok(client);
+  assert.equal(client.baseURL, 'http://localhost:11434/v1');
+  assert.equal(client.apiKey, 'ollama');
 });

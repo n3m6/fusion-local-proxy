@@ -7,7 +7,7 @@ import type { ChatRequest } from '../../../domain/model/chat-types.js';
 // Minimal mock of the OpenAI client interface used by the adapter
 // ---------------------------------------------------------------------------
 
-type MockCreateFn = (params: Record<string, unknown>) => Promise<Record<string, unknown>>;
+type MockCreateFn = (params: Record<string, unknown>, options?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockOpenAiClient(createFn: MockCreateFn): any {
@@ -158,7 +158,7 @@ test('OpenAiChatAdapter handles missing usage object', async () => {
   });
 });
 
-test('OpenAiChatAdapter passes responseFormat when provided', async () => {
+test('OpenAiChatAdapter passes responseFormat json_object when provided', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 
   const client = mockOpenAiClient(async (params) => {
@@ -192,7 +192,7 @@ test('OpenAiChatAdapter passes responseFormat when provided', async () => {
   assert.equal(rf.type, 'json_object');
 });
 
-test('OpenAiChatAdapter passes responseFormat with jsonSchema when provided', async () => {
+test('OpenAiChatAdapter passes responseFormat json_schema when provided', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 
   const client = mockOpenAiClient(async (params) => {
@@ -209,12 +209,12 @@ test('OpenAiChatAdapter passes responseFormat with jsonSchema when provided', as
 
   const adapter = new OpenAiChatAdapter(client);
 
-  const jsonSchema = { name: 'response', strict: true, schema: { type: 'object' } };
+  const schema = { type: 'object', properties: { answer: { type: 'string' } } };
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Output JSON' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
     options: {
-      responseFormat: { type: 'json_schema', jsonSchema },
+      responseFormat: { type: 'json_schema', schema },
     },
   };
 
@@ -225,7 +225,11 @@ test('OpenAiChatAdapter passes responseFormat with jsonSchema when provided', as
   const rf = params.response_format as Record<string, unknown> | undefined;
   assert.ok(rf);
   assert.equal(rf.type, 'json_schema');
-  assert.deepEqual(rf.json_schema, jsonSchema);
+  const js = rf.json_schema as Record<string, unknown>;
+  assert.ok(js);
+  assert.equal(js.name, 'response');
+  assert.equal(js.strict, true);
+  assert.deepEqual(js.schema, schema);
 });
 
 test('OpenAiChatAdapter completes without options', async () => {
@@ -251,4 +255,102 @@ test('OpenAiChatAdapter completes without options', async () => {
 
   assert.equal(response.content, 'Yes');
   assert.equal(response.model, 'test-model');
+});
+
+test('OpenAiChatAdapter does not send response_format for text type', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'Hello' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
+    options: {
+      responseFormat: { type: 'text' },
+    },
+  };
+
+  await adapter.complete(request);
+
+  const params = capturedParams.value!;
+  assert.ok(params);
+  assert.equal('response_format' in params, false);
+});
+
+test('OpenAiChatAdapter propagates SDK errors', async () => {
+  const sdkError = new Error('Network failure');
+  const client = mockOpenAiClient(async () => {
+    throw sdkError;
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
+  };
+
+  await assert.rejects(
+    adapter.complete(request),
+    (err: unknown) => {
+      assert.strictEqual(err, sdkError);
+      return true;
+    },
+  );
+});
+
+test('OpenAiChatAdapter forwards AbortSignal to SDK', async () => {
+  const capturedOptions: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = mockOpenAiClient(async (_params, options) => {
+    capturedOptions.value = options ?? null;
+    return {
+      id: 'chatcmpl-123',
+      object: 'chat.completion',
+      created: Date.now() / 1000,
+      model: 'gpt-4o',
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: 'Hello',
+          },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+      },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const controller = new AbortController();
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
+    options: { signal: controller.signal },
+  };
+
+  await adapter.complete(request);
+
+  assert.ok(capturedOptions.value);
+  assert.ok(capturedOptions.value!.signal);
+  assert.strictEqual(capturedOptions.value!.signal, controller.signal);
 });

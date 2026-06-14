@@ -30,71 +30,83 @@ test('ConsoleLoggerAdapter logStageStart emits structured JSON', () => {
   const logger = new ConsoleLoggerAdapter();
 
   const lines = captureConsole(() => {
-    logger.logStageStart('passthrough');
+    logger.logStageStart('panel');
   });
 
   assert.equal(lines.length, 1);
   const parsed = JSON.parse(lines[0]);
-  assert.equal(parsed.stage, 'passthrough');
+  assert.equal(parsed.stage, 'panel');
   assert.equal(parsed.event, 'start');
 });
 
 test('ConsoleLoggerAdapter logStageEnd emits structured JSON with usage', () => {
   const logger = new ConsoleLoggerAdapter();
-  const usage: TokenUsage = { promptTokens: 10, completionTokens: 5, totalTokens: 15 };
+  const usage: TokenUsage = { promptTokens: 100, completionTokens: 50, totalTokens: 150 };
 
   const lines = captureConsole(() => {
-    logger.logStageEnd('passthrough', 420, usage);
+    logger.logStageEnd('panel', 150, usage);
   });
 
   assert.equal(lines.length, 1);
   const parsed = JSON.parse(lines[0]);
-  assert.equal(parsed.stage, 'passthrough');
+  assert.equal(parsed.stage, 'panel');
   assert.equal(parsed.event, 'end');
-  assert.equal(parsed.durationMs, 420);
-  assert.deepEqual(parsed.tokens, { promptTokens: 10, completionTokens: 5, totalTokens: 15 });
+  assert.equal(parsed.durationMs, 150);
+  assert.deepEqual(parsed.tokens, { prompt: 100, completion: 50, total: 150 });
 });
 
 test('ConsoleLoggerAdapter logStageEnd without usage omits tokens field', () => {
   const logger = new ConsoleLoggerAdapter();
 
   const lines = captureConsole(() => {
-    logger.logStageEnd('passthrough', 100);
+    logger.logStageEnd('panel', 100);
   });
 
   const parsed = JSON.parse(lines[0]);
-  assert.equal(parsed.stage, 'passthrough');
+  assert.equal(parsed.stage, 'panel');
   assert.equal(parsed.event, 'end');
   assert.equal(parsed.durationMs, 100);
   // tokens should be undefined (absent from JSON after stringify)
   assert.equal('tokens' in parsed, false);
 });
 
-test('ConsoleLoggerAdapter logFailedModels emits structured JSON', () => {
+test('ConsoleLoggerAdapter logFailedModels emits one JSON line per model', () => {
   const logger = new ConsoleLoggerAdapter();
   const models: FailedModelInfo[] = [
-    { model: 'gpt-3.5', reason: 'timeout' },
-    { model: 'gpt-4o', reason: 'rate_limit' },
+    { modelId: 'gpt-4o', errorCode: 'TIMEOUT', errorMessage: 'Request timed out after 30s' },
+    { modelId: 'gpt-3.5', errorCode: 'RATE_LIMIT', errorMessage: 'Too many requests' },
   ];
 
   const lines = captureConsole(() => {
     logger.logFailedModels(models);
   });
 
-  const parsed = JSON.parse(lines[0]);
-  assert.equal(parsed.event, 'failed_models');
-  assert.deepEqual(parsed.models, models);
+  assert.equal(lines.length, 2);
+
+  // First model
+  const parsed0 = JSON.parse(lines[0]);
+  assert.equal(parsed0.event, 'failed_model');
+  assert.equal(parsed0.modelId, 'gpt-4o');
+  assert.equal(parsed0.errorCode, 'TIMEOUT');
+  assert.equal(parsed0.errorMessage, 'Request timed out after 30s');
+
+  // Second model
+  const parsed1 = JSON.parse(lines[1]);
+  assert.equal(parsed1.event, 'failed_model');
+  assert.equal(parsed1.modelId, 'gpt-3.5');
+  assert.equal(parsed1.errorCode, 'RATE_LIMIT');
+  assert.equal(parsed1.errorMessage, 'Too many requests');
 });
 
 test('ConsoleLoggerAdapter logError emits structured JSON with error message', () => {
   const logger = new ConsoleLoggerAdapter();
 
   const lines = captureConsole(() => {
-    logger.logError('passthrough', new Error('API key invalid'));
+    logger.logError('passthrough', new Error('connection refused'));
   });
 
   const parsed = JSON.parse(lines[0]);
   assert.equal(parsed.stage, 'passthrough');
   assert.equal(parsed.event, 'error');
-  assert.equal(parsed.error, 'API key invalid');
+  assert.equal(parsed.message, 'connection refused');
 });

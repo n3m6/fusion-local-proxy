@@ -18,15 +18,21 @@ export class OpenAiChatAdapter implements ChatModelPort {
 
     if (request.options?.responseFormat) {
       const rf = request.options.responseFormat;
-      const format: Record<string, unknown> = { type: rf.type };
-      if (rf.jsonSchema) {
-        format.json_schema = rf.jsonSchema;
+      if (rf.type === 'json_object') {
+        params.response_format = { type: 'json_object' };
+      } else if (rf.type === 'json_schema') {
+        params.response_format = {
+          type: 'json_schema',
+          json_schema: {
+            name: 'response',
+            strict: true,
+            schema: rf.schema,
+          },
+        };
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      params.response_format = format as any;
     }
 
-    const response = await this.client.chat.completions.create(params);
+    const response = await this.client.chat.completions.create(params, { signal: request.options?.signal });
 
     const choice = response.choices[0];
     const content = choice?.message?.content ?? '';
