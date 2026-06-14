@@ -119,3 +119,9 @@ No imports from `src/infrastructure/`, `openai`, `@anthropic-ai/sdk`, `hono`, `@
 - **System prompt prepend**: When `request.systemPrompt` is `'Be helpful'` and `request.messages` contains a user message, the `ChatRequest` passed to `complete()` has `messages` starting with `{ role: 'system', content: 'Be helpful' }` followed by the original user message.
 - **Logger calls**: On a successful call, `logStageStart('synthesis')` is called exactly once before `complete()`, and `logStageEnd('synthesis', <durationMs>, <usage>)` is called exactly once after `complete()` returns. The `durationMs` argument equals `clockPort.now()` second call minus first call.
 - **Error propagation**: When the stubbed `complete()` rejects with an `Error('upstream failure')`, iterating the async iterable rejects with that same error at the point where `complete()` is called. No `FusionStreamEvent` is yielded.
+
+## Review Status
+- **Task-Spec Review:** task_spec_clean (round 2)
+- **Task-Spec Conflicts:** None.
+- **Plan Review:** clean (round 1)
+- **Outstanding Concerns:** None.

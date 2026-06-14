@@ -15,4 +15,4 @@ Files:
   - src/infrastructure/inbound/http/models-route.ts (CREATE) — GET /v1/models stub returning a JSON array with at least one model entry from ConfigPort
   - src/infrastructure/di/container.ts (CREATE) — Manual composition root: instantiates config → logger → adapters → use case → routes → server
   - src/main.ts (CREATE) — Bootstrap: imports container, calls createServer(), starts @hono/node-server listener
-  - fusion.config.json (CREATE) — Single-provider config (type: "openai", role: "panel") for passthrough mode
+  - fusion.config.json (CREATE) — Single-provider config (type: "openai", role: "synthesizer") for passthrough mode

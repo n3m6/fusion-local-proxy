@@ -175,3 +175,9 @@ The factory must import `OpenAI` from `"openai"` (not the adapter) since it cons
 - **OpenAI adapter propagates SDK errors:** When the underlying OpenAI SDK call rejects (network failure, API error), `complete()` rejects with that same error.
 - **ChatAdapterFactory creates OpenAI adapter:** Calling `ChatAdapterFactory.create()` with `modelRef.provider === "openai"` returns an instance of `OpenAiChatAdapter` whose `complete()` method, when called, makes an HTTP request through the `openai` SDK to the configured `baseURL`.
 - **ChatAdapterFactory throws on unknown provider:** Calling `ChatAdapterFactory.create()` with `modelRef.provider === "anthropic"` (or any value other than `"openai"`) throws an `Error` whose message indicates the provider type is unsupported.
+
+## Review Status
+- **Task-Spec Review:** task_spec_clean (round 2)
+- **Task-Spec Conflicts:** None.
+- **Plan Review:** clean (round 1)
+- **Outstanding Concerns:** None.
