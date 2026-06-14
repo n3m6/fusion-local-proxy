@@ -1,13 +1,14 @@
 import type { TokenUsage } from './chat-types.js';
 
-export interface FailedModelInfo {
-  model: string;
-  reason: string;
-}
-
 export type FusionStreamEvent =
-  | { type: 'progress'; stage: string; message: string }
-  | { type: 'content_delta'; delta: string }
-  | { type: 'content_stop' }
-  | { type: 'done'; usage: TokenUsage; failedModels: FailedModelInfo[]; model?: string }
-  | { type: 'error'; code: string; message: string; details?: unknown };
+  | { readonly type: 'progress'; readonly stage: string; readonly message: string }
+  | { readonly type: 'content_delta'; readonly delta: string }
+  | { readonly type: 'content_stop' }
+  | { readonly type: 'done'; readonly usage?: TokenUsage; readonly failedModels?: FailedModelInfo[] }
+  | { readonly type: 'error'; readonly code: string; readonly message: string; readonly details?: unknown };
+
+export interface FailedModelInfo {
+  readonly modelId: string;
+  readonly errorCode: string;
+  readonly errorMessage: string;
+}

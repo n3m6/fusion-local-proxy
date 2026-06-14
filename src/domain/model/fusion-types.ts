@@ -1,31 +1,29 @@
 import type { Message } from './message.js';
-import type { ChatOptions } from './chat-types.js';
 
-export type ProviderType = 'openai';
+export type ProviderType = 'openai' | 'anthropic';
 
 export interface ModelRef {
-  provider: ProviderType;
-  model: string;
-  baseURL: string;
-  apiKey: string;
-}
-
-export interface FusionRequest {
-  messages: Message[];
-  model?: string;
-  stream?: boolean;
-  system?: string;
-  options?: ChatOptions;
+  readonly provider: ProviderType;
+  readonly model: string;
+  readonly baseURL: string;
+  readonly apiKey: string;
 }
 
 export class FusionError extends Error {
-  public readonly code: string;
-  public readonly details?: unknown;
-
-  constructor(code: string, message: string, details?: unknown) {
+  readonly code: string;
+  readonly details?: Record<string, unknown>;
+  constructor(code: string, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = 'FusionError';
     this.code = code;
     this.details = details;
   }
+}
+
+export interface FusionRequest {
+  readonly messages: Message[];
+  readonly stream?: boolean;
+  readonly systemPrompt?: string;
+  readonly maxTokens?: number;
+  readonly temperature?: number;
 }

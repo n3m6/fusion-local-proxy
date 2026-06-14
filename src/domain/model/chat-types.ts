@@ -1,31 +1,32 @@
 import type { Message } from './message.js';
 import type { ModelRef } from './fusion-types.js';
 
-export interface ResponseFormat {
-  type: 'text' | 'json_object' | 'json_schema';
-  jsonSchema?: Record<string, unknown>;
+export interface ChatRequest {
+  readonly messages: Message[];
+  readonly model: ModelRef;
+  readonly options?: ChatOptions;
 }
 
 export interface ChatOptions {
-  temperature?: number;
-  maxTokens?: number;
-  responseFormat?: ResponseFormat;
+  readonly temperature?: number;
+  readonly maxTokens?: number;
+  readonly responseFormat?: ResponseFormat;
+  readonly signal?: AbortSignal;
 }
 
-export interface ChatRequest {
-  messages: Message[];
-  model: ModelRef;
-  options?: ChatOptions;
+export type ResponseFormat =
+  | { readonly type: 'text' }
+  | { readonly type: 'json_object' }
+  | { readonly type: 'json_schema'; readonly schema: Record<string, unknown> };
+
+export interface ChatResponse {
+  readonly content: string;
+  readonly usage: TokenUsage;
+  readonly model: string;
 }
 
 export interface TokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-}
-
-export interface ChatResponse {
-  content: string;
-  usage: TokenUsage;
-  model: string;
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+  readonly totalTokens: number;
 }
