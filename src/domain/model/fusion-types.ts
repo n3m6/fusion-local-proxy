@@ -1,5 +1,6 @@
 import type { Message } from './message.js';
 import type { ChatOptions } from './chat-types.js';
+import type { FailedModelInfo } from './stream-types.js';
 
 export type ProviderType = 'openai' | 'anthropic';
 
@@ -10,6 +11,10 @@ export interface ModelRef {
   readonly apiKey: string;
 }
 
+/**
+ * Thrown with code `'all_panels_failed'` when every panel model fails
+ * (i.e., Promise.allSettled produces zero fulfilled results).
+ */
 export class FusionError extends Error {
   readonly code: string;
   readonly details?: Record<string, unknown>;
@@ -23,7 +28,15 @@ export class FusionError extends Error {
 
 export interface PanelResult {
   readonly modelId: string;
+  readonly provider: ProviderType;
   readonly content: string;
+  readonly usage: { promptTokens: number; completionTokens: number };
+  readonly latencyMs: number;
+}
+
+export interface PanelMeta {
+  readonly results: PanelResult[];
+  readonly failedModels: FailedModelInfo[];
 }
 
 export interface FusionRequest {
