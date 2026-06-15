@@ -200,6 +200,38 @@ test('Options mapping: max_tokens, temperature, and output_config for json_objec
   });
 });
 
+test('Options mapping: output_config set for json_schema responseFormat', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: '{}' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-3',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+  const schema = { type: 'object', properties: { answer: { type: 'string' } } };
+
+  const request = makeRequest({
+    options: {
+      responseFormat: { type: 'json_schema', schema },
+    },
+  });
+
+  await adapter.complete(request);
+
+  const params = capturedParams.value!;
+  assert.ok(params);
+  const outputConfig = params.output_config as Record<string, unknown> | undefined;
+  assert.ok(outputConfig, 'output_config should be set for json_schema');
+  const format = outputConfig.format as Record<string, unknown>;
+  assert.equal(format.type, 'json_schema');
+  assert.deepEqual(format.schema, schema);
+});
+
 test('Response content extraction: first text block text returned', async () => {
   const client = stubAnthropicClient(async () => ({
     content: [

@@ -129,6 +129,14 @@ export class AnthropicChatAdapter implements ChatModelPort {
       params['output_config'] = {
         format: { type: 'json_object', schema: null },
       };
+    } else if (request.options?.responseFormat?.type === 'json_schema') {
+      // Pass the schema through so structured output is requested from the model.
+      // Note: Anthropic's param shape (`output_config`) should be verified against
+      // the installed SDK version; the prompt-based JSON fallback in JudgeStep
+      // (which mandates JSON and safeParse-degrades) remains the reliable path.
+      params['output_config'] = {
+        format: { type: 'json_schema', schema: request.options.responseFormat.schema },
+      };
     }
 
     return params;

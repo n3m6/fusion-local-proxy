@@ -719,6 +719,112 @@ test('OpenAiChatAdapter.stream() sets stream: true in SDK params', async () => {
   assert.equal(capturedParams.value!.stream, true);
 });
 
+test('OpenAiChatAdapter.stream() sends stream_options.include_usage in params', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-su1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+    },
+  ];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client: any = {
+    chat: {
+      completions: {
+        async create(params: Record<string, unknown>): Promise<AsyncIterable<MockStreamChunk>> {
+          capturedParams.value = params;
+          return {
+            [Symbol.asyncIterator]() {
+              let i = 0;
+              return {
+                async next() {
+                  if (i < sdkChunks.length) return { value: sdkChunks[i++]!, done: false };
+                  return { value: undefined as never, done: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    },
+  };
+
+  const adapter = new OpenAiChatAdapter(client);
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
+  };
+
+  for await (const _ of adapter.stream(request)) { /* consume */ }
+
+  assert.ok(capturedParams.value);
+  const streamOpts = capturedParams.value!.stream_options as Record<string, unknown> | undefined;
+  assert.ok(streamOpts, 'stream_options should be present in params');
+  assert.equal(streamOpts!.include_usage, true);
+});
+
+test('OpenAiChatAdapter.stream() retries without stream_options on 400 error', async () => {
+  let callCount = 0;
+  const capturedParamsList: Record<string, unknown>[] = [];
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-su2',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }],
+    },
+  ];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client: any = {
+    chat: {
+      completions: {
+        async create(params: Record<string, unknown>): Promise<AsyncIterable<MockStreamChunk>> {
+          callCount++;
+          capturedParamsList.push(params);
+          if (callCount === 1) {
+            const error = new Error('Bad request') as Error & { status: number };
+            error.status = 400;
+            throw error;
+          }
+          return {
+            [Symbol.asyncIterator]() {
+              let i = 0;
+              return {
+                async next() {
+                  if (i < sdkChunks.length) return { value: sdkChunks[i++]!, done: false };
+                  return { value: undefined as never, done: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    },
+  };
+
+  const adapter = new OpenAiChatAdapter(client);
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  assert.equal(callCount, 2, 'should have made 2 create() calls (1 failing + 1 retry)');
+  assert.ok('stream_options' in capturedParamsList[0]!, 'first call should include stream_options');
+  assert.equal('stream_options' in capturedParamsList[1]!, false, 'retry call should omit stream_options');
+  assert.ok(chunks.some((c) => c.type === 'content_delta'), 'stream should have yielded content after retry');
+});
+
 test('OpenAiChatAdapter.stream() passes responseFormat json_schema in params', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
   const sdkChunks: MockStreamChunk[] = [

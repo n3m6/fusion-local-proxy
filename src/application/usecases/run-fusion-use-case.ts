@@ -19,6 +19,7 @@ export class RunFusionUseCase implements FusionService {
     private readonly configPort: ConfigPort,
     private readonly loggerPort: LoggerPort,
     private readonly clockPort: ClockPort,
+    private readonly heartbeatIntervalMs: number = 10000,
   ) {}
 
   async *runFusion(request: FusionRequest): AsyncIterable<FusionStreamEvent> {
@@ -32,22 +33,22 @@ export class RunFusionUseCase implements FusionService {
       ? [{ role: 'system', content: request.systemPrompt }, ...request.messages]
       : [...request.messages];
 
-    // 3. Panel stage
-    this.loggerPort.logStageStart('panel');
-    const panelStart = this.clockPort.now();
-    const panelMeta: PanelMeta = await this.panelRunner.run(messages, panelModels, timeoutMs);
-    this.loggerPort.logStageEnd('panel', this.clockPort.now() - panelStart);
+    // 3. Panel stage (periodic heartbeats keep the connection alive during long runs)
+    const panelMeta: PanelMeta = yield* this.withHeartbeat(
+      this.panelRunner.run(messages, panelModels, timeoutMs),
+      { type: 'progress', stage: 'panel', message: 'panel running' },
+    );
 
     // 4. Yield panel progress
     yield { type: 'progress', stage: 'panel', message: 'Panel stage complete' };
 
-    // 5. Judge stage (conditional)
+    // 5. Judge stage (conditional, with heartbeats)
     let analysis: Analysis | null = null;
     if (judgeModel !== null) {
-      this.loggerPort.logStageStart('judge');
-      const judgeStart = this.clockPort.now();
-      analysis = await this.judgeStep.analyze(panelMeta.results, messages, judgeModel, timeoutMs);
-      this.loggerPort.logStageEnd('judge', this.clockPort.now() - judgeStart);
+      analysis = yield* this.withHeartbeat(
+        this.judgeStep.analyze(panelMeta.results, messages, judgeModel, timeoutMs),
+        { type: 'progress', stage: 'judge', message: 'judge running' },
+      );
     }
 
     // 6. Yield judge progress (always, even when judge was skipped)
@@ -77,5 +78,26 @@ export class RunFusionUseCase implements FusionService {
       ...(synthUsage ? { usage: synthUsage } : {}),
       ...(synthModel ? { model: synthModel } : {}),
     };
+  }
+
+  /**
+   * Delegates to `work`, yielding periodic `ev` events while it is pending so
+   * that the SSE connection stays alive. Returns the resolved value of `work`.
+   * If `work` rejects, the rejection propagates after `done` is set.
+   */
+  private async *withHeartbeat<T>(
+    work: Promise<T>,
+    ev: FusionStreamEvent,
+  ): AsyncGenerator<FusionStreamEvent, T> {
+    let done = false;
+    const tracked = work.finally(() => { done = true; });
+    while (!done) {
+      let t: ReturnType<typeof setTimeout>;
+      const tick = new Promise<void>((r) => { t = setTimeout(r, this.heartbeatIntervalMs); });
+      await Promise.race([tracked.catch(() => undefined), tick]);
+      clearTimeout(t!);
+      if (!done) yield ev;
+    }
+    return await tracked;
   }
 }

@@ -83,6 +83,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
       temperature: request.options?.temperature,
       max_tokens: request.options?.maxTokens,
       stream: true,
+      stream_options: { include_usage: true },
     };
 
     if (request.options?.responseFormat) {
@@ -101,7 +102,26 @@ export class OpenAiChatAdapter implements ChatModelPort {
       }
     }
 
-    const stream = await this.client.chat.completions.create(params, { signal: request.options?.signal });
+    const requestOptions = { signal: request.options?.signal };
+    // Use the streaming-specific overload signature so `for await` resolves correctly
+    let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+    try {
+      stream = (await this.client.chat.completions.create(
+        params as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
+        requestOptions,
+      )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+    } catch (err) {
+      if ((err as { status?: number })?.status === 400) {
+        // Some backends reject stream_options; retry once without it
+        const { stream_options: _dropped, ...paramsWithoutStreamOptions } = params;
+        stream = (await this.client.chat.completions.create(
+          paramsWithoutStreamOptions as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
+          requestOptions,
+        )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+      } else {
+        throw err;
+      }
+    }
 
     let stopYielded = false;
     for await (const chunk of stream) {

@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import type { FusionRequest } from '../../../../domain/model/fusion-types.js';
+import { FusionError } from '../../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
 import type { ChatOptions } from '../../../../domain/model/chat-types.js';
 import { encodeAnthropicSSE } from './sse-encoder.js';
@@ -81,4 +83,56 @@ export async function* fusionStreamToAnthropicSSE(
   model: string,
 ): AsyncIterable<string> {
   yield* encodeAnthropicSSE(events, model);
+}
+
+/**
+ * Buffers all fusion stream events and returns a single Anthropic Messages
+ * response object (for `stream: false` requests).
+ */
+export async function fusionStreamToAnthropicResponse(
+  events: AsyncIterable<FusionStreamEvent>,
+  model: string,
+): Promise<Record<string, unknown>> {
+  const messageId = `msg_${randomUUID()}`;
+  let text = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let actualModel = model;
+
+  for await (const event of events) {
+    switch (event.type) {
+      case 'content_delta':
+        text += event.delta;
+        break;
+      case 'done':
+        inputTokens = event.usage?.promptTokens ?? 0;
+        outputTokens = event.usage?.completionTokens ?? 0;
+        if (event.model) actualModel = event.model;
+        break;
+      case 'error':
+        throw new FusionError(
+          event.code,
+          event.message,
+          typeof event.details === 'object' && event.details !== null
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+        );
+      default:
+        break;
+    }
+  }
+
+  return {
+    id: messageId,
+    type: 'message',
+    role: 'assistant',
+    model: actualModel,
+    content: [{ type: 'text', text }],
+    stop_reason: 'end_turn',
+    stop_sequence: null,
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+    },
+  };
 }

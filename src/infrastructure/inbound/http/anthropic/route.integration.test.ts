@@ -530,3 +530,76 @@ test('POST /v1/messages passes model to SSE encoder', async () => {
   const body = await res.text();
   assert.ok(body.includes('claude-3-haiku-20240307'), 'SSE body should contain the model name');
 });
+
+// ---------------------------------------------------------------------------
+// Non-streaming (stream: false)
+// ---------------------------------------------------------------------------
+
+test('POST /v1/messages with stream:false returns application/json with type:message body', async () => {
+  const fusionService = stubFusionService([
+    { type: 'content_delta', delta: 'Hello' },
+    { type: 'content_delta', delta: ' world' },
+    { type: 'content_stop' },
+    {
+      type: 'done',
+      usage: { promptTokens: 10, completionTokens: 25, totalTokens: 35 },
+      failedModels: [],
+      model: 'claude-3-opus-20240229',
+    },
+  ]);
+  const app = createApp(fusionService);
+
+  const res = await app.request('/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-3-opus-20240229',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: false,
+    }),
+  });
+
+  assert.equal(res.status, 200);
+  const contentType = res.headers.get('Content-Type') ?? '';
+  assert.ok(contentType.includes('application/json'), `expected application/json, got ${contentType}`);
+
+  const body = await res.json() as Record<string, unknown>;
+  assert.equal(body.type, 'message');
+  assert.equal(body.role, 'assistant');
+  assert.equal(body.stop_reason, 'end_turn');
+
+  const content = body.content as Array<{ type: string; text: string }>;
+  assert.ok(Array.isArray(content));
+  assert.equal(content[0].type, 'text');
+  assert.equal(content[0].text, 'Hello world');
+
+  const usage = body.usage as { input_tokens: number; output_tokens: number };
+  assert.equal(usage.input_tokens, 10);
+  assert.equal(usage.output_tokens, 25);
+});
+
+test('POST /v1/messages with stream:false and FusionError returns JSON error', async () => {
+  const fusionService = stubFusionServiceThatThrows(
+    new FusionError('all_panels_failed', 'All panel models failed'),
+  );
+  const app = createApp(fusionService);
+
+  const res = await app.request('/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-3-opus-20240229',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: false,
+    }),
+  });
+
+  assert.equal(res.status, 500);
+  const body = await res.json() as Record<string, unknown>;
+  const error = body.error as Record<string, unknown>;
+  assert.ok(error);
+  assert.equal(error.type, 'all_panels_failed');
+  assert.equal(error.message, 'All panel models failed');
+});

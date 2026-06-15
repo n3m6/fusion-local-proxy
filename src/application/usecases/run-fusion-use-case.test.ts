@@ -280,15 +280,9 @@ test('full ensemble happy path yields correct event sequence', async () => {
   assert.ok(doneEvent.usage !== undefined);
   assert.ok(doneEvent.model !== undefined);
 
-  // Verify per-stage logging calls
+  // Logging is now owned by PanelRunner and JudgeStep; the use case itself makes no log calls
   const logCalls = (loggerPort as unknown as StubLoggerPort)._calls;
-  assert.equal(logCalls.length, 4, 'expected 4 logger calls: panel start/end, judge start/end');
-  assert.deepStrictEqual(logCalls[0], { method: 'logStageStart', args: ['panel'] });
-  assert.deepStrictEqual(logCalls[1].method, 'logStageEnd');
-  assert.equal(logCalls[1].args[0], 'panel');
-  assert.deepStrictEqual(logCalls[2], { method: 'logStageStart', args: ['judge'] });
-  assert.deepStrictEqual(logCalls[3].method, 'logStageEnd');
-  assert.equal(logCalls[3].args[0], 'judge');
+  assert.equal(logCalls.length, 0, 'expected 0 use-case logger calls: panel/judge logging is step-owned');
 });
 
 // 3. Panel progress event is yielded before judge progress event
@@ -569,7 +563,59 @@ test('empty panel models does not block synthesis', async () => {
   assert.deepStrictEqual(doneEvent.failedModels, []);
 });
 
-// 13. Messages from request are not mutated
+// 13. withHeartbeat emits progress events during a slow panel stage
+test('withHeartbeat emits panel heartbeat events before Panel stage complete', async () => {
+  const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const slowPanelRunner: StubPanelRunner = {
+    _lastMessages: null,
+    _lastPanelModels: null,
+    _lastTimeoutMs: -1,
+    _callCount: 0,
+    async run(messages, panelModels, timeoutMs) {
+      slowPanelRunner._callCount++;
+      slowPanelRunner._lastMessages = messages;
+      slowPanelRunner._lastPanelModels = panelModels;
+      slowPanelRunner._lastTimeoutMs = timeoutMs;
+      await delay(60);
+      return { results: [samplePanelResult], failedModels: [] };
+    },
+  };
+
+  const judgeStep = stubJudgeStep() as unknown as JudgeStep;
+  const synthesizeStep = stubSynthesizeStep() as unknown as SynthesizeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    slowPanelRunner as unknown as PanelRunner,
+    judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    10, // heartbeatIntervalMs: small value so heartbeats fire during the 60ms delay
+  );
+
+  const events = await collectEvents(
+    useCase.runFusion({ messages: [{ role: 'user', content: 'hello' }] }),
+  );
+
+  const panelHeartbeats = events.filter(
+    (e) => e.type === 'progress' && (e as { stage?: string }).stage === 'panel' &&
+            (e as { message?: string }).message === 'panel running',
+  );
+  assert.ok(panelHeartbeats.length >= 1, `expected at least 1 panel heartbeat, got ${panelHeartbeats.length}`);
+
+  const panelCompleteIdx = events.findIndex(
+    (e) => e.type === 'progress' && (e as { message?: string }).message === 'Panel stage complete',
+  );
+  const lastHeartbeatIdx = events.reduce(
+    (max, e, i) =>
+      (e.type === 'progress' && (e as { message?: string }).message === 'panel running') ? i : max,
+    -1,
+  );
+  assert.ok(panelCompleteIdx > lastHeartbeatIdx, 'Panel stage complete should come after heartbeats');
+});
+
+// 14. Messages from request are not mutated
 test('messages from request are not mutated', async () => {
   const panelRunner = stubPanelRunner() as unknown as PanelRunner;
   const judgeStep = stubJudgeStep() as unknown as JudgeStep;

@@ -7,14 +7,6 @@ import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { FailedModelInfo } from '../../domain/model/stream-types.js';
 import { FusionError } from '../../domain/model/fusion-types.js';
 
-interface TaskResult {
-  status: 'fulfilled' | 'rejected';
-  value?: ChatResponse;
-  reason?: unknown;
-  modelRef: ModelRef;
-  latencyMs: number;
-}
-
 export class PanelRunner {
   constructor(
     private readonly chatPorts: ChatModelPort[],
@@ -31,52 +23,49 @@ export class PanelRunner {
       return { results: [], failedModels: [] };
     }
 
+    // Start times are read synchronously in map() to preserve clock ordering.
+    // Each task resolves to { value, latencyMs } so Promise.allSettled receives
+    // settled results for both successes and failures.
     const tasks = panelModels.map((modelRef, i) => {
       const request: ChatRequest = {
         messages,
         model: modelRef,
         options: { signal: AbortSignal.timeout(timeoutMs) },
       };
-
       const startTime = this.clockPort.now();
-
       return this.chatPorts[i].complete(request).then(
-        (value): TaskResult => ({
-          status: 'fulfilled',
+        (value: ChatResponse): { value: ChatResponse; latencyMs: number } => ({
           value,
-          modelRef,
-          latencyMs: this.clockPort.now() - startTime,
-        }),
-        (reason): TaskResult => ({
-          status: 'rejected',
-          reason,
-          modelRef,
           latencyMs: this.clockPort.now() - startTime,
         }),
       );
     });
 
-    const settled = await Promise.all(tasks);
+    const settled = await Promise.allSettled(tasks);
 
     const results: PanelResult[] = [];
     const failedModels: FailedModelInfo[] = [];
 
-    for (const task of settled) {
-      if (task.status === 'fulfilled' && task.value) {
+    for (let i = 0; i < settled.length; i++) {
+      const settlement = settled[i]!;
+      const modelRef = panelModels[i]!;
+
+      if (settlement.status === 'fulfilled') {
+        const { value, latencyMs } = settlement.value;
         results.push({
-          modelId: task.modelRef.model,
-          provider: task.modelRef.provider,
-          content: task.value.content,
+          modelId: modelRef.model,
+          provider: modelRef.provider,
+          content: value.content,
           usage: {
-            promptTokens: task.value.usage.promptTokens,
-            completionTokens: task.value.usage.completionTokens,
+            promptTokens: value.usage.promptTokens,
+            completionTokens: value.usage.completionTokens,
           },
-          latencyMs: task.latencyMs,
+          latencyMs,
         });
       } else {
-        const reason = task.reason;
+        const reason = settlement.reason;
         failedModels.push({
-          modelId: task.modelRef.model,
+          modelId: modelRef.model,
           errorCode: reason instanceof FusionError
             ? reason.code
             : (reason as { constructor?: { name?: string } })?.constructor?.name ?? 'UNKNOWN',

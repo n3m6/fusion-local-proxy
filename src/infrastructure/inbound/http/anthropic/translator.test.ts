@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   anthropicRequestToFusion,
   fusionStreamToAnthropicSSE,
+  fusionStreamToAnthropicResponse,
 } from './translator.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
 import { FusionError } from '../../../../domain/model/fusion-types.js';
@@ -937,6 +938,94 @@ test('SSE encoder handles done event with 0 completionTokens', async () => {
   const payload = JSON.parse(jsonStr);
 
   assert.equal(payload.usage.output_tokens, 0);
+});
+
+// ===========================================================================
+// fusionStreamToAnthropicResponse
+// ===========================================================================
+
+test('fusionStreamToAnthropicResponse buffers deltas into a Messages object', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'Hello' },
+    { type: 'content_delta', delta: ' world' },
+    { type: 'content_stop' },
+    {
+      type: 'done',
+      usage: { promptTokens: 10, completionTokens: 25, totalTokens: 35 },
+      model: 'claude-3-opus-20240229',
+      failedModels: [],
+    },
+  ];
+
+  const response = await fusionStreamToAnthropicResponse(
+    await asyncIterableFrom(events),
+    'claude-3-opus-20240229',
+  );
+
+  assert.equal(response.type, 'message');
+  assert.equal(response.role, 'assistant');
+  assert.equal(response.model, 'claude-3-opus-20240229');
+  assert.equal(response.stop_reason, 'end_turn');
+  assert.equal(response.stop_sequence, null);
+
+  const content = response.content as Array<{ type: string; text: string }>;
+  assert.ok(Array.isArray(content));
+  assert.equal(content[0].type, 'text');
+  assert.equal(content[0].text, 'Hello world');
+
+  const usage = response.usage as { input_tokens: number; output_tokens: number };
+  assert.equal(usage.input_tokens, 10);
+  assert.equal(usage.output_tokens, 25);
+
+  const id = response.id as string;
+  assert.ok(typeof id === 'string' && id.startsWith('msg_'), `expected id starting with msg_, got ${id}`);
+});
+
+test('fusionStreamToAnthropicResponse uses model from done event over request model', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'Hi' },
+    { type: 'done', model: 'claude-actual-model' },
+  ];
+
+  const response = await fusionStreamToAnthropicResponse(
+    await asyncIterableFrom(events),
+    'claude-request-model',
+  );
+
+  assert.equal(response.model, 'claude-actual-model');
+});
+
+test('fusionStreamToAnthropicResponse generates unique message IDs per call', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'A' },
+    { type: 'done', model: 'claude-3' },
+  ];
+
+  const r1 = await fusionStreamToAnthropicResponse(await asyncIterableFrom(events), 'claude-3');
+  const r2 = await fusionStreamToAnthropicResponse(await asyncIterableFrom(events), 'claude-3');
+
+  assert.notEqual(r1.id, r2.id);
+});
+
+test('fusionStreamToAnthropicResponse throws FusionError on error event', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'partial' },
+    { type: 'error', code: 'MODEL_DOWN', message: 'Service unavailable' },
+  ];
+
+  await assert.rejects(
+    async () => {
+      const iterable = await asyncIterableFrom(events);
+      await fusionStreamToAnthropicResponse(iterable, 'claude-3');
+    },
+    (err: unknown) => {
+      assert.ok(err instanceof FusionError);
+      const fe = err as FusionError;
+      assert.equal(fe.code, 'MODEL_DOWN');
+      assert.equal(fe.message, 'Service unavailable');
+      return true;
+    },
+  );
 });
 
 test('SSE encoder content_block_stop has correct shape', async () => {
