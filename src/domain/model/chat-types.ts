@@ -30,3 +30,8 @@ export interface TokenUsage {
   readonly completionTokens: number;
   readonly totalTokens: number;
 }
+
+export type ChatStreamChunk =
+  | { readonly type: 'content_delta'; readonly delta: string }
+  | { readonly type: 'content_stop' }
+  | { readonly type: 'usage'; readonly usage: TokenUsage };

@@ -153,7 +153,7 @@ describe('ChatModelPort contract', () => {
     assert.ok(source.includes('export interface ChatModelPort'), 'must export ChatModelPort');
   });
 
-  test('imports only ChatRequest and ChatResponse from ../model/chat-types.js', () => {
+  test('imports ChatRequest, ChatResponse, and ChatStreamChunk from ../model/chat-types.js', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     const importLines = source.split('\n').filter(line => line.startsWith('import'));
     assert.equal(importLines.length, 1, 'must have exactly one import line');
@@ -163,6 +163,7 @@ describe('ChatModelPort contract', () => {
     );
     assert.ok(importLines[0].includes('ChatRequest'), 'must import ChatRequest');
     assert.ok(importLines[0].includes('ChatResponse'), 'must import ChatResponse');
+    assert.ok(importLines[0].includes('ChatStreamChunk'), 'must import ChatStreamChunk');
   });
 
   test('declares complete method with signature (request: ChatRequest): Promise<ChatResponse>', () => {
@@ -173,10 +174,12 @@ describe('ChatModelPort contract', () => {
     );
   });
 
-  test('does NOT declare a stream method', () => {
+  test('declares stream method with signature (request: ChatRequest): AsyncIterable<ChatStreamChunk>', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
-    assert.ok(!source.includes('stream('), 'must not have a stream method');
-    assert.ok(!source.includes('stream ('), 'must not have a stream method');
+    assert.ok(
+      /stream\s*\(\s*request\s*:\s*ChatRequest\s*\)\s*:\s*AsyncIterable\s*<\s*ChatStreamChunk\s*>/ .test(source),
+      'must have stream(request: ChatRequest): AsyncIterable<ChatStreamChunk>'
+    );
   });
 });
 
