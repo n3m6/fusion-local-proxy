@@ -7,6 +7,12 @@ import type { ChatRequest, ChatStreamChunk } from '../../../domain/model/chat-ty
 // Stub helpers for the Anthropic SDK client used by the adapter
 // ---------------------------------------------------------------------------
 
+// The adapter's constructor expects the concrete `Anthropic` SDK client, but
+// `@anthropic-ai/sdk` must not be imported here (architectural boundary). We
+// derive the parameter type from the constructor and feed structurally minimal
+// stubs through an `unknown` cast.
+type AnthropicClientArg = ConstructorParameters<typeof AnthropicChatAdapter>[0];
+
 type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
@@ -28,13 +34,13 @@ function stubAnthropicClient(
     params: Record<string, unknown>,
     options?: Record<string, unknown>,
   ) => AsyncIterable<Record<string, unknown>>,
-): any {
+): AnthropicClientArg {
   return {
     messages: {
       create: createFn,
       stream: streamFn ?? async function* () {},
     },
-  };
+  } as unknown as AnthropicClientArg;
 }
 
 // ---------------------------------------------------------------------------
@@ -348,7 +354,7 @@ function asyncIterable<T>(events: T[]): AsyncIterable<T> {
 function stubAnthropicStreamingClient(
   events: Record<string, unknown>[],
   capturedOptions?: { value: Record<string, unknown> | null },
-): any {
+): AnthropicClientArg {
   return {
     messages: {
       async create() {
@@ -362,10 +368,10 @@ function stubAnthropicStreamingClient(
         return asyncIterable(events);
       },
     },
-  };
+  } as unknown as AnthropicClientArg;
 }
 
-function stubAnthropicStreamingClientReject(error: Error): any {
+function stubAnthropicStreamingClientReject(error: Error): AnthropicClientArg {
   return {
     messages: {
       async create() {
@@ -383,7 +389,7 @@ function stubAnthropicStreamingClientReject(error: Error): any {
         };
       },
     },
-  };
+  } as unknown as AnthropicClientArg;
 }
 
 async function collectStreamChunks(
@@ -582,7 +588,7 @@ test('Stream handles empty event stream gracefully', async () => {
 test('Stream default max_tokens is 4096 when not specified', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 
-  const client: any = {
+  const client = {
     messages: {
       async create() {
         return { content: [], usage: { input_tokens: 0, output_tokens: 0 }, model: 'claude-3' };
@@ -595,7 +601,7 @@ test('Stream default max_tokens is 4096 when not specified', async () => {
         ]);
       },
     },
-  };
+  } as unknown as AnthropicClientArg;
 
   const adapter = new AnthropicChatAdapter(client);
   const request = makeRequest({ options: undefined });
@@ -611,7 +617,7 @@ test('Stream default max_tokens is 4096 when not specified', async () => {
 test('Stream does not expose output_config when responseFormat is not json_object', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 
-  const client: any = {
+  const client = {
     messages: {
       async create() {
         return { content: [], usage: { input_tokens: 0, output_tokens: 0 }, model: 'claude-3' };
@@ -624,7 +630,7 @@ test('Stream does not expose output_config when responseFormat is not json_objec
         ]);
       },
     },
-  };
+  } as unknown as AnthropicClientArg;
 
   const adapter = new AnthropicChatAdapter(client);
   const request = makeRequest({

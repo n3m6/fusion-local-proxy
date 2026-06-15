@@ -7,19 +7,25 @@ import type { ChatRequest, ChatStreamChunk } from '../../../domain/model/chat-ty
 // Minimal mock of the OpenAI client interface used by the adapter
 // ---------------------------------------------------------------------------
 
+// The adapter's constructor expects the concrete `OpenAI` SDK client, but the
+// `openai` package must not be imported here (architectural boundary). We derive
+// the parameter type from the constructor and feed structurally minimal mocks
+// through an `unknown` cast.
+type OpenAiClientArg = ConstructorParameters<typeof OpenAiChatAdapter>[0];
+
 type MockCreateFn = (
   params: Record<string, unknown>,
   options?: Record<string, unknown>,
 ) => Promise<Record<string, unknown>>;
 
-function mockOpenAiClient(createFn: MockCreateFn): any {
+function mockOpenAiClient(createFn: MockCreateFn): OpenAiClientArg {
   return {
     chat: {
       completions: {
         create: createFn,
       },
     },
-  };
+  } as unknown as OpenAiClientArg;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,7 +429,7 @@ type MockStreamChunk = {
 function mockOpenAiStreamingClient(
   chunks: MockStreamChunk[],
   capturedOptions?: { value: Record<string, unknown> | null },
-): any {
+): OpenAiClientArg {
   return {
     chat: {
       completions: {
@@ -448,10 +454,10 @@ function mockOpenAiStreamingClient(
         },
       },
     },
-  };
+  } as unknown as OpenAiClientArg;
 }
 
-function mockOpenAiStreamingClientReject(error: Error): any {
+function mockOpenAiStreamingClientReject(error: Error): OpenAiClientArg {
   return {
     chat: {
       completions: {
@@ -460,7 +466,7 @@ function mockOpenAiStreamingClientReject(error: Error): any {
         },
       },
     },
-  };
+  } as unknown as OpenAiClientArg;
 }
 
 // ---------------------------------------------------------------------------
@@ -771,7 +777,7 @@ test('OpenAiChatAdapter.stream() sets stream: true in SDK params', async () => {
     },
   ];
 
-  const client: any = {
+  const client = {
     chat: {
       completions: {
         create: async (
@@ -795,7 +801,7 @@ test('OpenAiChatAdapter.stream() sets stream: true in SDK params', async () => {
         },
       },
     },
-  };
+  } as unknown as OpenAiClientArg;
 
   const adapter = new OpenAiChatAdapter(client);
 
@@ -829,7 +835,7 @@ test('OpenAiChatAdapter.stream() sends stream_options.include_usage in params', 
     },
   ];
 
-  const client: any = {
+  const client = {
     chat: {
       completions: {
         async create(params: Record<string, unknown>): Promise<AsyncIterable<MockStreamChunk>> {
@@ -848,7 +854,7 @@ test('OpenAiChatAdapter.stream() sends stream_options.include_usage in params', 
         },
       },
     },
-  };
+  } as unknown as OpenAiClientArg;
 
   const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
@@ -884,7 +890,7 @@ test('OpenAiChatAdapter.stream() retries without stream_options on 400 error', a
     },
   ];
 
-  const client: any = {
+  const client = {
     chat: {
       completions: {
         async create(params: Record<string, unknown>): Promise<AsyncIterable<MockStreamChunk>> {
@@ -909,7 +915,7 @@ test('OpenAiChatAdapter.stream() retries without stream_options on 400 error', a
         },
       },
     },
-  };
+  } as unknown as OpenAiClientArg;
 
   const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
@@ -953,7 +959,7 @@ test('OpenAiChatAdapter.stream() passes responseFormat json_schema in params', a
     },
   ];
 
-  const client: any = {
+  const client = {
     chat: {
       completions: {
         async create(
@@ -977,7 +983,7 @@ test('OpenAiChatAdapter.stream() passes responseFormat json_schema in params', a
         },
       },
     },
-  };
+  } as unknown as OpenAiClientArg;
 
   const adapter = new OpenAiChatAdapter(client);
   const schema = { type: 'object', properties: { answer: { type: 'string' } } };

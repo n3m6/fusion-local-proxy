@@ -1,27 +1,33 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildJudgeSystemPrompt, buildJudgeUserPrompt } from './judge-prompt.js';
+import type { PanelResult } from '../model/fusion-types.js';
+import type { Message } from '../model/message.js';
 
 // ---------------------------------------------------------------------------
 // Helpers — test data
 // ---------------------------------------------------------------------------
 
-// PanelResult does not yet exist in fusion-types.ts (forward ref for Task 03).
-// We use objects with the expected shape cast to any.
-const samplePanelResults: any[] = [
+const samplePanelResults: PanelResult[] = [
   {
     modelId: 'gpt-4o',
+    provider: 'openai',
     content: 'The capital of France is Paris. It is known for the Eiffel Tower.',
+    usage: { promptTokens: 0, completionTokens: 0 },
+    latencyMs: 0,
   },
   {
     modelId: 'claude-3-opus',
+    provider: 'anthropic',
     content: 'Paris is the capital of France, famous for its cuisine and art.',
+    usage: { promptTokens: 0, completionTokens: 0 },
+    latencyMs: 0,
   },
 ];
 
-const sampleMessages = [{ role: 'user' as const, content: 'What is the capital of France?' }];
+const sampleMessages: Message[] = [{ role: 'user', content: 'What is the capital of France?' }];
 
-const emptyPanelResults: any[] = [];
+const emptyPanelResults: PanelResult[] = [];
 
 // ---------------------------------------------------------------------------
 // buildJudgeSystemPrompt
@@ -58,39 +64,39 @@ test('buildJudgeSystemPrompt instructs JSON output', () => {
 // ---------------------------------------------------------------------------
 
 test('buildJudgeUserPrompt returns a non-empty string', () => {
-  const prompt = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
   assert.ok(typeof prompt === 'string', 'must return a string');
   assert.ok(prompt.trim().length > 0, 'must be non-empty');
 });
 
 test('buildJudgeUserPrompt includes modelId from panel results', () => {
-  const prompt = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
   assert.ok(prompt.includes('gpt-4o'), 'must include first modelId');
   assert.ok(prompt.includes('claude-3-opus'), 'must include second modelId');
 });
 
 test('buildJudgeUserPrompt includes original message content', () => {
-  const prompt = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
   assert.ok(prompt.includes('capital of France'), 'must include message content');
 });
 
 test('buildJudgeUserPrompt labels messages by role', () => {
-  const prompt = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
   assert.ok(prompt.includes('[user]'), 'must label user role');
 });
 
 test('buildJudgeUserPrompt works with empty panel results', () => {
-  const prompt = buildJudgeUserPrompt(emptyPanelResults as any, sampleMessages as any);
+  const prompt = buildJudgeUserPrompt(emptyPanelResults, sampleMessages);
   assert.ok(typeof prompt === 'string', 'must return a string even with empty results');
   assert.ok(prompt.includes('[user]'), 'must still include message content');
 });
 
 test('buildJudgeUserPrompt works with only system and assistant role messages', () => {
-  const messages = [
-    { role: 'system' as const, content: 'You are helpful.' },
-    { role: 'assistant' as const, content: 'Previous answer.' },
+  const messages: Message[] = [
+    { role: 'system', content: 'You are helpful.' },
+    { role: 'assistant', content: 'Previous answer.' },
   ];
-  const prompt = buildJudgeUserPrompt(samplePanelResults as any, messages as any);
+  const prompt = buildJudgeUserPrompt(samplePanelResults, messages);
 
   assert.ok(typeof prompt === 'string', 'must return a string');
   assert.ok(prompt.trim().length > 0, 'must be non-empty');
@@ -99,10 +105,16 @@ test('buildJudgeUserPrompt works with only system and assistant role messages', 
 });
 
 test('buildJudgeUserPrompt preserves special characters and multi-line panel content', () => {
-  const panelResults: any[] = [
-    { modelId: 'model-a', content: 'Line 1\nLine 2\tTabbed — "quoted" & <tagged>' },
+  const panelResults: PanelResult[] = [
+    {
+      modelId: 'model-a',
+      provider: 'openai',
+      content: 'Line 1\nLine 2\tTabbed — "quoted" & <tagged>',
+      usage: { promptTokens: 0, completionTokens: 0 },
+      latencyMs: 0,
+    },
   ];
-  const prompt = buildJudgeUserPrompt(panelResults, sampleMessages as any);
+  const prompt = buildJudgeUserPrompt(panelResults, sampleMessages);
 
   assert.ok(prompt.includes('Line 1\nLine 2'), 'must preserve newlines in content');
   assert.ok(prompt.includes('"quoted"'), 'must preserve quotes');
@@ -110,13 +122,13 @@ test('buildJudgeUserPrompt preserves special characters and multi-line panel con
 });
 
 test('buildJudgeUserPrompt output is deterministic for identical input', () => {
-  const a = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
-  const b = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  const a = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
+  const b = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
   assert.equal(a, b);
 });
 
 test('buildJudgeUserPrompt includes panel content text for each result', () => {
-  const prompt = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
   assert.ok(prompt.includes('Eiffel Tower'), 'must include first panel content');
   assert.ok(prompt.includes('cuisine and art'), 'must include second panel content');
 });
