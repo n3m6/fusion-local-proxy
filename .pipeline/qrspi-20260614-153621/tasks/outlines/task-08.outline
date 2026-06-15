@@ -1,0 +1,16 @@
+### task-08.outline
+Task: 08
+Title: Streaming infrastructure (adapter.stream(), SSE encoder, route SSE)
+Phase: 3
+Route: full
+Slice: Slice 4 (Streaming Infra)
+Dependencies: 07 (ChatModelPort.stream(), ChatStreamChunk)
+Scope: Implement stream() on OpenAiChatAdapter using the OpenAI SDK's streaming API (client.chat.completions.create({ stream: true })). Create the OpenAI SSE encoder that consumes FusionStreamEvent iterables and yields SSE-formatted strings with chat.completion.chunk payloads, keep-alive comments for progress events, and [DONE] termination. Modify the OpenAI route to detect stream: true and switch to SSE response via Hono streamSSE(). Add fusionStreamToOpenAiSSE export in translator.ts. The non-streaming JSON path is preserved for stream: false requests.
+Acceptance Criteria: AC-5 (partial — OpenAiChatAdapter stream implementation), AC-10, AC-12 (AbortSignal passthrough in stream)
+NFRs: NFR-2 (Hono in infrastructure), NFR-3 (openai SDK only in OpenAiChatAdapter), NFR-4 (only synthesis streams, keep-alive for panel/judge)
+Gate Criteria: Phase 3 Gate 1 (SSE stream with keep-alive, chat.completion.chunk, [DONE]), Phase 3 Gate 2 (timeout cancellation)
+Files:
+  - src/infrastructure/outbound/llm/openai-chat-adapter.ts (MODIFY) — Implement async *stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> using client.chat.completions.create({ ...params, stream: true }, { signal: request.options?.signal }). Yield content_delta for each delta content, content_stop on finish, usage from final chunk.
+  - src/infrastructure/inbound/http/openai/sse-encoder.ts (CREATE) — Export encodeOpenAiSSE(events: AsyncIterable<FusionStreamEvent>, model: string): AsyncIterable<string>. Emits keep-alive comments (": panel running", ": judging") for progress events. For content_delta: yields data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{"content":"..."}}]}. For done: yields data: [DONE]. Each line terminates with \n\n.
+  - src/infrastructure/inbound/http/openai/route.ts (MODIFY) — Detect stream: true in request body. When streaming: use Hono streamSSE() with encodeOpenAiSSE() callback piped from fusionService.runFusion(). When non-streaming: preserve existing c.json() path.
+  - src/infrastructure/inbound/http/openai/translator.ts (MODIFY) — Add export function fusionStreamToOpenAiSSE(events: AsyncIterable<FusionStreamEvent>, model: string): AsyncIterable<string> that delegates to encodeOpenAiSSE.

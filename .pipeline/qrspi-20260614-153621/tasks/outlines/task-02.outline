@@ -1,0 +1,15 @@
+### task-02.outline
+Task: 02
+Title: Domain service scaffold (analysis schema, judge prompt, synthesis prompt)
+Phase: 1
+Route: full
+Slice: Slice 1 (Domain Services)
+Dependencies: None
+Scope: Create three pure domain service files that define the Analysis zod schema and prompt builders for the judge and synthesis stages. These files live in src/domain/services/ and must have zero imports from src/application/ or src/infrastructure/. Contains no executable logic — just type definitions, schema definitions, and prompt-building functions that later phases consume. The judge prompt builder references PanelResult from fusion-types (created in Task 03) but must be structured so the import resolves once that type exists.
+Acceptance Criteria: AC-2 (domain purity)
+NFRs: NFR-1 (no SDK/framework imports in domain), NFR-6 (ConfigPort contract types used)
+Gate Criteria: Phase 1 Gate 4 (domain service files exist, compile, and have zero imports from src/application/ or src/infrastructure/)
+Files:
+  - src/domain/services/analysis-schema.ts (CREATE) — Zod schema for Analysis: { consensus: string[], contradictions: { topic: string, perspectives: string[] }[], unique_insights: { model: string, insight: string }[], blind_spots: string[] }. Exports analysisSchema and inferred Analysis type.
+  - src/domain/services/judge-prompt.ts (CREATE) — Export buildJudgeSystemPrompt(): string and buildJudgeUserPrompt(panelResults: PanelResult[], originalMessages: Message[]): string. References PanelResult from ../model/fusion-types.js and Message from ../model/message.js.
+  - src/domain/services/synthesis-prompt.ts (CREATE) — Export buildSynthesisSystemPrompt(): string and buildSynthesisUserPrompt(panelResults: PanelResult[], originalMessages: Message[], analysis: Analysis | null): string. References PanelResult, Message, and Analysis.

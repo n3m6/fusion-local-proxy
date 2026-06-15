@@ -1,0 +1,14 @@
+### task-07.outline
+Task: 07
+Title: Domain streaming interface (ChatModelPort.stream() + ChatStreamChunk)
+Phase: 3
+Route: full
+Slice: Slice 4 (Streaming Domain)
+Dependencies: None
+Scope: Extend ChatModelPort with a stream() method returning AsyncIterable<ChatStreamChunk>. Add ChatStreamChunk discriminated union type (content_delta | content_stop | usage) to chat-types.ts. These are pure domain-level changes — no infrastructure modifications. The existing complete() method is preserved unchanged. Later phases implement stream() in concrete adapters and upgrade SynthesizeStep to use it.
+Acceptance Criteria: AC-3 (ChatModelPort complete() + stream())
+NFRs: NFR-1 (domain purity), NFR-4 (streaming interface defined)
+Gate Criteria: Phase 3 Gate 1 (streaming interface exists for adapters), Phase 3 Gate 2 (timeout signal passthrough on stream signature)
+Files:
+  - src/domain/ports/chat-model-port.ts (MODIFY) — Add stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> method alongside existing complete(). Import ChatStreamChunk from ../model/chat-types.js.
+  - src/domain/model/chat-types.ts (MODIFY) — Append ChatStreamChunk discriminated union type: { type: 'content_delta'; delta: string } | { type: 'content_stop' } | { type: 'usage'; usage: TokenUsage }.

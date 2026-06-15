@@ -1,0 +1,16 @@
+### task-12.outline
+Task: 12
+Title: Domain-layer unit tests
+Phase: 5
+Route: full
+Slice: Slice 6 (Domain Tests)
+Dependencies: 02 (analysis-schema, judge-prompt, synthesis-prompt), 03 (PanelResult/PanelMeta types), 04 (JudgeStep), 05 (SynthesizeStep)
+Scope: Add unit tests for all domain service files and extend existing domain model tests. Create analysis-schema.test.ts verifying valid Analysis payloads pass validation and malformed shapes are rejected. Create judge-prompt.test.ts verifying prompt builder output shape includes panel results and original messages. Create synthesis-prompt.test.ts verifying prompt builder includes panel results and (when available) analysis references. Modify fusion-types.test.ts to add tests for PanelResult and PanelMeta type shapes.
+Acceptance Criteria: AC-14
+NFRs: NFR-1 (domain tests import only from domain layer)
+Gate Criteria: Phase 5 Gate 2 (≥80% branch coverage on domain layer)
+Files:
+  - src/domain/services/analysis-schema.test.ts (CREATE) — node:test suite: valid Analysis payload passes safeParse, missing consensus fails, malformed contradictions fails, empty blind_spots accepted, extra fields stripped or ignored.
+  - src/domain/services/judge-prompt.test.ts (CREATE) — node:test suite: buildJudgeSystemPrompt returns non-empty string, buildJudgeUserPrompt output contains model identifiers from panel results, includes original user message content.
+  - src/domain/services/synthesis-prompt.test.ts (CREATE) — node:test suite: buildSynthesisSystemPrompt returns non-empty string, buildSynthesisUserPrompt with analysis includes consensus/contradictions/insights/blind_spots references, buildSynthesisUserPrompt with null analysis includes panel results only, no analysis-specific tokens present.
+  - src/domain/model/fusion-types.test.ts (MODIFY) — Add tests: PanelResult type shape has all required fields, PanelMeta shape validates results + failedModels, FusionError code 'all_panels_failed' recognized as a valid code.

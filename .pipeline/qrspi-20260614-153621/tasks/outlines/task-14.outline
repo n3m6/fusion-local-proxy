@@ -1,0 +1,14 @@
+### task-14.outline
+Task: 14
+Title: README and example fusion.config.json
+Phase: 5
+Route: full
+Slice: Slice 6 (Documentation)
+Dependencies: 01–13 (full system implemented)
+Scope: Write comprehensive README.md covering architecture overview, local development setup, configuration format, and API usage examples for both OpenAI and Anthropic endpoints. Update fusion.config.json to serve as a realistic example mixing a local Ollama panel model, a remote OpenAI judge, and a remote Anthropic synthesizer.
+Acceptance Criteria: AC-15
+NFRs: None specific
+Gate Criteria: Phase 5 Gate 2 (documentation quality)
+Files:
+  - README.md (MODIFY) — Full documentation with: project overview and ensemble pipeline description, hexagonal architecture diagram (Mermaid or ASCII), prerequisites (Node 20+), install/setup steps, configuration format reference table, API usage examples (curl for OpenAI /v1/chat/completions and Anthropic /v1/messages), development workflow (npm run dev, npm run typecheck, npm test), environment variables reference.
+  - fusion.config.json (MODIFY) — Example config with: two panel providers (one local Ollama openai type, one local Ollama anthropic type or OpenRouter), one judge provider (remote OpenAI), one synthesizer provider (remote Anthropic). All apiKeyEnv fields reference documented environment variables.

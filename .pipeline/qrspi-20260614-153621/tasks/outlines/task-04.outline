@@ -1,0 +1,14 @@
+### task-04.outline
+Task: 04
+Title: JudgeStep with graceful degradation
+Phase: 2
+Route: full
+Slice: Slice 3 (Judge Analysis)
+Dependencies: 02 (analysis-schema, judge-prompt), 03 (PanelResult type)
+Scope: Create JudgeStep use case that calls the judge model via ChatModelPort.complete() with a JSON response_format, parses the response against analysisSchema using safeParse, and returns Analysis | null. On any failure (SDK error, invalid JSON, schema validation failure), logs the error via LoggerPort.logError() and returns null (graceful degradation). Uses buildJudgeSystemPrompt() and buildJudgeUserPrompt() from domain services. Include colocated judge-step.test.ts.
+Acceptance Criteria: AC-8, AC-14 (partial)
+NFRs: NFR-1, NFR-5 (judge failure never blocks synthesis), NFR-7 (logs judge failure with error details)
+Gate Criteria: Phase 2 Gate 1 (analysis enriches synthesis), Phase 2 Gate 2 (graceful degradation when judge unreachable)
+Files:
+  - src/application/usecases/judge-step.ts (CREATE) — JudgeStep class with constructor(chatPort: ChatModelPort, loggerPort: LoggerPort, clockPort: ClockPort). Exposes async analyze(panelResults: PanelResult[], originalMessages: Message[], judgeModel: ModelRef, timeoutMs: number): Promise<Analysis | null>. Builds ChatRequest with response_format: { type: 'json_schema', schema: analysisSchema.shape }, calls complete(), runs safeParse on the response content, catches errors → logs → returns null.
+  - src/application/usecases/judge-step.test.ts (CREATE) — node:test suite covering: successful analysis parse from valid JSON, schema validation failure returns null, judge model error returns null, empty panel results handled, logger.logError called on failure. Uses hand-written stubs.

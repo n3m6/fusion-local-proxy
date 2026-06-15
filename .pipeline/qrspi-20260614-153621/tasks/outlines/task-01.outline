@@ -1,0 +1,13 @@
+### task-01.outline
+Task: 01
+Title: Package.json regression fix and Anthropic SDK dependency
+Phase: 1
+Route: full
+Slice: Slice 1 (Foundation Fix)
+Dependencies: None
+Scope: Restore the two missing npm scripts to the complete three-script set mandated by the structure: `"dev": "tsx src/main.ts"`, `"start": "tsx src/main.ts"`, and `"typecheck": "tsc --noEmit"`. Add `@anthropic-ai/sdk` at `^0.104.1` to `dependencies` and run `npm install`. Verify that `npm run typecheck` passes with zero errors and the system remains runnable (existing passthrough still responds correctly to `curl POST /v1/chat/completions`). This is a MODIFY-only task fixing the single-file regression identified by the backward loop, incorporating the lesson that all three scripts must be explicitly preserved.
+Acceptance Criteria: AC-1
+NFRs: NFR-1 (maintain dependency rule — no new SDK imports in domain/app)
+Gate Criteria: Phase 1 Gate 1 (package.json scripts + @anthropic-ai/sdk dependency), Phase 1 Gate 2 (typecheck passes), Phase 1 Gate 3 (system remains runnable)
+Files:
+  - package.json (MODIFY) — Add `"dev": "tsx src/main.ts"`, `"start": "tsx src/main.ts"`, and `"typecheck": "tsc --noEmit"` to scripts. Add `"@anthropic-ai/sdk": "^0.104.1"` to dependencies. Run `npm install`.

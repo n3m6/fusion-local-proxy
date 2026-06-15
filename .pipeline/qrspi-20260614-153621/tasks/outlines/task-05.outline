@@ -1,0 +1,14 @@
+### task-05.outline
+Task: 05
+Title: SynthesizeStep (non-streamed synthesis)
+Phase: 2
+Route: full
+Slice: Slice 3 (Synthesis)
+Dependencies: 02 (synthesis-prompt), 03 (PanelResult type)
+Scope: Create SynthesizeStep use case that produces a final synthesis via ChatModelPort.complete(), wrapping the result in FusionStreamEvent iterable. Incorporates panel results and optional judge analysis into the prompt using domain service prompt builders. Produces content_delta → content_stop → done event sequence. Accepts Analysis | null and falls back to raw panel results when analysis is unavailable. Include colocated synthesize-step.test.ts. Note: this task implements the non-streamed version; Task 08 will upgrade SynthesizeStep to use stream().
+Acceptance Criteria: AC-9, AC-14 (partial)
+NFRs: NFR-1, NFR-5 (accepts null analysis)
+Gate Criteria: Phase 2 Gate 1 (synthesis references panel and analysis), Phase 2 Gate 2 (works without analysis)
+Files:
+  - src/application/usecases/synthesize-step.ts (CREATE) — SynthesizeStep class with constructor(chatPort: ChatModelPort, loggerPort: LoggerPort, clockPort: ClockPort). Exposes async *synthesize(panelResults: PanelResult[], originalMessages: Message[], analysis: Analysis | null, synthesizerModel: ModelRef, timeoutMs: number): AsyncIterable<FusionStreamEvent>. Calls buildSynthesisUserPrompt(), calls chatPort.complete(), yields content_delta, content_stop, done events.
+  - src/application/usecases/synthesize-step.test.ts (CREATE) — node:test suite covering: synthesis with analysis present, synthesis with null analysis (fallback path), content references panel and (when present) analysis elements, error propagation, correct event sequence. Uses hand-written stubs.

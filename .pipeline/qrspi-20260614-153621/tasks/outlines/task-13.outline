@@ -1,0 +1,15 @@
+### task-13.outline
+Task: 13
+Title: Infrastructure tests (OpenAI route, SSE encoder, server)
+Phase: 5
+Route: full
+Slice: Slice 6 (Infra Tests)
+Dependencies: 08 (OpenAI SSE encoder, route SSE), 10 (Anthropic route in server)
+Scope: Add integration and unit tests for infrastructure components created in Phases 3 and 4. Create openai/route.test.ts for the streaming SSE endpoint. Create openai/sse-encoder.test.ts for SSE output format and keep-alive comments. Modify server.test.ts to verify POST /v1/messages route is mounted.
+Acceptance Criteria: AC-10 (SSE encoding tested), AC-11 (Anthropic route tested)
+NFRs: NFR-2 (Hono tested in infrastructure)
+Gate Criteria: Phase 5 Gate 2 (test coverage on infrastructure)
+Files:
+  - src/infrastructure/inbound/http/openai/route.test.ts (CREATE) — node:test integration suite: Hono app with stream: true request returns SSE response with text/event-stream content-type, non-streaming returns JSON, error handling in streaming path.
+  - src/infrastructure/inbound/http/openai/sse-encoder.test.ts (CREATE) — node:test unit suite: encodeOpenAiSSE yields keep-alive comments for progress events, yields chat.completion.chunk for content_delta, yields [DONE] for done event, handles multiple content_delta events, includes model in chunk object.
+  - src/infrastructure/inbound/http/server.test.ts (MODIFY) — Add test: POST /v1/messages route is mounted on Hono app and returns non-404 status. Preserve existing tests for /v1/chat/completions and /v1/models.

@@ -1,0 +1,14 @@
+### task-11.outline
+Task: 11
+Title: DI container ensemble wiring
+Phase: 5
+Route: full
+Slice: Slice 6 (Wiring)
+Dependencies: 06 (RunFusionUseCase ensemble), 09 (ChatAdapterFactory anthropic branch), 10 (Anthropic route in server)
+Scope: Replace the single-ChatModelPort passthrough wiring in container.ts with full ensemble wiring. Create ChatAdapterFactory once, instantiate PanelRunner with panelPorts: ChatModelPort[] (one per panel model from config), JudgeStep and SynthesizeStep with per-role ChatModelPort instances, and pass all to the new RunFusionUseCase constructor. Wire the existing createServer() function which now includes both OpenAI and Anthropic routes. Modify container.test.ts to verify ensemble wiring compiles and covers anthropic adapter resolution.
+Acceptance Criteria: AC-13 (structured logging wired), NFR-7 (observability wired)
+NFRs: NFR-1 (no upward imports in DI), NFR-3 (SDK confinement through factory)
+Gate Criteria: Phase 5 Gate 1 (structured log lines per stage), Phase 5 Gate 2 (npm test passes with full wiring)
+Files:
+  - src/infrastructure/di/container.ts (MODIFY) — Replace single ChatModelPort creation with ensemble wiring: factory.create() for each panel model → PanelRunner; factory.create() for judge model (if present) → JudgeStep; factory.create() for synthesizer → SynthesizeStep; pass all to RunFusionUseCase along with config/logger/clock. If judgeModel is null, create a JudgeStep with a no-op ChatModelPort stub that immediately returns.
+  - src/infrastructure/di/container.test.ts (MODIFY) — Add tests: container resolves with anthropic providers in config, ensemble wiring does not throw, all config paths exercised (panel array, optional judge, synthesizer required), factory correctly routes openai and anthropic ModelRef instances.

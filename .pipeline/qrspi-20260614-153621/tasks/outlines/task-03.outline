@@ -1,0 +1,15 @@
+### task-03.outline
+Task: 03
+Title: Panel types and PanelRunner use case
+Phase: 2
+Route: full
+Slice: Slice 2 (Panel Fan-out)
+Dependencies: None
+Scope: Extend fusion-types.ts with PanelResult and PanelMeta interfaces. Create PanelRunner use case that fans out to N panel models via Promise.allSettled, collects partial failures, and raises FusionError('all_panels_failed') when every panel model fails. PanelRunner receives ChatModelPort[] in constructor (one per panel model) and panelModels: ModelRef[] in run() for metadata. Each port targets a different backend so adapters can be created per-model. Include colocated panel-runner.test.ts using node:test with stubbed ChatModelPort instances.
+Acceptance Criteria: AC-7, AC-14 (partial — application tests)
+NFRs: NFR-1, NFR-5 (graceful degradation — partial failures collected, total failure fatal), NFR-7 (logs per-panel latency)
+Gate Criteria: Phase 2 Gate 1 (contributes panel results needed for end-to-end content grounding), Phase 2 Gate 3 (all_panels_failed thrown when every panel fails)
+Files:
+  - src/domain/model/fusion-types.ts (MODIFY) — Append PanelResult interface { modelId, provider, content, usage: { promptTokens, completionTokens }, latencyMs } and PanelMeta interface { results: PanelResult[], failedModels: FailedModelInfo[] }. Document all_panels_failed error code convention.
+  - src/application/usecases/panel-runner.ts (CREATE) — PanelRunner class with constructor(chatPorts: ChatModelPort[], loggerPort: LoggerPort, clockPort: ClockPort) and async run(messages: Message[], panelModels: ModelRef[], timeoutMs: number): Promise<PanelMeta>. Dispatches all panel calls via Promise.allSettled, builds PanelMeta with results and failed_models, throws FusionError('all_panels_failed') when results array is empty.
+  - src/application/usecases/panel-runner.test.ts (CREATE) — node:test suite covering: all-success, partial-failure, all-failure (all_panels_failed), empty-panels edge case, AbortSignal passthrough for timeout. Uses hand-written stubs for ChatModelPort, LoggerPort, ClockPort.
