@@ -94,6 +94,42 @@ test('buildJudgeUserPrompt works with empty panel results', () => {
   assert.ok(prompt.includes('[user]'), 'must still include message content');
 });
 
+test('buildJudgeUserPrompt works with only system and assistant role messages', () => {
+  const messages = [
+    { role: 'system' as const, content: 'You are helpful.' },
+    { role: 'assistant' as const, content: 'Previous answer.' },
+  ];
+  const prompt = buildJudgeUserPrompt(samplePanelResults as any, messages as any);
+
+  assert.ok(typeof prompt === 'string', 'must return a string');
+  assert.ok(prompt.trim().length > 0, 'must be non-empty');
+  assert.ok(prompt.includes('[system]'), 'must label system role');
+  assert.ok(prompt.includes('[assistant]'), 'must label assistant role');
+});
+
+test('buildJudgeUserPrompt preserves special characters and multi-line panel content', () => {
+  const panelResults: any[] = [
+    { modelId: 'model-a', content: 'Line 1\nLine 2\tTabbed — "quoted" & <tagged>' },
+  ];
+  const prompt = buildJudgeUserPrompt(panelResults, sampleMessages as any);
+
+  assert.ok(prompt.includes('Line 1\nLine 2'), 'must preserve newlines in content');
+  assert.ok(prompt.includes('"quoted"'), 'must preserve quotes');
+  assert.ok(prompt.includes('<tagged>'), 'must preserve angle brackets');
+});
+
+test('buildJudgeUserPrompt output is deterministic for identical input', () => {
+  const a = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  const b = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  assert.equal(a, b);
+});
+
+test('buildJudgeUserPrompt includes panel content text for each result', () => {
+  const prompt = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
+  assert.ok(prompt.includes('Eiffel Tower'), 'must include first panel content');
+  assert.ok(prompt.includes('cuisine and art'), 'must include second panel content');
+});
+
 // ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------

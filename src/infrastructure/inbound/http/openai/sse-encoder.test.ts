@@ -112,6 +112,28 @@ test('encodeOpenAiSSE emits chat.completion.chunk for content_delta', async () =
   assert.ok(strings[0].endsWith('\n\n'));
 });
 
+test('encodeOpenAiSSE emits ordered chunks for multiple content_delta events', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'Hello' },
+    { type: 'content_delta', delta: ' there' },
+    { type: 'done' },
+  ];
+
+  const strings = await collectStrings(
+    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
+  );
+
+  const chunkDeltas = strings
+    .filter((s) => s.startsWith('data: ') && s.includes('chat.completion.chunk'))
+    .map((s) => {
+      const obj = JSON.parse(s.slice('data: '.length).trim());
+      const choices = obj.choices as Array<Record<string, unknown>>;
+      return (choices[0].delta as Record<string, unknown>).content;
+    });
+
+  assert.deepEqual(chunkDeltas, ['Hello', ' there']);
+});
+
 // ---------------------------------------------------------------------------
 // content_stop
 // ---------------------------------------------------------------------------

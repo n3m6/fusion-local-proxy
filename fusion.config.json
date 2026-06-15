@@ -2,10 +2,31 @@
   "providers": [
     {
       "type": "openai",
-      "role": "synthesizer",
+      "role": "panel",
+      "model": "llama3:8b",
+      "baseURL": "http://localhost:11434/v1",
+      "apiKeyEnv": "OLLAMA_API_KEY"
+    },
+    {
+      "type": "openai",
+      "role": "panel",
+      "model": "openai/gpt-4.1-mini",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "apiKeyEnv": "OPENROUTER_API_KEY"
+    },
+    {
+      "type": "openai",
+      "role": "judge",
       "model": "gpt-4o",
       "baseURL": "https://api.openai.com/v1",
       "apiKeyEnv": "OPENAI_API_KEY"
+    },
+    {
+      "type": "anthropic",
+      "role": "synthesizer",
+      "model": "claude-sonnet-4-20250514",
+      "baseURL": "https://api.anthropic.com/v1",
+      "apiKeyEnv": "ANTHROPIC_API_KEY"
     }
   ],
   "timeoutMs": 30000

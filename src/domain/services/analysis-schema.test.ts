@@ -95,6 +95,108 @@ test('analysisSchema — empty valid input (all fields empty arrays)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// analysisSchema — extra fields stripped
+// ---------------------------------------------------------------------------
+
+test('analysisSchema — extra top-level fields are stripped from parsed data', () => {
+  const input = {
+    consensus: ['Point A'],
+    contradictions: [],
+    unique_insights: [],
+    blind_spots: [],
+    extra: 123,
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.ok(result.success);
+  if (result.success) {
+    assert.equal('extra' in result.data, false);
+  }
+});
+
+test('analysisSchema — unknown nested fields are stripped from contradiction entries', () => {
+  const input = {
+    consensus: [],
+    contradictions: [
+      { topic: 'A vs B', perspectives: ['A is better'], severity: 'high' },
+    ],
+    unique_insights: [],
+    blind_spots: [],
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.ok(result.success);
+  if (result.success) {
+    assert.equal('severity' in result.data.contradictions[0], false);
+    assert.equal(result.data.contradictions[0].topic, 'A vs B');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// analysisSchema — malformed sub-fields
+// ---------------------------------------------------------------------------
+
+test('analysisSchema — contradiction topic as number fails', () => {
+  const input = {
+    consensus: [],
+    contradictions: [{ topic: 42, perspectives: ['x'] }],
+    unique_insights: [],
+    blind_spots: [],
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.equal(result.success, false);
+});
+
+test('analysisSchema — contradiction missing perspectives fails', () => {
+  const input = {
+    consensus: [],
+    contradictions: [{ topic: 'A vs B' }],
+    unique_insights: [],
+    blind_spots: [],
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.equal(result.success, false);
+});
+
+test('analysisSchema — unique_insights entry missing model fails', () => {
+  const input = {
+    consensus: [],
+    contradictions: [],
+    unique_insights: [{ insight: 'Only one model said this' }],
+    blind_spots: [],
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.equal(result.success, false);
+});
+
+test('analysisSchema — unique_insights entry missing insight fails', () => {
+  const input = {
+    consensus: [],
+    contradictions: [],
+    unique_insights: [{ model: 'gpt-4o' }],
+    blind_spots: [],
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.equal(result.success, false);
+});
+
+test('analysisSchema — consensus array of numbers fails', () => {
+  const input = {
+    consensus: [1, 2, 3],
+    contradictions: [],
+    unique_insights: [],
+    blind_spots: [],
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.equal(result.success, false);
+});
+
+// ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------
 

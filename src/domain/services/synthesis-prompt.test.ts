@@ -231,6 +231,53 @@ test('buildSynthesisUserPrompt with empty analysis still includes section header
   assert.ok(prompt.includes('Blind Spots'), 'must include blind spots header');
 });
 
+test('buildSynthesisUserPrompt with null analysis excludes analysis-specific terminology', () => {
+  const panelResults: any[] = [
+    { modelId: 'model-a', content: 'Paris is the capital city.' },
+    { modelId: 'model-b', content: 'The Eiffel Tower is a landmark.' },
+  ];
+  const prompt = buildSynthesisUserPrompt(panelResults, sampleMessages as any, null).toLowerCase();
+
+  assert.ok(!prompt.includes('consensus'), 'null path must not reference consensus');
+  assert.ok(!prompt.includes('contradiction'), 'null path must not reference contradiction');
+  assert.ok(!prompt.includes('blind_spot'), 'null path must not reference blind_spot');
+  assert.ok(!prompt.includes('blind spot'), 'null path must not reference blind spots');
+  assert.ok(!prompt.includes('unique_insight'), 'null path must not reference unique_insight');
+  assert.ok(!prompt.includes('unique insight'), 'null path must not reference unique insights');
+});
+
+test('buildSynthesisUserPrompt with null analysis still references panel content', () => {
+  const panelResults: any[] = [
+    { modelId: 'model-a', content: 'distinctive panel output text' },
+  ];
+  const prompt = buildSynthesisUserPrompt(panelResults, sampleMessages as any, null);
+  assert.ok(prompt.includes('distinctive panel output text'), 'must include raw panel content');
+});
+
+test('buildSynthesisUserPrompt handles panel results with empty content', () => {
+  const panelResults: any[] = [
+    { modelId: 'model-a', content: '' },
+    { modelId: 'model-b', content: '' },
+  ];
+  const prompt = buildSynthesisUserPrompt(panelResults, sampleMessages as any, validAnalysis);
+  assert.ok(typeof prompt === 'string');
+  assert.ok(prompt.trim().length > 0);
+  assert.ok(prompt.includes('model-a'), 'must still list model identifiers');
+  assert.ok(prompt.includes('model-b'), 'must still list model identifiers');
+});
+
+test('buildSynthesisUserPrompt with empty analysis arrays emits empty-section fallbacks', () => {
+  const prompt = buildSynthesisUserPrompt(
+    samplePanelResults as any,
+    sampleMessages as any,
+    emptyAnalysis,
+  );
+  assert.ok(prompt.includes('No consensus points identified'), 'must note empty consensus');
+  assert.ok(prompt.includes('No contradictions identified'), 'must note empty contradictions');
+  assert.ok(prompt.includes('No unique insights identified'), 'must note empty unique insights');
+  assert.ok(prompt.includes('No blind spots identified'), 'must note empty blind spots');
+});
+
 // ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
-import { serve } from '@hono/node-server';
 import { createApp } from './infrastructure/di/container.js';
+import { startHttpServer } from './infrastructure/inbound/http/node-server.js';
 
 export function resolvePort(): number {
   return Number(process.env.PORT) || 3000;
@@ -11,11 +11,7 @@ export function main(): void {
 
   console.log(JSON.stringify({ event: 'starting', port }));
 
-  serve({
-    fetch: app.fetch,
-    port,
-    hostname: '127.0.0.1',
-  });
+  startHttpServer(app, { port });
 
   console.log(`Server listening on http://localhost:${port}`);
 }

@@ -387,3 +387,39 @@ test('POST /v1/chat/completions with stream:true handles error event via SSE', a
   // Should NOT end with [DONE] after error
   assert.ok(!body.includes('[DONE]'), 'SSE stream should not have [DONE] after error');
 });
+
+// ---------------------------------------------------------------------------
+// Anthropic route mount (Task 10 / Task 13)
+// ---------------------------------------------------------------------------
+
+test('POST /v1/messages route is mounted and reachable with a valid body', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: 'Hello' }],
+    }),
+  });
+
+  assert.notEqual(res.status, 404);
+});
+
+test('POST /v1/messages route is mounted and returns non-404 for empty body', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '',
+  });
+
+  assert.notEqual(res.status, 404);
+});

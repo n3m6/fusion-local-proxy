@@ -1,10 +1,21 @@
-import type Anthropic from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelPort } from '../../../domain/ports/chat-model-port.js';
 import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../../domain/model/chat-types.js';
 
 export interface AdapterConfig {
   readonly baseURL: string;
   readonly apiKey: string;
+}
+
+/**
+ * Construct the Anthropic SDK client. Kept here (rather than in the factory) so
+ * the `@anthropic-ai/sdk` import stays confined to this adapter module (NFR-3).
+ */
+export function createAnthropicClient(config: AdapterConfig): Anthropic {
+  return new Anthropic({
+    baseURL: config.baseURL,
+    apiKey: config.apiKey,
+  });
 }
 
 export class AnthropicChatAdapter implements ChatModelPort {

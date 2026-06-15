@@ -1,10 +1,21 @@
-import type OpenAI from 'openai';
+import OpenAI from 'openai';
 import type { ChatModelPort } from '../../../domain/ports/chat-model-port.js';
 import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../../domain/model/chat-types.js';
 
 export interface AdapterConfig {
   readonly baseURL: string;
   readonly apiKey: string;
+}
+
+/**
+ * Construct the OpenAI SDK client. Kept here (rather than in the factory) so the
+ * `openai` SDK import stays confined to this adapter module (NFR-3).
+ */
+export function createOpenAiClient(config: AdapterConfig): OpenAI {
+  return new OpenAI({
+    baseURL: config.baseURL,
+    apiKey: config.apiKey,
+  });
 }
 
 export class OpenAiChatAdapter implements ChatModelPort {
