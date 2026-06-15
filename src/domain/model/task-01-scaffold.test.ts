@@ -257,6 +257,95 @@ describe('FusionStreamEvent discriminated union', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// Task 01: Scripts completeness — start, typecheck, and exact count
+// ---------------------------------------------------------------------------
+
+describe('Scripts completeness (Task 01 regression fix)', () => {
+  const pkg = readJson(projectFile('package.json')) as Record<string, unknown>;
+  const scripts = pkg.scripts as Record<string, string>;
+
+  test('has "start" script running tsx src/main.ts', () => {
+    assert.ok(scripts.start, '"start" script must exist');
+    assert.equal(scripts.start, 'tsx src/main.ts', '"start" must equal "tsx src/main.ts"');
+  });
+
+  test('has "typecheck" script running tsc --noEmit', () => {
+    assert.ok(scripts.typecheck, '"typecheck" script must exist');
+    assert.equal(scripts.typecheck, 'tsc --noEmit', '"typecheck" must equal "tsc --noEmit"');
+  });
+
+  test('scripts object contains exactly three entries', () => {
+    const keys = Object.keys(scripts);
+    assert.deepEqual(keys.sort(), ['dev', 'start', 'typecheck'], 'scripts must contain exactly dev, start, typecheck');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 01: Dependency presence — @anthropic-ai/sdk
+// ---------------------------------------------------------------------------
+
+describe('@anthropic-ai/sdk dependency (Task 01)', () => {
+  const pkg = readJson(projectFile('package.json')) as Record<string, unknown>;
+  const deps = pkg.dependencies as Record<string, string>;
+
+  test('includes @anthropic-ai/sdk at version ^0.104.1', () => {
+    assert.ok(deps['@anthropic-ai/sdk'], '@anthropic-ai/sdk must be in dependencies');
+    assert.equal(
+      deps['@anthropic-ai/sdk'],
+      '^0.104.1',
+      `@anthropic-ai/sdk version must be ^0.104.1, got ${deps['@anthropic-ai/sdk']}`
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 01: NFR-1 — no @anthropic-ai/sdk imports in src/application/
+// ---------------------------------------------------------------------------
+
+describe('NFR-1: @anthropic-ai/sdk not in application layer (Task 01)', () => {
+  const appDir = projectFile('src/application');
+
+  test('no @anthropic-ai/sdk import in src/application/', () => {
+    const patterns = ["from '@anthropic-ai/sdk'", 'from "@anthropic-ai/sdk"'];
+    for (const pat of patterns) {
+      const { stdout } = spawnSync(
+        'grep',
+        ['-r', '--include=*.ts', '--exclude=*.test.ts', pat, appDir],
+        { encoding: 'utf-8', cwd: ROOT }
+      );
+      const output = stdout.trim();
+      assert.equal(
+        output,
+        '',
+        `Forbidden SDK import @anthropic-ai/sdk found in src/application/ (${pat}):\n${output}`
+      );
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 01: Full-project typecheck using tsc --noEmit (matches "typecheck" script)
+// ---------------------------------------------------------------------------
+
+describe('Full-project typecheck (Task 01)', () => {
+  test('npm run typecheck exits 0 with no errors', () => {
+    const { status, stdout, stderr } = spawnSync(
+      'npx',
+      ['tsc', '--noEmit'],
+      { encoding: 'utf-8', cwd: ROOT }
+    );
+
+    assert.equal(
+      status,
+      0,
+      `tsc --noEmit failed with exit ${status}\nstdout: ${stdout}\nstderr: ${stderr}`
+    );
+    assert.equal(stderr.trim(), '', `tsc produced stderr: ${stderr}`);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // TypeScript compilation — domain model files only
 // ---------------------------------------------------------------------------
