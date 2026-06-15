@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { createServer } from './server.js';
 import type { FusionService } from '../../../application/ports/fusion-service.js';
 import type { ConfigPort } from '../../../domain/ports/config-port.js';
-import type { FusionRequest } from '../../../domain/model/fusion-types.js';
+import { FusionError, type FusionRequest } from '../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../domain/model/stream-types.js';
 import type { ModelRef } from '../../../domain/model/fusion-types.js';
 
@@ -225,4 +225,45 @@ test('POST /v1/chat/completions empty messages returns 200 (passthrough)', async
   assert.equal(res.status, 200);
   const body = await res.json() as Record<string, unknown>;
   assert.equal(body.object, 'chat.completion');
+});
+
+test('POST /v1/chat/completions returns 500 with FusionError body on all_panels_failed', async () => {
+  const failedModels = [
+    { modelId: 'm1', errorCode: 'TIMEOUT', errorMessage: 'timed out' },
+  ];
+  const error = new FusionError('all_panels_failed', 'All panel models failed', { failedModels });
+
+  const fusionService: FusionService = {
+    async *runFusion(_request: FusionRequest): AsyncIterable<FusionStreamEvent> {
+      await Promise.resolve();
+      throw error;
+    },
+  };
+
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+    }),
+  });
+
+  assert.equal(res.status, 500);
+  const body = await res.json() as Record<string, unknown>;
+  const err = body.error as Record<string, unknown>;
+  assert.ok(err);
+  assert.equal(err.code, 'all_panels_failed');
+  assert.equal(err.message, 'All panel models failed');
+
+  const details = err.details as Record<string, unknown>;
+  assert.ok(details);
+  assert.ok(Array.isArray(details.failedModels));
+  const models = details.failedModels as Array<Record<string, unknown>>;
+  assert.equal(models.length, 1);
+  assert.equal(models[0].modelId, 'm1');
+  assert.equal(models[0].errorCode, 'TIMEOUT');
 });
