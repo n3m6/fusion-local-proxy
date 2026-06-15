@@ -1,24 +1,10 @@
 ---
 run_id: qrspi-20260614-153621
 route: full
-current_phase: 3
+current_phase: 4
 total_phases: 5
-last_completed_stage: accept
-next_stage: replan
-stages_completed:
-  - goals
-  - research
-  - design
-  - structure
-  - plan
-  - implement
-  - accept
-  - replan
-  - implement
-  - accept
-  - replan
-  - implement
-  - accept
+last_completed_stage: replan
+next_stage: implement
 phase_history:
   - phase: 1
     completed_stages:
@@ -34,6 +20,7 @@ phase_history:
     completed_stages:
       - implement
       - accept
+      - replan
 backward_loops: 1
 interaction_mode: automated
 failure_policy: best-effort
