@@ -1,5 +1,0 @@
-### Status — PASS
-
-### Findings
-
-None.
