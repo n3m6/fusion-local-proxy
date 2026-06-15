@@ -5,7 +5,7 @@ import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatRequest, ChatResponse, TokenUsage } from '../../domain/model/chat-types.js';
+import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../domain/model/chat-types.js';
 import type { ModelRef, PanelResult } from '../../domain/model/fusion-types.js';
 import type { Analysis } from '../../domain/services/analysis-schema.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
@@ -21,17 +21,37 @@ interface StubChatModelPort extends ChatModelPort {
 
 function stubChatPort(response?: ChatResponse): StubChatModelPort {
   const calls: ChatRequest[] = [];
+  const resp = response ?? {
+    content: 'stub synthesis response',
+    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    model: 'synth-model',
+  };
   return {
     _calls: calls,
     async complete(request: ChatRequest): Promise<ChatResponse> {
       calls.push(request);
-      return (
-        response ?? {
-          content: 'stub synthesis response',
-          usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-          model: 'synth-model',
-        }
-      );
+      return resp;
+    },
+    stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
+      calls.push(request);
+      const chunks: ChatStreamChunk[] = [
+        { type: 'content_delta', delta: resp.content },
+        { type: 'content_stop' },
+        { type: 'usage', usage: resp.usage },
+      ];
+      return {
+        [Symbol.asyncIterator]() {
+          let i = 0;
+          return {
+            async next() {
+              if (i < chunks.length) {
+                return { value: chunks[i++]!, done: false };
+              }
+              return { value: undefined as never, done: true };
+            },
+          };
+        },
+      };
     },
   };
 }
@@ -43,6 +63,18 @@ function stubChatPortReject(error: Error): StubChatModelPort {
     async complete(request: ChatRequest): Promise<ChatResponse> {
       calls.push(request);
       throw error;
+    },
+    stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
+      calls.push(request);
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              throw error;
+            },
+          };
+        },
+      };
     },
   };
 }

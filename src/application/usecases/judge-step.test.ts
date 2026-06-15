@@ -4,7 +4,7 @@ import { JudgeStep } from './judge-step.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatRequest, ChatResponse, TokenUsage } from '../../domain/model/chat-types.js';
+import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../domain/model/chat-types.js';
 import type { ModelRef, PanelResult } from '../../domain/model/fusion-types.js';
 import type { Message } from '../../domain/model/message.js';
 
@@ -30,6 +30,18 @@ function stubChatPort(response?: ChatResponse): StubChatModelPort {
         }
       );
     },
+    stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
+      calls.push(request);
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              return { value: undefined as never, done: true };
+            },
+          };
+        },
+      };
+    },
   };
 }
 
@@ -40,6 +52,18 @@ function stubChatPortReject(error: Error): StubChatModelPort {
     async complete(_request: ChatRequest): Promise<ChatResponse> {
       calls.push(_request);
       throw error;
+    },
+    stream(_request: ChatRequest): AsyncIterable<ChatStreamChunk> {
+      calls.push(_request);
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              throw error;
+            },
+          };
+        },
+      };
     },
   };
 }

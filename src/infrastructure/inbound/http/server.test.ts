@@ -267,3 +267,123 @@ test('POST /v1/chat/completions returns 500 with FusionError body on all_panels_
   assert.equal(models[0].modelId, 'm1');
   assert.equal(models[0].errorCode, 'TIMEOUT');
 });
+
+
+// ---------------------------------------------------------------------------
+// Streaming (SSE) route tests
+// ---------------------------------------------------------------------------
+
+test('POST /v1/chat/completions with stream:true returns text/event-stream content type', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: true,
+    }),
+  });
+
+  assert.equal(res.status, 200);
+  const contentType = res.headers.get('Content-Type') ?? '';
+  assert.ok(contentType.includes('text/event-stream'), `expected text/event-stream, got ${contentType}`);
+});
+
+test('POST /v1/chat/completions with stream:true body contains data: lines', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: true,
+    }),
+  });
+
+  assert.equal(res.status, 200);
+  const body = await res.text();
+
+  // SSE body should contain data: lines
+  assert.ok(body.includes('data: '), 'SSE body should contain data: lines');
+  // Should end with [DONE]
+  assert.ok(body.includes('[DONE]'), 'SSE stream should terminate with [DONE]');
+});
+
+test('POST /v1/chat/completions with stream:true includes chat.completion.chunk', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: true,
+    }),
+  });
+
+  const body = await res.text();
+  assert.ok(body.includes('chat.completion.chunk'), 'SSE body should contain chat.completion.chunk object');
+});
+
+test('POST /v1/chat/completions with stream:false returns JSON', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: false,
+    }),
+  });
+
+  assert.equal(res.status, 200);
+
+  const body = await res.json() as Record<string, unknown>;
+  assert.equal(body.object, 'chat.completion');
+  // Should NOT contain SSE-specific markers
+  const textBody = JSON.stringify(body);
+  assert.ok(!textBody.includes('data: '));
+  assert.ok(!textBody.includes('[DONE]'));
+});
+
+test('POST /v1/chat/completions with stream:true handles error event via SSE', async () => {
+  const fusionService = stubFusionServiceWithErrorEvent('MODEL_DOWN', 'Upstream model unavailable');
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: true,
+    }),
+  });
+
+  assert.equal(res.status, 200);
+  const contentType = res.headers.get('Content-Type') ?? '';
+  assert.ok(contentType.includes('text/event-stream'), `expected text/event-stream, got ${contentType}`);
+
+  const body = await res.text();
+  // Should contain the error in SSE format
+  assert.ok(body.includes('data: '), 'SSE body should contain data: lines');
+  assert.ok(body.includes('MODEL_DOWN'), 'SSE body should contain error code');
+  // Should NOT end with [DONE] after error
+  assert.ok(!body.includes('[DONE]'), 'SSE stream should not have [DONE] after error');
+});

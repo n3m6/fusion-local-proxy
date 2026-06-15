@@ -1,6 +1,6 @@
 import type { Message } from '../../domain/model/message.js';
 import type { ModelRef, PanelResult } from '../../domain/model/fusion-types.js';
-import type { ChatRequest } from '../../domain/model/chat-types.js';
+import type { ChatRequest, TokenUsage } from '../../domain/model/chat-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
@@ -48,19 +48,35 @@ export class SynthesizeStep {
       this.loggerPort.logStageStart('synthesis');
       const startTime = this.clockPort.now();
 
-      const response = await this.chatPort.complete(request);
+      let usage: TokenUsage | undefined;
+
+      for await (const chunk of this.chatPort.stream(request)) {
+        if (chunk.type === 'content_delta') {
+          yield { type: 'content_delta', delta: chunk.delta };
+        } else if (chunk.type === 'content_stop') {
+          yield { type: 'content_stop' };
+        } else if (chunk.type === 'usage') {
+          usage = chunk.usage;
+        }
+      }
 
       const durationMs = this.clockPort.now() - startTime;
-      this.loggerPort.logStageEnd('synthesis', durationMs, response.usage);
+      if (usage) {
+        this.loggerPort.logStageEnd('synthesis', durationMs, usage);
+      } else {
+        this.loggerPort.logStageEnd('synthesis', durationMs);
+      }
 
       if (timer !== undefined) {
         clearTimeout(timer);
         timer = undefined;
       }
 
-      yield { type: 'content_delta', delta: response.content };
-      yield { type: 'content_stop' };
-      yield { type: 'done', usage: response.usage, model: synthesizerModel.model };
+      yield {
+        type: 'done',
+        ...(usage ? { usage } : {}),
+        model: synthesizerModel.model,
+      };
     } finally {
       if (timer !== undefined) {
         clearTimeout(timer);

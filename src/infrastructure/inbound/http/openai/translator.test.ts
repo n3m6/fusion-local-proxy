@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   openAiRequestToFusion,
   fusionStreamToOpenAiResponse,
+  fusionStreamToOpenAiSSE,
 } from './translator.js';
 import { FusionError } from '../../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
@@ -418,4 +419,56 @@ test('fusionStreamToOpenAiResponse throws when stream completes without done eve
       return true;
     },
   );
+});
+
+
+// ---------------------------------------------------------------------------
+// fusionStreamToOpenAiSSE
+// ---------------------------------------------------------------------------
+
+test('fusionStreamToOpenAiSSE delegates to SSE encoder', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'Hello' },
+    { type: 'content_stop' },
+    { type: 'done' },
+  ];
+
+  const strings: string[] = [];
+  for await (const s of fusionStreamToOpenAiSSE(
+    await asyncIterableFrom(events),
+    'gpt-4o',
+  )) {
+    strings.push(s);
+  }
+
+  // First line should be a content_delta SSE chunk
+  assert.ok(strings[0].startsWith('data: '));
+  const jsonStr = strings[0].slice('data: '.length).trim();
+  const obj = JSON.parse(jsonStr);
+  assert.equal(obj.object, 'chat.completion.chunk');
+  assert.equal(obj.model, 'gpt-4o');
+  const choices = obj.choices as Array<Record<string, unknown>>;
+  assert.equal((choices[0].delta as Record<string, unknown>).content, 'Hello');
+
+  // Second line should be content_stop
+  assert.ok(strings[1].startsWith('data: '));
+
+  // Last line should be [DONE]
+  const last = strings[strings.length - 1];
+  assert.equal(last.trim(), 'data: [DONE]');
+});
+
+test('fusionStreamToOpenAiSSE handles empty stream with [DONE]', async () => {
+  const events: FusionStreamEvent[] = [];
+
+  const strings: string[] = [];
+  for await (const s of fusionStreamToOpenAiSSE(
+    await asyncIterableFrom(events),
+    'gpt-4o',
+  )) {
+    strings.push(s);
+  }
+
+  assert.equal(strings.length, 1);
+  assert.equal(strings[0].trim(), 'data: [DONE]');
 });

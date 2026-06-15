@@ -3,6 +3,7 @@ import type { FusionRequest } from '../../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
 import type { ChatOptions } from '../../../../domain/model/chat-types.js';
 import type { TokenUsage } from '../../../../domain/model/chat-types.js';
+import { encodeOpenAiSSE } from './sse-encoder.js';
 
 export function openAiRequestToFusion(body: Record<string, unknown>): FusionRequest {
   const messages = Array.isArray(body.messages)
@@ -105,4 +106,11 @@ export async function fusionStreamToOpenAiResponse(
       total_tokens: usage.totalTokens,
     },
   };
+}
+
+export function fusionStreamToOpenAiSSE(
+  events: AsyncIterable<FusionStreamEvent>,
+  model: string,
+): AsyncIterable<string> {
+  return encodeOpenAiSSE(events, model);
 }
