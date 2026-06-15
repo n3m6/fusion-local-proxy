@@ -1,63 +1,81 @@
 import type { FusionService } from '../ports/fusion-service.js';
-import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { FusionRequest } from '../../domain/model/fusion-types.js';
+import type { FusionRequest, PanelMeta } from '../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
-import type { ChatRequest } from '../../domain/model/chat-types.js';
-import type { ChatResponse } from '../../domain/model/chat-types.js';
+import type { TokenUsage } from '../../domain/model/chat-types.js';
 import type { Message } from '../../domain/model/message.js';
+import type { Analysis } from '../../domain/services/analysis-schema.js';
+import { PanelRunner } from './panel-runner.js';
+import { JudgeStep } from './judge-step.js';
+import { SynthesizeStep } from './synthesize-step.js';
 
 export class RunFusionUseCase implements FusionService {
   constructor(
-    private readonly chatModelPort: ChatModelPort,
+    private readonly panelRunner: PanelRunner,
+    private readonly judgeStep: JudgeStep,
+    private readonly synthesizeStep: SynthesizeStep,
     private readonly configPort: ConfigPort,
     private readonly loggerPort: LoggerPort,
     private readonly clockPort: ClockPort,
   ) {}
 
   async *runFusion(request: FusionRequest): AsyncIterable<FusionStreamEvent> {
-    // 1. Resolve the synthesizer model
-    const synthesizerModel = this.configPort.getSynthesizerModel();
+    // 1. Resolve configuration
+    const panelModels = this.configPort.getPanelModels();
+    const judgeModel = this.configPort.getJudgeModel();
+    const timeoutMs = this.configPort.getTimeoutMs();
 
-    // 2. Log stage start and capture start time
-    this.loggerPort.logStageStart('synthesis');
-    const startTime = this.clockPort.now();
-
-    // 3. Build the ChatRequest
+    // 2. Build messages array (prepend system prompt if present)
     const messages: Message[] = request.systemPrompt
       ? [{ role: 'system', content: request.systemPrompt }, ...request.messages]
       : [...request.messages];
 
-    const options: { temperature?: number; maxTokens?: number } = {
-      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-      ...(request.maxTokens !== undefined ? { maxTokens: request.maxTokens } : {}),
-    };
+    // 3. Panel stage
+    this.loggerPort.logStageStart('panel');
+    const panelStart = this.clockPort.now();
+    const panelMeta: PanelMeta = await this.panelRunner.run(messages, panelModels, timeoutMs);
+    this.loggerPort.logStageEnd('panel', this.clockPort.now() - panelStart);
 
-    const chatRequest: ChatRequest = {
-      messages,
-      model: synthesizerModel,
-      ...(Object.keys(options).length > 0 ? { options } : {}),
-    };
+    // 4. Yield panel progress
+    yield { type: 'progress', stage: 'panel', message: 'Panel stage complete' };
 
-    // 4. Call the model
-    const response: ChatResponse = await this.chatModelPort.complete(chatRequest);
+    // 5. Judge stage (conditional)
+    let analysis: Analysis | null = null;
+    if (judgeModel !== null) {
+      this.loggerPort.logStageStart('judge');
+      const judgeStart = this.clockPort.now();
+      analysis = await this.judgeStep.analyze(panelMeta.results, messages, judgeModel, timeoutMs);
+      this.loggerPort.logStageEnd('judge', this.clockPort.now() - judgeStart);
+    }
 
-    // 5. Compute duration and log
-    const durationMs = this.clockPort.now() - startTime;
-    this.loggerPort.logStageEnd('synthesis', durationMs, response.usage);
+    // 6. Yield judge progress (always, even when judge was skipped)
+    yield { type: 'progress', stage: 'judge', message: 'Judge stage complete' };
 
-    // 6. Yield content event
+    // 7. Synthesis stage — iterate and re-yield content events, capture usage/model from done
+    let synthUsage: TokenUsage | undefined;
+    let synthModel: string | undefined;
+
+    for await (const event of this.synthesizeStep.synthesize(panelMeta.results, messages, analysis)) {
+      if (event.type === 'content_delta') {
+        yield { type: 'content_delta', delta: event.delta };
+      } else if (event.type === 'content_stop') {
+        yield { type: 'content_stop' };
+      } else if (event.type === 'done') {
+        // Capture usage and model from synthesis done event; do NOT yield it
+        synthUsage = event.usage;
+        synthModel = event.model;
+      }
+      // Ignore progress, error, etc. events from synthesis
+    }
+
+    // 8. Yield combined final done event
     yield {
-      type: 'content_delta' as const,
-      delta: response.content,
-    };
-
-    // 7. Yield done event
-    yield {
-      type: 'done' as const,
-      usage: response.usage,
+      type: 'done',
+      failedModels: panelMeta.failedModels,
+      ...(synthUsage ? { usage: synthUsage } : {}),
+      ...(synthModel ? { model: synthModel } : {}),
     };
   }
 }
