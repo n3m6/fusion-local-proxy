@@ -1,6 +1,6 @@
 ---
 total_phases: 5
-completed_phases: [1]
+completed_phases: [1, 2]
 ---
 
 ## Phase 1 — Foundation Fix and Domain Services ✅ COMPLETED
@@ -12,13 +12,14 @@ completed_phases: [1]
   3. ✅ `curl POST /v1/chat/completions` with existing passthrough returns a valid ChatCompletion JSON response (system remains runnable).
   4. ✅ Domain service files (`analysis-schema.ts`, `judge-prompt.ts`, `synthesis-prompt.ts`) exist, compile, and have zero imports from `src/application/` or `src/infrastructure/`. Colocated test suites created (37 deterministic tests).
 
-## Phase 2 — Ensemble Pipeline (Panel + Judge + Synthesis)
+## Phase 2 — Ensemble Pipeline (Panel + Judge + Synthesis) ✅ COMPLETED
 - **Tasks:** 03, 04, 05, 06
 - **Acceptance Criteria:** AC-7 (PanelRunner parallel dispatch with all_panels_failed), AC-8 (JudgeStep graceful degradation), AC-9 (SynthesizeStep grounded responses), AC-4 (use-case orchestration), NFR-5 (graceful degradation)
 - **Replan Gate:**
-  1. When all panel models are configured, the `/v1/chat/completions` response content references at least one element from panel outputs and at least one element from judge analysis.
-  2. When the judge model is unreachable or returns invalid JSON, the system returns a valid synthesis response (graceful degradation) and logs the judge failure via `LoggerPort.logError()`.
-  3. `PanelRunner` throws `FusionError('all_panels_failed')` when every panel model fails.
+  1. ✅ When all panel models are configured, the `/v1/chat/completions` response content references at least one element from panel outputs and at least one element from judge analysis.
+  2. ✅ When the judge model is unreachable or returns invalid JSON, the system returns a valid synthesis response (graceful degradation) and logs the judge failure via `LoggerPort.logError()`.
+  3. ✅ `PanelRunner` throws `FusionError('all_panels_failed')` when every panel model fails.
+- **Evidence:** 50 deterministic tests (Tasks 03–06), 240 total tests pass. Integration gate PASS. Acceptance gate PASS (5/5 criteria). Zero flaky, zero harness_noisy, zero ambiguous, zero redundant.
 
 ## Phase 3 — Streaming Synthesis
 - **Tasks:** 07, 08
@@ -26,6 +27,7 @@ completed_phases: [1]
 - **Replan Gate:**
   1. A `curl` request with `stream: true` to `/v1/chat/completions` receives SSE `data:` lines with `object: "chat.completion.chunk"` payloads, terminated by `data: [DONE]`, with keep-alive comments visible before the first content chunk.
   2. A per-call timeout correctly cancels the upstream LLM call via `AbortController` and surfaces the cancellation.
+- **Replan Amendment (Phase 2 → Phase 3):** Task 08 scope expanded to include upgrading `SynthesizeStep` from `ChatModelPort.complete()` (buffered) to `ChatModelPort.stream()` (incremental token streaming). Without this change, synthesis output is a single buffered chunk regardless of SSE framing. The amendment stays within the existing architectural boundaries — `SynthesizeStep` already depends on `ChatModelPort`, and `stream()` is the same port's incremental method. See `phase-02/replan/replan-note.md`.
 
 ## Phase 4 — Anthropic API Compatibility
 - **Tasks:** 09, 10
