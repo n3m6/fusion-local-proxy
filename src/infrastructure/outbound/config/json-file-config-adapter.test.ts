@@ -581,6 +581,150 @@ test('JsonFileConfigAdapter throws on empty model string', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// jsonMode field
+// ---------------------------------------------------------------------------
+
+test('JsonFileConfigAdapter surfaces jsonMode on ModelRef when present', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'deepseek-v4-pro',
+          baseURL: 'https://api.deepseek.com',
+          apiKeyEnv: 'DEEPSEEK_API_KEY',
+          jsonMode: 'json_object',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.DEEPSEEK_API_KEY = 'sk-deepseek';
+    process.env.OPENAI_API_KEY = 'sk-openai';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      const judge = adapter.getJudgeModel();
+      assert.ok(judge !== null);
+      assert.equal(judge!.jsonMode, 'json_object');
+    } finally {
+      delete process.env.DEEPSEEK_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter omits jsonMode from ModelRef when not specified', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-openai';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      const judge = adapter.getJudgeModel();
+      assert.ok(judge !== null);
+      assert.equal(judge!.jsonMode, undefined);
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter accepts json_schema as explicit jsonMode value', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+          jsonMode: 'json_schema',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-openai';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      const judge = adapter.getJudgeModel();
+      assert.ok(judge !== null);
+      assert.equal(judge!.jsonMode, 'json_schema');
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter throws on invalid jsonMode value', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+          jsonMode: 'invalid_mode',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    assert.throws(
+      () => new JsonFileConfigAdapter(path),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        const msg = (err as Error).message;
+        assert.ok(
+          msg.includes('jsonMode') || msg.includes('Invalid') || msg.includes('enum'),
+          `expected message about invalid jsonMode, got: ${msg}`,
+        );
+        return true;
+      },
+    );
+  });
+});
+
 test('JsonFileConfigAdapter throws on empty env var value', () => {
   withTempDir((dir) => {
     const path = writeConfig(dir, {

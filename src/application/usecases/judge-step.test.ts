@@ -516,6 +516,63 @@ test('judge failure with FusionError does not throw (graceful degradation)', asy
 // Test: logStageEnd receives correct usage from response
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Test: responseFormat selection based on judgeModel.jsonMode
+// ---------------------------------------------------------------------------
+
+test('judge uses json_schema responseFormat by default (jsonMode absent)', async () => {
+  const chatPort = stubChatPort({
+    content: validAnalysisJson,
+    usage: responseWithUsage,
+    model: 'gpt-4o-judge',
+  });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0]);
+
+  const step = new JudgeStep(chatPort, logger, clock);
+  await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+
+  assert.equal(chatPort._calls.length, 1);
+  const req = chatPort._calls[0];
+  assert.ok(req.options?.responseFormat !== undefined, 'expected responseFormat');
+  assert.equal(req.options!.responseFormat!.type, 'json_schema');
+});
+
+test('judge uses json_schema responseFormat when jsonMode is explicitly json_schema', async () => {
+  const chatPort = stubChatPort({
+    content: validAnalysisJson,
+    usage: responseWithUsage,
+    model: 'gpt-4o-judge',
+  });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0]);
+
+  const step = new JudgeStep(chatPort, logger, clock);
+  await step.analyze([panelResult()], sampleMessages, judgeModel({ jsonMode: 'json_schema' }), 0);
+
+  assert.equal(chatPort._calls.length, 1);
+  const req = chatPort._calls[0];
+  assert.equal(req.options!.responseFormat!.type, 'json_schema');
+});
+
+test('judge uses json_object responseFormat when judgeModel.jsonMode is json_object', async () => {
+  const chatPort = stubChatPort({
+    content: validAnalysisJson,
+    usage: responseWithUsage,
+    model: 'deepseek-v4-pro',
+  });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0]);
+
+  const step = new JudgeStep(chatPort, logger, clock);
+  await step.analyze([panelResult()], sampleMessages, judgeModel({ jsonMode: 'json_object' }), 0);
+
+  assert.equal(chatPort._calls.length, 1);
+  const req = chatPort._calls[0];
+  assert.ok(req.options?.responseFormat !== undefined, 'expected responseFormat');
+  assert.equal(req.options!.responseFormat!.type, 'json_object');
+});
+
 test('logStageEnd receives correct duration and usage', async () => {
   const customUsage: TokenUsage = { promptTokens: 42, completionTokens: 58, totalTokens: 100 };
   const chatPort = stubChatPort({

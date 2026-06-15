@@ -9,6 +9,7 @@ const providerSchema = z.object({
   model: z.string().min(1),
   baseURL: z.string().min(1),
   apiKeyEnv: z.string().min(1),
+  jsonMode: z.enum(['json_object', 'json_schema']).optional(),
 });
 
 const configSchema = z.object({
@@ -90,6 +91,7 @@ export class JsonFileConfigAdapter implements ConfigPort {
       model: entry.model,
       baseURL: entry.baseURL,
       apiKey,
+      ...(entry.jsonMode !== undefined ? { jsonMode: entry.jsonMode } : {}),
     };
   }
 }

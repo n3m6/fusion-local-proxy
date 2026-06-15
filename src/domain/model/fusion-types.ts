@@ -4,11 +4,15 @@ import type { FailedModelInfo } from './stream-types.js';
 
 export type ProviderType = 'openai' | 'anthropic';
 
+export type JsonMode = 'json_object' | 'json_schema';
+
 export interface ModelRef {
   readonly provider: ProviderType;
   readonly model: string;
   readonly baseURL: string;
   readonly apiKey: string;
+  /** Structured-output mode used by the judge. Defaults to 'json_schema' when absent. */
+  readonly jsonMode?: JsonMode;
 }
 
 /**

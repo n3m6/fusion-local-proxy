@@ -125,6 +125,7 @@ ensemble.
 | `providers[].model`     | string                                | yes      | Model name passed to the upstream API (e.g. `"llama3:8b"`, `"gpt-4o"`, `"claude-sonnet-4-20250514"`).                                                                                                  |
 | `providers[].baseURL`   | string                                | yes      | Base URL of the API endpoint, including the path prefix (e.g. `"http://localhost:11434/v1"` for local Ollama, `"https://api.openai.com/v1"` for OpenAI).                                               |
 | `providers[].apiKeyEnv` | string                                | yes      | Name of the environment variable holding the API key. The adapter reads `process.env[apiKeyEnv]` at startup and fails fast if it is unset.                                                             |
+| `providers[].jsonMode`  | `"json_object" \| "json_schema"`      | no       | Structured-output mode used when this provider is the judge. Defaults to `"json_schema"` (OpenAI strict mode). Set to `"json_object"` for backends that support only basic JSON mode (e.g. DeepSeek).  |
 | `timeoutMs`             | number                                | no       | Per-call timeout in milliseconds (default: `30000`). Applies to each outbound LLM call.                                                                                                                |
 
 Multiple providers can share the same `role` (e.g. several `panel` members). The
@@ -132,8 +133,52 @@ Multiple providers can share the same `role` (e.g. several `panel` members). The
 OpenAI-compatible servers such as Ollama and OpenRouter use `type: "openai"`.
 
 The bundled `fusion.config.json` is a realistic example that mixes a local
-Ollama panel model, an OpenRouter panel model, an OpenAI judge, and an Anthropic
-synthesizer.
+Ollama panel model, a DeepSeek panel model, an OpenRouter panel model, an OpenAI
+judge, and an Anthropic synthesizer:
+
+```json
+{
+  "providers": [
+    {
+      "type": "openai",
+      "role": "panel",
+      "model": "llama3:8b",
+      "baseURL": "http://localhost:11434/v1",
+      "apiKeyEnv": "OLLAMA_API_KEY"
+    },
+    {
+      "type": "openai",
+      "role": "panel",
+      "model": "deepseek-v4-pro",
+      "baseURL": "https://api.deepseek.com",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "jsonMode": "json_object"
+    },
+    {
+      "type": "openai",
+      "role": "panel",
+      "model": "openai/gpt-4.1-mini",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "apiKeyEnv": "OPENROUTER_API_KEY"
+    },
+    {
+      "type": "openai",
+      "role": "judge",
+      "model": "gpt-4o",
+      "baseURL": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY"
+    },
+    {
+      "type": "anthropic",
+      "role": "synthesizer",
+      "model": "claude-sonnet-4-20250514",
+      "baseURL": "https://api.anthropic.com/v1",
+      "apiKeyEnv": "ANTHROPIC_API_KEY"
+    }
+  ],
+  "timeoutMs": 30000
+}
+```
 
 ## API usage
 
@@ -213,6 +258,7 @@ The default port is `3000`; override it with the `PORT` environment variable.
 | `ANTHROPIC_API_KEY`  | if a provider has `apiKeyEnv: "ANTHROPIC_API_KEY"`  | API key for Anthropic backends                          |
 | `OLLAMA_API_KEY`     | if a provider has `apiKeyEnv: "OLLAMA_API_KEY"`     | API key for local Ollama (any non-empty string)         |
 | `OPENROUTER_API_KEY` | if a provider has `apiKeyEnv: "OPENROUTER_API_KEY"` | API key for OpenRouter                                  |
+| `DEEPSEEK_API_KEY`   | if a provider has `apiKeyEnv: "DEEPSEEK_API_KEY"`   | API key for DeepSeek                                    |
 | `PORT`               | no                                                  | HTTP server port (default: `3000`)                      |
 | `FUSION_CONFIG_PATH` | no                                                  | Path to the config file (default: `fusion.config.json`) |
 

@@ -5,7 +5,7 @@ import type { Message } from '../../domain/model/message.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatRequest, ChatResponse } from '../../domain/model/chat-types.js';
+import type { ChatRequest, ChatResponse, ResponseFormat } from '../../domain/model/chat-types.js';
 import {
   buildJudgeSystemPrompt,
   buildJudgeUserPrompt,
@@ -82,6 +82,11 @@ export class JudgeStep {
       timeoutId = setTimeout(() => controller!.abort(), timeoutMs);
     }
 
+    const responseFormat: ResponseFormat =
+      judgeModel.jsonMode === 'json_object'
+        ? { type: 'json_object' }
+        : { type: 'json_schema', schema: ANALYSIS_JSON_SCHEMA as Record<string, unknown> };
+
     const request: ChatRequest = {
       messages: [
         { role: 'system', content: systemPrompt },
@@ -89,10 +94,7 @@ export class JudgeStep {
       ],
       model: judgeModel,
       options: {
-        responseFormat: {
-          type: 'json_schema',
-          schema: ANALYSIS_JSON_SCHEMA as Record<string, unknown>,
-        },
+        responseFormat,
         ...(controller ? { signal: controller.signal } : {}),
       },
     };
