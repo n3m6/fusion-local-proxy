@@ -4,7 +4,7 @@ import type { ConfigPort } from '../../../domain/ports/config-port.js';
 import type { ModelRef } from '../../../domain/model/fusion-types.js';
 
 const providerSchema = z.object({
-  type: z.enum(['openai']),
+  type: z.enum(['openai', 'anthropic']),
   role: z.enum(['panel', 'judge', 'synthesizer']),
   model: z.string().min(1),
   baseURL: z.string().min(1),

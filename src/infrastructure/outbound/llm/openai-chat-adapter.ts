@@ -2,8 +2,20 @@ import type OpenAI from 'openai';
 import type { ChatModelPort } from '../../../domain/ports/chat-model-port.js';
 import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../../domain/model/chat-types.js';
 
+export interface AdapterConfig {
+  readonly baseURL: string;
+  readonly apiKey: string;
+}
+
 export class OpenAiChatAdapter implements ChatModelPort {
   constructor(private readonly client: OpenAI) {}
+
+  get config(): AdapterConfig {
+    return {
+      baseURL: (this.client as unknown as { baseURL?: string }).baseURL ?? '',
+      apiKey: (this.client as unknown as { apiKey?: string }).apiKey ?? '',
+    };
+  }
 
   async complete(request: ChatRequest): Promise<ChatResponse> {
     const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
