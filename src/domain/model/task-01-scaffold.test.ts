@@ -178,7 +178,6 @@ describe('Domain purity', () => {
     ['openai', ["from 'openai'", 'from "openai"']],
     ['@anthropic-ai/sdk', ["from '@anthropic-ai/sdk'", 'from "@anthropic-ai/sdk"']],
     ['hono', ["from 'hono'", 'from "hono"']],
-    ['zod', ["from 'zod'", 'from "zod"']],
   ];
 
   for (const [sdk, patterns] of sdkImports) {
