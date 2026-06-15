@@ -1,15 +1,16 @@
 ---
 total_phases: 5
+completed_phases: [1]
 ---
 
-## Phase 1 — Foundation Fix and Domain Services
+## Phase 1 — Foundation Fix and Domain Services ✅ COMPLETED
 - **Tasks:** 01, 02
 - **Acceptance Criteria:** AC-1 (package.json scripts and dependencies), AC-2 (dependency rule maintained)
-- **Replan Gate:** 
-  1. `package.json` contains exactly three scripts: `"dev": "tsx src/main.ts"`, `"start": "tsx src/main.ts"`, `"typecheck": "tsc --noEmit"`, and includes `@anthropic-ai/sdk: "^0.104.1"` in dependencies.
-  2. `npm run typecheck` passes with zero errors.
-  3. `curl POST /v1/chat/completions` with existing passthrough returns a valid ChatCompletion JSON response (system remains runnable).
-  4. Domain service files (`analysis-schema.ts`, `judge-prompt.ts`, `synthesis-prompt.ts`) exist, compile, and have zero imports from `src/application/` or `src/infrastructure/`.
+- **Replan Gate:**
+  1. ✅ `package.json` contains exactly three scripts: `"dev": "tsx src/main.ts"`, `"start": "tsx src/main.ts"`, `"typecheck": "tsc --noEmit"`, and includes `@anthropic-ai/sdk: "^0.104.1"` in dependencies.
+  2. ✅ `npm run typecheck` passes with zero errors.
+  3. ✅ `curl POST /v1/chat/completions` with existing passthrough returns a valid ChatCompletion JSON response (system remains runnable).
+  4. ✅ Domain service files (`analysis-schema.ts`, `judge-prompt.ts`, `synthesis-prompt.ts`) exist, compile, and have zero imports from `src/application/` or `src/infrastructure/`. Colocated test suites created (37 deterministic tests).
 
 ## Phase 2 — Ensemble Pipeline (Panel + Judge + Synthesis)
 - **Tasks:** 03, 04, 05, 06

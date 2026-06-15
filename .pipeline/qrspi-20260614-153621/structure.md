@@ -345,9 +345,9 @@ Wires the full ensemble in the DI container, adds remaining tests across all lay
 | `src/infrastructure/inbound/http/openai/sse-encoder.test.ts` | CREATE | Unit: SSE encoder output format, keep-alive comments, `[DONE]` termination, progress event handling. |
 | `src/infrastructure/inbound/http/server.test.ts` | MODIFY | Add test: POST `/v1/messages` route is mounted and returns 200. |
 | `src/domain/model/fusion-types.test.ts` | MODIFY | Add tests for `PanelResult`, `PanelMeta` type shapes. |
-| `src/domain/services/synthesis-prompt.test.ts` | CREATE | Unit: prompt builder output contains panel results and analysis references (both with and without analysis). |
-| `src/domain/services/judge-prompt.test.ts` | CREATE | Unit: judge prompt builder output shape, includes panel results and original messages. |
-| `src/domain/services/analysis-schema.test.ts` | CREATE | Unit: validation of valid `Analysis` payloads, rejection of missing required fields, rejection of malformed shapes. |
+| `src/domain/services/synthesis-prompt.test.ts` | MODIFY / VERIFY-EXTEND | Existing 21-test suite from Phase 1 Task 02. Verify all pass; extend for coverage gaps: null-analysis terminology exclusion, empty content edge case, empty-analysis sub-array handling. |
+| `src/domain/services/judge-prompt.test.ts` | MODIFY / VERIFY-EXTEND | Existing 10-test suite from Phase 1 Task 02. Verify all pass; extend for coverage gaps: no-user-role edge case, special characters in content, output format consistency. |
+| `src/domain/services/analysis-schema.test.ts` | MODIFY / VERIFY-EXTEND | Existing 6-test suite from Phase 1 Task 02. Verify all pass; extend for coverage gaps: malformed sub-field rejection, missing model/insight on unique_insights entries. |
 | `README.md` | MODIFY | Full documentation: architecture overview, setup instructions, configuration format, API usage examples (OpenAI and Anthropic). |
 | `fusion.config.json` | MODIFY | Example config mixing local Ollama panel + remote OpenAI judge + remote Anthropic synthesizer. |
 
@@ -446,9 +446,9 @@ flowchart TD
     readme["README.md\nMODIFY (full docs)"]
     example_config["fusion.config.json\nMODIFY (example)"]
     fusion_types_test["src/domain/model/\nfusion-types.test.ts\nMODIFY"]
-    synthesis_prompt_test["src/domain/services/\nsynthesis-prompt.test.ts\nCREATE"]
-    judge_prompt_test["src/domain/services/\njudge-prompt.test.ts\nCREATE"]
-    analysis_schema_test["src/domain/services/\nanalysis-schema.test.ts\nCREATE"]
+    synthesis_prompt_test["src/domain/services/\nsynthesis-prompt.test.ts\nMODIFY / VERIFY-EXTEND"]
+    judge_prompt_test["src/domain/services/\njudge-prompt.test.ts\nMODIFY / VERIFY-EXTEND"]
+    analysis_schema_test["src/domain/services/\nanalysis-schema.test.ts\nMODIFY / VERIFY-EXTEND"]
     oai_route_test["src/infrastructure/inbound/http/\nopenai/route.test.ts\nCREATE"]
     oai_sse_test["src/infrastructure/inbound/http/\nopenai/sse-encoder.test.ts\nCREATE"]
     server_test["src/infrastructure/inbound/http/\nserver.test.ts\nMODIFY"]
