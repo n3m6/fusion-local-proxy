@@ -9,34 +9,23 @@ import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { FusionService } from '../../application/ports/fusion-service.js';
-import type { ModelRef } from '../../domain/model/fusion-types.js';
 
-export function createApp(): { app: Hono; configPort: ConfigPort } {
+export function createApp(): { app: Hono; configPort: ConfigPort; fusionService: FusionService } {
   const configPath = process.env.FUSION_CONFIG_PATH ?? 'fusion.config.json';
 
-  // 1. Config
   const configPort: ConfigPort = new JsonFileConfigAdapter(configPath);
 
-  // 2. Logger
   const loggerPort: LoggerPort = new ConsoleLoggerAdapter();
 
-  // 3. Clock
   const clockPort: ClockPort = {
     now: () => Date.now(),
   };
 
-  // 4. Panel model selection
-  const panelModels = configPort.getPanelModels();
-  if (panelModels.length === 0) {
-    throw new Error('At least one panel model is required in configuration');
-  }
-  const panelModel: ModelRef = panelModels[0];
+  const synthesizerModel = configPort.getSynthesizerModel();
 
-  // 5. Chat adapter
   const factory = new ChatAdapterFactory();
-  const chatModelPort: ChatModelPort = factory.create(panelModel);
+  const chatModelPort: ChatModelPort = factory.create(synthesizerModel);
 
-  // 6. Use case
   const fusionService: FusionService = new RunFusionUseCase(
     chatModelPort,
     configPort,
@@ -44,8 +33,7 @@ export function createApp(): { app: Hono; configPort: ConfigPort } {
     clockPort,
   );
 
-  // 7. Server
   const app = createServer(fusionService, configPort);
 
-  return { app, configPort };
+  return { app, configPort, fusionService };
 }

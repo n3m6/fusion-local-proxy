@@ -2,6 +2,7 @@ import { FusionError } from '../../../../domain/model/fusion-types.js';
 import type { FusionRequest } from '../../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
 import type { ChatOptions } from '../../../../domain/model/chat-types.js';
+import type { TokenUsage } from '../../../../domain/model/chat-types.js';
 
 export function openAiRequestToFusion(body: Record<string, unknown>): FusionRequest {
   const messages = Array.isArray(body.messages)
@@ -13,32 +14,37 @@ export function openAiRequestToFusion(body: Record<string, unknown>): FusionRequ
 
   const model = typeof body.model === 'string' ? body.model : undefined;
   const stream = typeof body.stream === 'boolean' ? body.stream : undefined;
-  const system = typeof body.system === 'string' ? body.system : undefined;
+  const systemPrompt = typeof body.system === 'string' ? body.system : undefined;
+  const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
+  const maxTokens = typeof body.max_tokens === 'number' ? body.max_tokens : undefined;
 
   const options: ChatOptions = {};
-  if (typeof body.temperature === 'number') {
-    options.temperature = body.temperature;
+  if (temperature !== undefined) {
+    (options as Record<string, unknown>).temperature = temperature;
   }
-  if (typeof body.max_tokens === 'number') {
-    options.maxTokens = body.max_tokens;
+  if (maxTokens !== undefined) {
+    (options as Record<string, unknown>).maxTokens = maxTokens;
   }
 
   return {
     messages,
     model,
     stream,
-    system,
+    systemPrompt,
+    temperature,
+    maxTokens,
     options: Object.keys(options).length > 0 ? options : undefined,
   };
 }
 
 export async function fusionStreamToOpenAiResponse(
   events: AsyncIterable<FusionStreamEvent>,
+  model?: string,
 ): Promise<Record<string, unknown>> {
   let content = '';
-  let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-  let model = '';
-  const failedModels: Array<{ model: string; reason: string }> = [];
+  let usage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  let eventModel = '';
+  let doneReceived = false;
 
   for await (const event of events) {
     switch (event.type) {
@@ -46,23 +52,33 @@ export async function fusionStreamToOpenAiResponse(
         content += event.delta;
         break;
       case 'content_stop':
-        // marker event, no accumulation needed
         break;
       case 'done':
-        usage = event.usage;
-        failedModels.push(...event.failedModels);
+        doneReceived = true;
+        usage = {
+          promptTokens: event.usage?.promptTokens ?? 0,
+          completionTokens: event.usage?.completionTokens ?? 0,
+          totalTokens: event.usage?.totalTokens ?? 0,
+        };
         if (event.model) {
-          model = event.model;
+          eventModel = event.model;
         }
         break;
       case 'error':
-        throw new FusionError(event.code, event.message, event.details);
+        throw new FusionError(
+          event.code,
+          event.message,
+          typeof event.details === 'object' && event.details !== null
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+        );
       case 'progress':
-        // progress events are informational, skip
-        break;
-      default:
         break;
     }
+  }
+
+  if (!doneReceived) {
+    throw new FusionError('incomplete_stream', 'Stream completed without a done event');
   }
 
   const id = `chatcmpl-${crypto.randomUUID()}`;
@@ -72,7 +88,7 @@ export async function fusionStreamToOpenAiResponse(
     id,
     object: 'chat.completion',
     created,
-    model: model || '',
+    model: model ?? (eventModel || ''),
     choices: [
       {
         index: 0,

@@ -2,7 +2,7 @@
   "providers": [
     {
       "type": "openai",
-      "role": "panel",
+      "role": "synthesizer",
       "model": "gpt-4o",
       "baseURL": "https://api.openai.com/v1",
       "apiKeyEnv": "OPENAI_API_KEY"

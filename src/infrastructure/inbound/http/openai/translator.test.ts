@@ -128,7 +128,7 @@ test('openAiRequestToFusion extracts system prompt', () => {
   };
 
   const result = openAiRequestToFusion(body);
-  assert.equal(result.system, 'You are a helpful assistant.');
+  assert.equal(result.systemPrompt, 'You are a helpful assistant.');
 });
 
 test('openAiRequestToFusion handles missing system field', () => {
@@ -137,7 +137,7 @@ test('openAiRequestToFusion handles missing system field', () => {
   };
 
   const result = openAiRequestToFusion(body);
-  assert.equal(result.system, undefined);
+  assert.equal(result.systemPrompt, undefined);
 });
 
 test('openAiRequestToFusion handles non-string system field', () => {
@@ -147,7 +147,7 @@ test('openAiRequestToFusion handles non-string system field', () => {
   };
 
   const result = openAiRequestToFusion(body);
-  assert.equal(result.system, undefined);
+  assert.equal(result.systemPrompt, undefined);
 });
 
 test('openAiRequestToFusion handles max_tokens zero', () => {
@@ -363,7 +363,7 @@ test('fusionStreamToOpenAiResponse collects failedModels from done', async () =>
       type: 'done',
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
       failedModels: [
-        { model: 'gpt-3.5', reason: 'timeout' },
+        { modelId: 'gpt-3.5', errorCode: 'timeout', errorMessage: 'timeout' },
       ],
       model: 'gpt-4o',
     },
@@ -378,4 +378,44 @@ test('fusionStreamToOpenAiResponse collects failedModels from done', async () =>
   const choices = result.choices as Array<Record<string, unknown>>;
   const message = choices[0].message as Record<string, unknown>;
   assert.equal(message.content, 'answer');
+});
+
+test('fusionStreamToOpenAiResponse defaults usage to zeros when done omits usage', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'Hi' },
+    {
+      type: 'done',
+      failedModels: [],
+      model: 'gpt-4o',
+    },
+  ];
+
+  const result = await fusionStreamToOpenAiResponse(
+    await asyncIterableFrom(events),
+  );
+
+  const usage = result.usage as Record<string, unknown>;
+  assert.equal(usage.prompt_tokens, 0);
+  assert.equal(usage.completion_tokens, 0);
+  assert.equal(usage.total_tokens, 0);
+});
+
+test('fusionStreamToOpenAiResponse throws when stream completes without done event', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'partial' },
+    { type: 'content_stop' },
+  ];
+
+  await assert.rejects(
+    async () => {
+      await fusionStreamToOpenAiResponse(await asyncIterableFrom(events));
+    },
+    (err: unknown) => {
+      assert.ok(err instanceof FusionError);
+      const fe = err as FusionError;
+      assert.equal(fe.code, 'incomplete_stream');
+      assert.equal(fe.message, 'Stream completed without a done event');
+      return true;
+    },
+  );
 });

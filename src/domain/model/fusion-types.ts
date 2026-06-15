@@ -1,4 +1,5 @@
 import type { Message } from './message.js';
+import type { ChatOptions } from './chat-types.js';
 
 export type ProviderType = 'openai' | 'anthropic';
 
@@ -22,8 +23,10 @@ export class FusionError extends Error {
 
 export interface FusionRequest {
   readonly messages: Message[];
+  readonly model?: string;
   readonly stream?: boolean;
   readonly systemPrompt?: string;
   readonly maxTokens?: number;
   readonly temperature?: number;
+  readonly options?: ChatOptions;
 }

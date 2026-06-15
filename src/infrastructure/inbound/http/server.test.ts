@@ -83,7 +83,7 @@ function stubConfigPort(panelModels?: ModelRef[]): ConfigPort {
   return {
     getPanelModels: () => models,
     getJudgeModel: () => null,
-    getSynthesizerModel: () => null,
+    getSynthesizerModel: () => ({ provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' }),
     getTimeoutMs: () => 30000,
   };
 }
@@ -184,7 +184,7 @@ test('POST /v1/chat/completions returns 500 on fusion service error', async () =
   const body = await res.json() as Record<string, unknown>;
   const error = body.error as Record<string, unknown>;
   assert.ok(error);
-  assert.equal(error.message, 'Upstream failure');
+  assert.equal(error.message, 'Internal server error');
 });
 
 test('POST /v1/chat/completions returns 500 on async iterable error event', async () => {
