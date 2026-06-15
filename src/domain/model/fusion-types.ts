@@ -21,6 +21,11 @@ export class FusionError extends Error {
   }
 }
 
+export interface PanelResult {
+  readonly modelId: string;
+  readonly content: string;
+}
+
 export interface FusionRequest {
   readonly messages: Message[];
   readonly model?: string;
