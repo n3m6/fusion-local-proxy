@@ -98,7 +98,6 @@ describe('ChatStreamChunk discriminated union', () => {
     assert.throws(() => {
       narrowChunk({ type: 'invalid' } as unknown as ChatStreamChunk);
     });
-
   });
 });
 
@@ -134,7 +133,6 @@ describe('ChatModelPort interface requires stream()', () => {
     assert.equal(typeof compliant.complete, 'function');
     assert.equal(typeof compliant.stream, 'function');
   });
-
 });
 
 // ---------------------------------------------------------------------------

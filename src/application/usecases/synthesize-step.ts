@@ -1,5 +1,5 @@
 import type { Message } from '../../domain/model/message.js';
-import type { ModelRef, PanelResult } from '../../domain/model/fusion-types.js';
+import type { PanelResult } from '../../domain/model/fusion-types.js';
 import type { ChatRequest, TokenUsage } from '../../domain/model/chat-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
@@ -7,7 +7,10 @@ import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { Analysis } from '../../domain/services/analysis-schema.js';
-import { buildSynthesisSystemPrompt, buildSynthesisUserPrompt } from '../../domain/services/synthesis-prompt.js';
+import {
+  buildSynthesisSystemPrompt,
+  buildSynthesisUserPrompt,
+} from '../../domain/services/synthesis-prompt.js';
 
 export class SynthesizeStep {
   constructor(

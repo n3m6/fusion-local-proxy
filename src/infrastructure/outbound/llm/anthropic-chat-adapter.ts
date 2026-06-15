@@ -1,6 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelPort } from '../../../domain/ports/chat-model-port.js';
-import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../../domain/model/chat-types.js';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ChatStreamChunk,
+  TokenUsage,
+} from '../../../domain/model/chat-types.js';
 
 export interface AdapterConfig {
   readonly baseURL: string;
@@ -30,7 +35,10 @@ export class AnthropicChatAdapter implements ChatModelPort {
 
   async complete(request: ChatRequest): Promise<ChatResponse> {
     const params = this.buildCreateParams(request);
-    const response = await this.client.messages.create(params as any, { signal: request.options?.signal });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Record<string,unknown> bypasses SDK strict params type
+    const response = await this.client.messages.create(params as any, {
+      signal: request.options?.signal,
+    });
 
     const textBlock = response.content.find((block) => block.type === 'text');
     if (!textBlock) {
@@ -49,7 +57,10 @@ export class AnthropicChatAdapter implements ChatModelPort {
 
   async *stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
     const params = this.buildCreateParams(request);
-    const messageStream = this.client.messages.stream(params as any, { signal: request.options?.signal });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Record<string,unknown> bypasses SDK strict params type
+    const messageStream = this.client.messages.stream(params as any, {
+      signal: request.options?.signal,
+    });
 
     let stopYielded = false;
     let usageYielded = false;

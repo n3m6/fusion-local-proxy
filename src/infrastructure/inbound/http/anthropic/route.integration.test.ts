@@ -44,9 +44,10 @@ function stubFusionService(events?: FusionStreamEvent[]): FusionService {
   };
 }
 
-function stubFusionServiceWithCapture(
-  events: FusionStreamEvent[],
-): { service: FusionService; request: FusionRequest | null } {
+function stubFusionServiceWithCapture(events: FusionStreamEvent[]): {
+  service: FusionService;
+  request: FusionRequest | null;
+} {
   const captured: { value: FusionRequest | null } = { value: null };
   const service: FusionService = {
     runFusion(request: FusionRequest): AsyncIterable<FusionStreamEvent> {
@@ -100,7 +101,11 @@ function stubFusionServiceWithErrorEvent(code: string, message: string): FusionS
   };
 }
 
-function stubFusionServiceWithContentThenError(delta: string, code: string, message: string): FusionService {
+function stubFusionServiceWithContentThenError(
+  delta: string,
+  code: string,
+  message: string,
+): FusionService {
   return {
     runFusion(_request: FusionRequest): AsyncIterable<FusionStreamEvent> {
       const events: FusionStreamEvent[] = [
@@ -151,7 +156,10 @@ test('POST /v1/messages returns 200 with text/event-stream for valid request', a
 
   assert.equal(res.status, 200);
   const contentType = res.headers.get('Content-Type') ?? '';
-  assert.ok(contentType.includes('text/event-stream'), `expected text/event-stream, got ${contentType}`);
+  assert.ok(
+    contentType.includes('text/event-stream'),
+    `expected text/event-stream, got ${contentType}`,
+  );
 });
 
 test('POST /v1/messages body contains all 6 event types in sequence', async () => {
@@ -172,8 +180,14 @@ test('POST /v1/messages body contains all 6 event types in sequence', async () =
   const body = await res.text();
 
   // All 6 event types should appear in order
-  const events = ['message_start', 'content_block_start', 'content_block_delta',
-    'content_block_stop', 'message_delta', 'message_stop'];
+  const events = [
+    'message_start',
+    'content_block_start',
+    'content_block_delta',
+    'content_block_stop',
+    'message_delta',
+    'message_stop',
+  ];
 
   let lastIndex = -1;
   for (const eventName of events) {
@@ -225,7 +239,11 @@ test('POST /v1/messages each SSE event has both event: and data: fields', async 
       if (currentHasEvent && !currentHasData) {
         assert.fail('SSE message has event: but no data:');
       }
-      if (!currentHasEvent && currentHasData && !body.slice(body.indexOf('data: ')).startsWith('data: ') ) {
+      if (
+        !currentHasEvent &&
+        currentHasData &&
+        !body.slice(body.indexOf('data: ')).startsWith('data: ')
+      ) {
         // data: only messages are OK for heartbeat-like messages? Actually Anthropic always uses event: + data:
       }
       currentHasEvent = false;
@@ -276,7 +294,7 @@ test('POST /v1/messages returns 400 for invalid JSON', async () => {
   });
 
   assert.equal(res.status, 400);
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const error = body.error as Record<string, unknown>;
   assert.ok(error);
   assert.equal(error.type, 'invalid_request_error');
@@ -506,7 +524,10 @@ test('POST /v1/messages handles error event after content', async () => {
   assert.ok(body.includes('partial'), 'SSE body should contain partial content');
   assert.ok(body.includes('MODEL_DOWN'), 'SSE body should contain error code');
   // Should not have message_stop after error
-  assert.ok(!body.includes('event: message_stop'), 'SSE body should not contain message_stop after error');
+  assert.ok(
+    !body.includes('event: message_stop'),
+    'SSE body should not contain message_stop after error',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -562,9 +583,12 @@ test('POST /v1/messages with stream:false returns application/json with type:mes
 
   assert.equal(res.status, 200);
   const contentType = res.headers.get('Content-Type') ?? '';
-  assert.ok(contentType.includes('application/json'), `expected application/json, got ${contentType}`);
+  assert.ok(
+    contentType.includes('application/json'),
+    `expected application/json, got ${contentType}`,
+  );
 
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   assert.equal(body.type, 'message');
   assert.equal(body.role, 'assistant');
   assert.equal(body.stop_reason, 'end_turn');
@@ -597,7 +621,7 @@ test('POST /v1/messages with stream:false and FusionError returns JSON error', a
   });
 
   assert.equal(res.status, 500);
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const error = body.error as Record<string, unknown>;
   assert.ok(error);
   assert.equal(error.type, 'all_panels_failed');

@@ -50,15 +50,12 @@ export function encodeAnthropicSSE(
         case 'done':
           if (!started) {
             yield* emitMessageStart(messageId, model);
-            started = true;
           }
           if (!contentBlockStarted) {
             yield* emitContentBlockStart();
-            contentBlockStarted = true;
           }
           if (!contentBlockStopped) {
             yield* emitContentBlockStop();
-            contentBlockStopped = true;
           }
           outputTokens = event.usage?.completionTokens ?? 0;
           yield* emitMessageDelta(outputTokens);

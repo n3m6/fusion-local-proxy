@@ -6,7 +6,10 @@ import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { ChatRequest, ChatResponse } from '../../domain/model/chat-types.js';
-import { buildJudgeSystemPrompt, buildJudgeUserPrompt } from '../../domain/services/judge-prompt.js';
+import {
+  buildJudgeSystemPrompt,
+  buildJudgeUserPrompt,
+} from '../../domain/services/judge-prompt.js';
 
 const ANALYSIS_JSON_SCHEMA = {
   type: 'object',

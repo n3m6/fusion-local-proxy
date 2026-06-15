@@ -29,7 +29,7 @@ export class JsonFileConfigAdapter implements ConfigPort {
     } catch (err) {
       const error = err as NodeJS.ErrnoException;
       if (error.code === 'ENOENT') {
-        throw new Error(`Configuration file not found: ${configPath}`);
+        throw new Error(`Configuration file not found: ${configPath}`, { cause: err });
       }
       throw error;
     }
@@ -40,6 +40,7 @@ export class JsonFileConfigAdapter implements ConfigPort {
     } catch (err) {
       throw new Error(
         `Failed to parse configuration file: ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err },
       );
     }
 
@@ -60,9 +61,7 @@ export class JsonFileConfigAdapter implements ConfigPort {
   }
 
   getPanelModels(): ModelRef[] {
-    return this.config.providers
-      .filter((p) => p.role === 'panel')
-      .map((p) => this.toModelRef(p));
+    return this.config.providers.filter((p) => p.role === 'panel').map((p) => this.toModelRef(p));
   }
 
   getJudgeModel(): ModelRef | null {

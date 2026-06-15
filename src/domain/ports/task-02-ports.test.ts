@@ -18,7 +18,7 @@ function grepForbidden(dir: string, pattern: RegExp): string {
   const { stdout, error, status } = spawnSync(
     'grep',
     ['-r', '-E', '--include=*.ts', pattern.source, dir],
-    { encoding: 'utf-8', cwd: ROOT }
+    { encoding: 'utf-8', cwd: ROOT },
   );
   if (error !== undefined || (status !== null && status > 1)) {
     const detail = error ? `spawn error: ${error.message}` : `grep exit status ${status}`;
@@ -120,23 +120,22 @@ describe('TypeScript compilation', () => {
         'tsc',
         '--noEmit',
         '--strict',
-        '--target', 'ES2023',
-        '--module', 'NodeNext',
-        '--moduleResolution', 'NodeNext',
+        '--target',
+        'ES2023',
+        '--module',
+        'NodeNext',
+        '--moduleResolution',
+        'NodeNext',
         '--esModuleInterop',
         '--skipLibCheck',
         '--resolveJsonModule',
         '--isolatedModules',
         ...portFiles,
       ],
-      { encoding: 'utf-8', cwd: ROOT }
+      { encoding: 'utf-8', cwd: ROOT },
     );
 
-    assert.equal(
-      status,
-      0,
-      `tsc failed with exit ${status}\nstdout: ${stdout}\nstderr: ${stderr}`
-    );
+    assert.equal(status, 0, `tsc failed with exit ${status}\nstdout: ${stdout}\nstderr: ${stderr}`);
     assert.equal(stderr.trim(), '', `tsc produced stderr: ${stderr}`);
   });
 });
@@ -155,11 +154,11 @@ describe('ChatModelPort contract', () => {
 
   test('imports ChatRequest, ChatResponse, and ChatStreamChunk from ../model/chat-types.js', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
-    const importLines = source.split('\n').filter(line => line.startsWith('import'));
+    const importLines = source.split('\n').filter((line) => line.startsWith('import'));
     assert.equal(importLines.length, 1, 'must have exactly one import line');
     assert.ok(
       importLines[0].includes("from '../model/chat-types.js'"),
-      `import must be from ../model/chat-types.js, got: ${importLines[0]}`
+      `import must be from ../model/chat-types.js, got: ${importLines[0]}`,
     );
     assert.ok(importLines[0].includes('ChatRequest'), 'must import ChatRequest');
     assert.ok(importLines[0].includes('ChatResponse'), 'must import ChatResponse');
@@ -169,16 +168,20 @@ describe('ChatModelPort contract', () => {
   test('declares complete method with signature (request: ChatRequest): Promise<ChatResponse>', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
-      /complete\s*\(\s*request\s*:\s*ChatRequest\s*\)\s*:\s*Promise\s*<\s*ChatResponse\s*>/.test(source),
-      'must have complete(request: ChatRequest): Promise<ChatResponse>'
+      /complete\s*\(\s*request\s*:\s*ChatRequest\s*\)\s*:\s*Promise\s*<\s*ChatResponse\s*>/.test(
+        source,
+      ),
+      'must have complete(request: ChatRequest): Promise<ChatResponse>',
     );
   });
 
   test('declares stream method with signature (request: ChatRequest): AsyncIterable<ChatStreamChunk>', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
-      /stream\s*\(\s*request\s*:\s*ChatRequest\s*\)\s*:\s*AsyncIterable\s*<\s*ChatStreamChunk\s*>/ .test(source),
-      'must have stream(request: ChatRequest): AsyncIterable<ChatStreamChunk>'
+      /stream\s*\(\s*request\s*:\s*ChatRequest\s*\)\s*:\s*AsyncIterable\s*<\s*ChatStreamChunk\s*>/.test(
+        source,
+      ),
+      'must have stream(request: ChatRequest): AsyncIterable<ChatStreamChunk>',
     );
   });
 });
@@ -197,11 +200,11 @@ describe('ConfigPort contract', () => {
 
   test('imports only ModelRef from ../model/fusion-types.js', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
-    const importLines = source.split('\n').filter(line => line.startsWith('import'));
+    const importLines = source.split('\n').filter((line) => line.startsWith('import'));
     assert.equal(importLines.length, 1, 'must have exactly one import line');
     assert.ok(
       importLines[0].includes("from '../model/fusion-types.js'"),
-      `import must be from ../model/fusion-types.js, got: ${importLines[0]}`
+      `import must be from ../model/fusion-types.js, got: ${importLines[0]}`,
     );
     assert.ok(importLines[0].includes('ModelRef'), 'must import ModelRef');
   });
@@ -210,7 +213,7 @@ describe('ConfigPort contract', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
       /getPanelModels\s*\(\s*\)\s*:\s*ModelRef\s*\[\s*\]/.test(source),
-      'getPanelModels must return ModelRef[]'
+      'getPanelModels must return ModelRef[]',
     );
   });
 
@@ -219,7 +222,7 @@ describe('ConfigPort contract', () => {
     // Must have | null in the return type
     assert.ok(
       /getJudgeModel\s*\(\s*\)\s*:\s*ModelRef\s*\|\s*null/.test(source),
-      'getJudgeModel must return ModelRef | null'
+      'getJudgeModel must return ModelRef | null',
     );
   });
 
@@ -231,7 +234,7 @@ describe('ConfigPort contract', () => {
     const returnType = methodMatch![1];
     assert.ok(
       !returnType.includes('null'),
-      `getSynthesizerModel must not return null, got: ${returnType}`
+      `getSynthesizerModel must not return null, got: ${returnType}`,
     );
   });
 
@@ -239,7 +242,7 @@ describe('ConfigPort contract', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
       /getTimeoutMs\s*\(\s*\)\s*:\s*number\s*;/.test(source),
-      'getTimeoutMs must return number'
+      'getTimeoutMs must return number',
     );
   });
 });
@@ -258,13 +261,13 @@ describe('LoggerPort contract', () => {
 
   test('imports TokenUsage from ../model/chat-types.js and FailedModelInfo from ../model/stream-types.js', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
-    const importLines = source.split('\n').filter(line => line.startsWith('import'));
+    const importLines = source.split('\n').filter((line) => line.startsWith('import'));
     assert.equal(importLines.length, 2, 'must have exactly two import lines');
     const hasChatTypes = importLines.some(
-      l => l.includes("from '../model/chat-types.js'") && l.includes('TokenUsage')
+      (l) => l.includes("from '../model/chat-types.js'") && l.includes('TokenUsage'),
     );
     const hasStreamTypes = importLines.some(
-      l => l.includes("from '../model/stream-types.js'") && l.includes('FailedModelInfo')
+      (l) => l.includes("from '../model/stream-types.js'") && l.includes('FailedModelInfo'),
     );
     assert.ok(hasChatTypes, 'must import TokenUsage from ../model/chat-types.js');
     assert.ok(hasStreamTypes, 'must import FailedModelInfo from ../model/stream-types.js');
@@ -274,15 +277,17 @@ describe('LoggerPort contract', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
       /logStageStart\s*\(\s*stage\s*:\s*string\s*\)\s*:\s*void/.test(source),
-      'must have logStageStart(stage: string): void'
+      'must have logStageStart(stage: string): void',
     );
   });
 
   test('declares logStageEnd(stage: string, durationMs: number, usage?: TokenUsage): void', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
-      /logStageEnd\s*\(\s*stage\s*:\s*string\s*,\s*durationMs\s*:\s*number\s*,\s*usage\?\s*:\s*TokenUsage\s*\)\s*:\s*void/.test(source),
-      'must have logStageEnd(stage: string, durationMs: number, usage?: TokenUsage): void'
+      /logStageEnd\s*\(\s*stage\s*:\s*string\s*,\s*durationMs\s*:\s*number\s*,\s*usage\?\s*:\s*TokenUsage\s*\)\s*:\s*void/.test(
+        source,
+      ),
+      'must have logStageEnd(stage: string, durationMs: number, usage?: TokenUsage): void',
     );
   });
 
@@ -290,7 +295,7 @@ describe('LoggerPort contract', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
       /logFailedModels\s*\(\s*models\s*:\s*FailedModelInfo\s*\[\s*\]\s*\)\s*:\s*void/.test(source),
-      'must have logFailedModels(models: FailedModelInfo[]): void'
+      'must have logFailedModels(models: FailedModelInfo[]): void',
     );
   });
 
@@ -298,7 +303,7 @@ describe('LoggerPort contract', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
       /logError\s*\(\s*stage\s*:\s*string\s*,\s*error\s*:\s*Error\s*\)\s*:\s*void/.test(source),
-      'must have logError(stage: string, error: Error): void'
+      'must have logError(stage: string, error: Error): void',
     );
   });
 
@@ -308,7 +313,10 @@ describe('LoggerPort contract', () => {
     const interfaceStart = source.indexOf('export interface LoggerPort');
     const interfaceBody = source.slice(interfaceStart);
     const voidMatches = interfaceBody.match(/:\s*void/g);
-    assert.ok(voidMatches && voidMatches.length === 4, `Expected 4 void returns, found ${voidMatches?.length ?? 0}`);
+    assert.ok(
+      voidMatches && voidMatches.length === 4,
+      `Expected 4 void returns, found ${voidMatches?.length ?? 0}`,
+    );
   });
 });
 
@@ -326,7 +334,7 @@ describe('ClockPort contract', () => {
 
   test('has zero imports', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
-    const importLines = source.split('\n').filter(line => line.startsWith('import'));
+    const importLines = source.split('\n').filter((line) => line.startsWith('import'));
     assert.equal(importLines.length, 0, 'ClockPort must have no imports');
   });
 
@@ -334,7 +342,7 @@ describe('ClockPort contract', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
       /now\s*\(\s*\)\s*:\s*number\s*;/.test(source),
-      'now() must have empty parameter list and return number'
+      'now() must have empty parameter list and return number',
     );
   });
 });

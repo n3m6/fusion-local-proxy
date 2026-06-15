@@ -201,7 +201,10 @@ test('JsonFileConfigAdapter constructor throws when no synthesizer configured', 
         (err: unknown) => {
           assert.ok(err instanceof Error);
           const msg = (err as Error).message;
-          assert.ok(msg.includes('synthesizer'), `expected message to mention synthesizer, got: ${msg}`);
+          assert.ok(
+            msg.includes('synthesizer'),
+            `expected message to mention synthesizer, got: ${msg}`,
+          );
           return true;
         },
       );
@@ -241,7 +244,10 @@ test('JsonFileConfigAdapter throws on missing model field', () => {
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('model') || msg.includes('Required'), `expected message to mention model, got: ${msg}`);
+        assert.ok(
+          msg.includes('model') || msg.includes('Required'),
+          `expected message to mention model, got: ${msg}`,
+        );
         return true;
       },
     );
@@ -273,7 +279,10 @@ test('JsonFileConfigAdapter throws on missing type field', () => {
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('type') || msg.includes('Required'), `expected message to mention type, got: ${msg}`);
+        assert.ok(
+          msg.includes('type') || msg.includes('Required'),
+          `expected message to mention type, got: ${msg}`,
+        );
         return true;
       },
     );
@@ -305,7 +314,10 @@ test('JsonFileConfigAdapter throws on missing role field', () => {
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('role') || msg.includes('Required'), `expected message to mention role, got: ${msg}`);
+        assert.ok(
+          msg.includes('role') || msg.includes('Required'),
+          `expected message to mention role, got: ${msg}`,
+        );
         return true;
       },
     );
@@ -337,7 +349,10 @@ test('JsonFileConfigAdapter throws on missing baseURL field', () => {
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('baseURL') || msg.includes('Required'), `expected message to mention baseURL, got: ${msg}`);
+        assert.ok(
+          msg.includes('baseURL') || msg.includes('Required'),
+          `expected message to mention baseURL, got: ${msg}`,
+        );
         return true;
       },
     );
@@ -370,7 +385,10 @@ test('JsonFileConfigAdapter throws on invalid role value', () => {
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('role') || msg.includes('Invalid') || msg.includes('enum'), `expected message about invalid role, got: ${msg}`);
+        assert.ok(
+          msg.includes('role') || msg.includes('Invalid') || msg.includes('enum'),
+          `expected message about invalid role, got: ${msg}`,
+        );
         return true;
       },
     );
@@ -387,7 +405,10 @@ test('JsonFileConfigAdapter throws on non-existent config file', () => {
     (err: unknown) => {
       assert.ok(err instanceof Error);
       const msg = (err as Error).message;
-      assert.ok(msg.includes('not found:') || msg.includes('not found'), `expected file not found message, got: ${msg}`);
+      assert.ok(
+        msg.includes('not found:') || msg.includes('not found'),
+        `expected file not found message, got: ${msg}`,
+      );
       return true;
     },
   );
@@ -403,7 +424,10 @@ test('JsonFileConfigAdapter throws on malformed JSON', () => {
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('Failed to parse') || msg.includes('JSON'), `expected parse error, got: ${msg}`);
+        assert.ok(
+          msg.includes('Failed to parse') || msg.includes('JSON'),
+          `expected parse error, got: ${msg}`,
+        );
         return true;
       },
     );
@@ -447,8 +471,14 @@ test('JsonFileConfigAdapter.getPanelModels throws when env var is not set', () =
         (err: unknown) => {
           assert.ok(err instanceof Error);
           const msg = (err as Error).message;
-          assert.ok(msg.includes('MISSING_ENV_VAR_XYZ'), `expected env var name in message, got: ${msg}`);
-          assert.ok(msg.includes('not set') || msg.includes('Environment'), `expected 'not set' message, got: ${msg}`);
+          assert.ok(
+            msg.includes('MISSING_ENV_VAR_XYZ'),
+            `expected env var name in message, got: ${msg}`,
+          );
+          assert.ok(
+            msg.includes('not set') || msg.includes('Environment'),
+            `expected 'not set' message, got: ${msg}`,
+          );
           return true;
         },
       );
@@ -505,7 +535,10 @@ test('JsonFileConfigAdapter constructor throws on empty providers array', () => 
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('providers') || msg.includes('Array'), `expected message about empty providers, got: ${msg}`);
+        assert.ok(
+          msg.includes('providers') || msg.includes('Array'),
+          `expected message about empty providers, got: ${msg}`,
+        );
         return true;
       },
     );
@@ -538,7 +571,10 @@ test('JsonFileConfigAdapter throws on empty model string', () => {
       (err: unknown) => {
         assert.ok(err instanceof Error);
         const msg = (err as Error).message;
-        assert.ok(msg.includes('model') || msg.includes('String'), `expected message about empty model, got: ${msg}`);
+        assert.ok(
+          msg.includes('model') || msg.includes('String'),
+          `expected message about empty model, got: ${msg}`,
+        );
         return true;
       },
     );

@@ -58,7 +58,11 @@ export class RunFusionUseCase implements FusionService {
     let synthUsage: TokenUsage | undefined;
     let synthModel: string | undefined;
 
-    for await (const event of this.synthesizeStep.synthesize(panelMeta.results, messages, analysis)) {
+    for await (const event of this.synthesizeStep.synthesize(
+      panelMeta.results,
+      messages,
+      analysis,
+    )) {
       if (event.type === 'content_delta') {
         yield { type: 'content_delta', delta: event.delta };
       } else if (event.type === 'content_stop') {
@@ -90,10 +94,14 @@ export class RunFusionUseCase implements FusionService {
     ev: FusionStreamEvent,
   ): AsyncGenerator<FusionStreamEvent, T> {
     let done = false;
-    const tracked = work.finally(() => { done = true; });
+    const tracked = work.finally(() => {
+      done = true;
+    });
     while (!done) {
       let t: ReturnType<typeof setTimeout>;
-      const tick = new Promise<void>((r) => { t = setTimeout(r, this.heartbeatIntervalMs); });
+      const tick = new Promise<void>((r) => {
+        t = setTimeout(r, this.heartbeatIntervalMs);
+      });
       await Promise.race([tracked.catch(() => undefined), tick]);
       clearTimeout(t!);
       if (!done) yield ev;

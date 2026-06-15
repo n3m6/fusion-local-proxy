@@ -25,7 +25,14 @@ export class ConsoleLoggerAdapter implements LoggerPort {
 
   logFailedModels(models: FailedModelInfo[]): void {
     for (const m of models) {
-      console.log(JSON.stringify({ event: 'failed_model', modelId: m.modelId, errorCode: m.errorCode, errorMessage: m.errorMessage }));
+      console.log(
+        JSON.stringify({
+          event: 'failed_model',
+          modelId: m.modelId,
+          errorCode: m.errorCode,
+          errorMessage: m.errorMessage,
+        }),
+      );
     }
   }
 

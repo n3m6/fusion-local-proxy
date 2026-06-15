@@ -4,7 +4,12 @@ import { JudgeStep } from './judge-step.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../domain/model/chat-types.js';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ChatStreamChunk,
+  TokenUsage,
+} from '../../domain/model/chat-types.js';
 import type { ModelRef, PanelResult } from '../../domain/model/fusion-types.js';
 import type { Message } from '../../domain/model/message.js';
 
@@ -143,9 +148,7 @@ function panelResult(overrides?: Partial<PanelResult>): PanelResult {
   };
 }
 
-const sampleMessages: Message[] = [
-  { role: 'user', content: 'What is the capital of France?' },
-];
+const sampleMessages: Message[] = [{ role: 'user', content: 'What is the capital of France?' }];
 
 const responseWithUsage: TokenUsage = {
   promptTokens: 50,
@@ -167,12 +170,7 @@ test('successful analysis parse returns Analysis with all fields populated', asy
   const clock = stubClockPort([100, 250]);
 
   const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze(
-    [panelResult()],
-    sampleMessages,
-    judgeModel(),
-    0,
-  );
+  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
 
   assert.ok(result !== null, 'expected non-null Analysis');
   assert.equal(result!.consensus.length, 1);
@@ -182,19 +180,19 @@ test('successful analysis parse returns Analysis with all fields populated', asy
   assert.equal(result!.blind_spots.length, 1);
 
   // loggerPort.logStageStart('judge') called once
-  const startCalls = logger._calls.filter(c => c.method === 'logStageStart');
+  const startCalls = logger._calls.filter((c) => c.method === 'logStageStart');
   assert.equal(startCalls.length, 1);
   assert.equal(startCalls[0].args[0], 'judge');
 
   // loggerPort.logStageEnd('judge', durationMs, usage) called once
-  const endCalls = logger._calls.filter(c => c.method === 'logStageEnd');
+  const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
   assert.equal(endCalls.length, 1);
   assert.equal(endCalls[0].args[0], 'judge');
   assert.equal(endCalls[0].args[1], 150); // 250 - 100
   assert.deepStrictEqual(endCalls[0].args[2], responseWithUsage);
 
   // loggerPort.logError() NOT called
-  const errorCalls = logger._calls.filter(c => c.method === 'logError');
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
   assert.equal(errorCalls.length, 0);
 });
 
@@ -212,17 +210,12 @@ test('schema validation failure (missing consensus) returns null', async () => {
   const clock = stubClockPort([0, 0]);
 
   const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze(
-    [panelResult()],
-    sampleMessages,
-    judgeModel(),
-    0,
-  );
+  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
 
   assert.equal(result, null);
 
   // loggerPort.logError('judge', error) called once with ZodError
-  const errorCalls = logger._calls.filter(c => c.method === 'logError');
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
   assert.equal(errorCalls.length, 1);
   assert.equal(errorCalls[0].args[0], 'judge');
   assert.ok(errorCalls[0].args[1] instanceof Error);
@@ -231,7 +224,7 @@ test('schema validation failure (missing consensus) returns null', async () => {
   assert.ok(zodError.issues !== undefined, 'expected ZodError with issues');
 
   // loggerPort.logStageEnd() NOT called
-  const endCalls = logger._calls.filter(c => c.method === 'logStageEnd');
+  const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
   assert.equal(endCalls.length, 0);
 });
 
@@ -246,17 +239,12 @@ test('judge model error (chatPort rejects) returns null', async () => {
   const clock = stubClockPort([0, 0]);
 
   const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze(
-    [panelResult()],
-    sampleMessages,
-    judgeModel(),
-    0,
-  );
+  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
 
   assert.equal(result, null);
 
   // loggerPort.logError('judge', error) called once with the rejected error
-  const errorCalls = logger._calls.filter(c => c.method === 'logError');
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
   assert.equal(errorCalls.length, 1);
   assert.equal(errorCalls[0].args[0], 'judge');
   assert.equal(errorCalls[0].args[1], sdkError);
@@ -278,17 +266,12 @@ test('invalid JSON response returns null and logs SyntaxError', async () => {
   const clock = stubClockPort([0, 0]);
 
   const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze(
-    [panelResult()],
-    sampleMessages,
-    judgeModel(),
-    0,
-  );
+  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
 
   assert.equal(result, null);
 
   // loggerPort.logError('judge', error) called once with SyntaxError
-  const errorCalls = logger._calls.filter(c => c.method === 'logError');
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
   assert.equal(errorCalls.length, 1);
   assert.equal(errorCalls[0].args[0], 'judge');
   assert.ok(errorCalls[0].args[1] instanceof SyntaxError, 'expected SyntaxError');
@@ -308,12 +291,7 @@ test('empty panel results does not throw and proceeds with judge call', async ()
   const clock = stubClockPort([100, 200]);
 
   const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze(
-    [],
-    sampleMessages,
-    judgeModel(),
-    0,
-  );
+  const result = await step.analyze([], sampleMessages, judgeModel(), 0);
 
   // Should not throw and should return an Analysis
   assert.ok(result !== null, 'expected non-null Analysis with empty panels');
@@ -323,7 +301,7 @@ test('empty panel results does not throw and proceeds with judge call', async ()
   assert.equal(chatPort._calls.length, 1);
   const req = chatPort._calls[0];
   assert.ok(req.messages.length >= 2, 'should have system + user messages');
-  const userMsg = req.messages.find(m => m.role === 'user');
+  const userMsg = req.messages.find((m) => m.role === 'user');
   assert.ok(userMsg !== undefined, 'should have user message');
   assert.ok(userMsg!.content.length > 0, 'user message should be non-empty');
 });
@@ -340,7 +318,7 @@ test('logger called exactly once on each failure scenario', async () => {
     const step = new JudgeStep(chatPort, logger, stubClockPort([0, 0]));
     const result = await step.analyze([], sampleMessages, judgeModel(), 0);
     assert.equal(result, null);
-    const errorCalls = logger._calls.filter(c => c.method === 'logError');
+    const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
     assert.equal(errorCalls[0].args[0], 'judge');
   }
@@ -352,19 +330,23 @@ test('logger called exactly once on each failure scenario', async () => {
     const step = new JudgeStep(chatPort, logger, stubClockPort([0, 0]));
     const result = await step.analyze([], sampleMessages, judgeModel(), 0);
     assert.equal(result, null);
-    const errorCalls = logger._calls.filter(c => c.method === 'logError');
+    const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
     assert.equal(errorCalls[0].args[0], 'judge');
   }
 
   // Test 3: Schema validation failure
   {
-    const chatPort = stubChatPort({ content: validAnalysisMissingConsensus, usage: responseWithUsage, model: 'm' });
+    const chatPort = stubChatPort({
+      content: validAnalysisMissingConsensus,
+      usage: responseWithUsage,
+      model: 'm',
+    });
     const logger = stubLoggerPort();
     const step = new JudgeStep(chatPort, logger, stubClockPort([0, 0]));
     const result = await step.analyze([], sampleMessages, judgeModel(), 0);
     assert.equal(result, null);
-    const errorCalls = logger._calls.filter(c => c.method === 'logError');
+    const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
     assert.equal(errorCalls[0].args[0], 'judge');
   }
@@ -463,12 +445,7 @@ test('cleanup on success clears timeout', async () => {
       return originalClearTimeout(id);
     }) as typeof clearTimeout;
 
-    await step.analyze(
-      [panelResult()],
-      sampleMessages,
-      judgeModel(),
-      5000,
-    );
+    await step.analyze([panelResult()], sampleMessages, judgeModel(), 5000);
 
     // setTimeout should have been called (to create the timeout)
     assert.ok(setTimeoutCallCount >= 1, 'setTimeout should have been called');
@@ -500,12 +477,7 @@ test('cleanup on error also clears timeout', async () => {
       return originalClearTimeout(id);
     }) as typeof clearTimeout;
 
-    await step.analyze(
-      [panelResult()],
-      sampleMessages,
-      judgeModel(),
-      5000,
-    );
+    await step.analyze([panelResult()], sampleMessages, judgeModel(), 5000);
 
     // clearTimeout should have been called in the finally block
     assert.ok(clearTimeoutCallCount >= 1, 'clearTimeout should be called even on error');
@@ -519,24 +491,22 @@ test('cleanup on error also clears timeout', async () => {
 // ---------------------------------------------------------------------------
 
 test('judge failure with FusionError does not throw (graceful degradation)', async () => {
-  const fusionError = new (await import('../../domain/model/fusion-types.js')).FusionError('model_overload', 'Judge model overloaded');
+  const fusionError = new (await import('../../domain/model/fusion-types.js')).FusionError(
+    'model_overload',
+    'Judge model overloaded',
+  );
   const chatPort = stubChatPortReject(fusionError);
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
   const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze(
-    [panelResult()],
-    sampleMessages,
-    judgeModel(),
-    0,
-  );
+  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
 
   // Must not throw and must return null
   assert.equal(result, null);
 
   // Must log the error
-  const errorCalls = logger._calls.filter(c => c.method === 'logError');
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
   assert.equal(errorCalls.length, 1);
   assert.equal(errorCalls[0].args[0], 'judge');
   assert.ok(errorCalls[0].args[1] instanceof Error);
@@ -558,14 +528,9 @@ test('logStageEnd receives correct duration and usage', async () => {
   const clock = stubClockPort([500, 700]);
 
   const step = new JudgeStep(chatPort, logger, clock);
-  await step.analyze(
-    [panelResult()],
-    sampleMessages,
-    judgeModel(),
-    0,
-  );
+  await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
 
-  const endCalls = logger._calls.filter(c => c.method === 'logStageEnd');
+  const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
   assert.equal(endCalls.length, 1);
   assert.equal(endCalls[0].args[0], 'judge');
   assert.equal(endCalls[0].args[1], 200); // 700 - 500

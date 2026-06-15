@@ -35,28 +35,14 @@ import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import fs from 'node:fs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
-
-function findMatchingFiles(dir: string, pattern: RegExp): string[] {
-  const { stdout, error, status } = spawnSync(
-    'grep',
-    ['-r', '-l', '-E', '--include=*.ts', pattern.source, dir],
-    { encoding: 'utf-8', cwd: ROOT }
-  );
-  if (error !== undefined || (status !== null && status > 1)) {
-    const detail = error ? `spawn error: ${error.message}` : `grep exit status ${status}`;
-    throw new Error(`grep failed (${detail})`);
-  }
-  return stdout.trim().split('\n').filter(Boolean);
-}
 
 function findMatchingLines(dir: string, pattern: RegExp): string[] {
   const { stdout, error, status } = spawnSync(
     'grep',
     ['-r', '-n', '-E', '--include=*.ts', pattern.source, dir],
-    { encoding: 'utf-8', cwd: ROOT }
+    { encoding: 'utf-8', cwd: ROOT },
   );
   if (error !== undefined || (status !== null && status > 1)) {
     const detail = error ? `spawn error: ${error.message}` : `grep exit status ${status}`;
@@ -97,7 +83,7 @@ describe('[boundary] NFR-2: Hono framework confinement', () => {
     assert.deepStrictEqual(
       violations,
       [],
-      `Hono imports found outside ${honoAllowed}:\n${violations.join('\n')}`
+      `Hono imports found outside ${honoAllowed}:\n${violations.join('\n')}`,
     );
   });
 });
@@ -131,7 +117,7 @@ describe('[boundary] NFR-3: SDK confinement', () => {
     assert.deepStrictEqual(
       violations,
       [],
-      `openai SDK imports found outside ${openaiAllowed}:\n${violations.join('\n')}`
+      `openai SDK imports found outside ${openaiAllowed}:\n${violations.join('\n')}`,
     );
   });
 
@@ -148,7 +134,7 @@ describe('[boundary] NFR-3: SDK confinement', () => {
     assert.deepStrictEqual(
       violations,
       [],
-      `@anthropic-ai/sdk imports found outside ${anthropicAllowed}:\n${violations.join('\n')}`
+      `@anthropic-ai/sdk imports found outside ${anthropicAllowed}:\n${violations.join('\n')}`,
     );
   });
 });

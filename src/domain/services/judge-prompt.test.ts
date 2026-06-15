@@ -9,16 +9,19 @@ import { buildJudgeSystemPrompt, buildJudgeUserPrompt } from './judge-prompt.js'
 // PanelResult does not yet exist in fusion-types.ts (forward ref for Task 03).
 // We use objects with the expected shape cast to any.
 const samplePanelResults: any[] = [
-  { modelId: 'gpt-4o', content: 'The capital of France is Paris. It is known for the Eiffel Tower.' },
-  { modelId: 'claude-3-opus', content: 'Paris is the capital of France, famous for its cuisine and art.' },
+  {
+    modelId: 'gpt-4o',
+    content: 'The capital of France is Paris. It is known for the Eiffel Tower.',
+  },
+  {
+    modelId: 'claude-3-opus',
+    content: 'Paris is the capital of France, famous for its cuisine and art.',
+  },
 ];
 
-const sampleMessages = [
-  { role: 'user' as const, content: 'What is the capital of France?' },
-];
+const sampleMessages = [{ role: 'user' as const, content: 'What is the capital of France?' }];
 
 const emptyPanelResults: any[] = [];
-const emptyMessages: Array<{ role: string; content: string }> = [];
 
 // ---------------------------------------------------------------------------
 // buildJudgeSystemPrompt
@@ -35,28 +38,19 @@ test('buildJudgeSystemPrompt contains comparative analysis instructions', () => 
   const prompt = buildJudgeSystemPrompt().toLowerCase();
   assert.ok(
     prompt.includes('consensus') || prompt.includes('analy'),
-    'must mention consensus or analysis'
+    'must mention consensus or analysis',
   );
   assert.ok(
     prompt.includes('contradiction') || prompt.includes('conflict'),
-    'must mention contradictions or conflicts'
+    'must mention contradictions or conflicts',
   );
-  assert.ok(
-    prompt.includes('insight') || prompt.includes('unique'),
-    'must mention insights'
-  );
-  assert.ok(
-    prompt.includes('blind') && prompt.includes('spot'),
-    'must mention blind spots'
-  );
+  assert.ok(prompt.includes('insight') || prompt.includes('unique'), 'must mention insights');
+  assert.ok(prompt.includes('blind') && prompt.includes('spot'), 'must mention blind spots');
 });
 
 test('buildJudgeSystemPrompt instructs JSON output', () => {
   const prompt = buildJudgeSystemPrompt().toLowerCase();
-  assert.ok(
-    prompt.includes('json'),
-    'must mention JSON output format'
-  );
+  assert.ok(prompt.includes('json'), 'must mention JSON output format');
 });
 
 // ---------------------------------------------------------------------------
@@ -77,10 +71,7 @@ test('buildJudgeUserPrompt includes modelId from panel results', () => {
 
 test('buildJudgeUserPrompt includes original message content', () => {
   const prompt = buildJudgeUserPrompt(samplePanelResults as any, sampleMessages as any);
-  assert.ok(
-    prompt.includes('capital of France'),
-    'must include message content'
-  );
+  assert.ok(prompt.includes('capital of France'), 'must include message content');
 });
 
 test('buildJudgeUserPrompt labels messages by role', () => {
@@ -139,7 +130,7 @@ import { fileURLToPath } from 'node:url';
 
 const judgePromptSource = readFileSync(
   fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.ts'),
-  'utf-8'
+  'utf-8',
 );
 
 test('judge-prompt.ts has zero imports from src/application/', () => {

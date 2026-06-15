@@ -14,11 +14,7 @@ export class PanelRunner {
     private readonly clockPort: ClockPort,
   ) {}
 
-  async run(
-    messages: Message[],
-    panelModels: ModelRef[],
-    timeoutMs: number,
-  ): Promise<PanelMeta> {
+  async run(messages: Message[], panelModels: ModelRef[], timeoutMs: number): Promise<PanelMeta> {
     if (panelModels.length === 0) {
       return { results: [], failedModels: [] };
     }
@@ -33,12 +29,12 @@ export class PanelRunner {
         options: { signal: AbortSignal.timeout(timeoutMs) },
       };
       const startTime = this.clockPort.now();
-      return this.chatPorts[i].complete(request).then(
-        (value: ChatResponse): { value: ChatResponse; latencyMs: number } => ({
+      return this.chatPorts[i]
+        .complete(request)
+        .then((value: ChatResponse): { value: ChatResponse; latencyMs: number } => ({
           value,
           latencyMs: this.clockPort.now() - startTime,
-        }),
-      );
+        }));
     });
 
     const settled = await Promise.allSettled(tasks);
@@ -66,10 +62,14 @@ export class PanelRunner {
         const reason = settlement.reason;
         failedModels.push({
           modelId: modelRef.model,
-          errorCode: reason instanceof FusionError
-            ? reason.code
-            : (reason as { constructor?: { name?: string } })?.constructor?.name ?? 'UNKNOWN',
-          errorMessage: String((reason as { message?: unknown })?.message ?? reason ?? '').slice(0, 200),
+          errorCode:
+            reason instanceof FusionError
+              ? reason.code
+              : ((reason as { constructor?: { name?: string } })?.constructor?.name ?? 'UNKNOWN'),
+          errorMessage: String((reason as { message?: unknown })?.message ?? reason ?? '').slice(
+            0,
+            200,
+          ),
         });
       }
     }

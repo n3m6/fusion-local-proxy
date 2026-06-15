@@ -38,9 +38,7 @@ test('FusionError accepts the all_panels_failed code', () => {
 });
 
 test('FusionError preserves all_panels_failed code with details', () => {
-  const failedModels = [
-    { modelId: 'gpt-4o', errorCode: 'TIMEOUT', errorMessage: 'timed out' },
-  ];
+  const failedModels = [{ modelId: 'gpt-4o', errorCode: 'TIMEOUT', errorMessage: 'timed out' }];
   const err = new FusionError('all_panels_failed', 'Every panel model failed', { failedModels });
 
   assert.equal(err.code, 'all_panels_failed');

@@ -53,7 +53,7 @@ describe('package.json', () => {
     // The version string should satisfy >=20.0.0
     assert.ok(
       engines.node.includes('20') || engines.node.includes('>=20') || engines.node === '>=20.0.0',
-      `engines.node should require >=20.0.0, got: ${engines.node}`
+      `engines.node should require >=20.0.0, got: ${engines.node}`,
     );
   });
 
@@ -186,14 +186,10 @@ describe('Domain purity', () => {
         const { stdout } = spawnSync(
           'grep',
           ['-r', '--include=*.ts', '--exclude=*.test.ts', pat, domainDir],
-          { encoding: 'utf-8', cwd: ROOT }
+          { encoding: 'utf-8', cwd: ROOT },
         );
         const output = stdout.trim();
-        assert.equal(
-          output,
-          '',
-          `Forbidden SDK import ${sdk} found (${pat}):\n${output}`
-        );
+        assert.equal(output, '', `Forbidden SDK import ${sdk} found (${pat}):\n${output}`);
       }
     });
   }
@@ -209,14 +205,10 @@ describe('Domain purity', () => {
       const { stdout } = spawnSync(
         'grep',
         ['-E', '-r', '--include=*.ts', '--exclude=*.test.ts', pattern, domainDir],
-        { encoding: 'utf-8', cwd: ROOT }
+        { encoding: 'utf-8', cwd: ROOT },
       );
       const output = stdout.trim();
-      assert.equal(
-        output,
-        '',
-        `Forbidden ${layer} layer import found:\n${output}`
-      );
+      assert.equal(output, '', `Forbidden ${layer} layer import found:\n${output}`);
     });
   }
 });
@@ -243,7 +235,7 @@ describe('FusionStreamEvent discriminated union', () => {
     const typeDef = source.slice(typeDefStart, typeDefEnd >= 0 ? typeDefEnd : undefined);
 
     // Count lines that begin with "  |" (the union members)
-    const variantLines = typeDef.split('\n').filter(line => line.trim().startsWith('|'));
+    const variantLines = typeDef.split('\n').filter((line) => line.trim().startsWith('|'));
     assert.equal(variantLines.length, 5, `Expected 5 variants, found ${variantLines.length}`);
   });
 
@@ -255,7 +247,6 @@ describe('FusionStreamEvent discriminated union', () => {
     assert.ok(source.includes('errorMessage'), 'FailedModelInfo must have errorMessage');
   });
 });
-
 
 // ---------------------------------------------------------------------------
 // Task 01: Scripts completeness — start, typecheck, and exact count
@@ -275,9 +266,13 @@ describe('Scripts completeness (Task 01 regression fix)', () => {
     assert.equal(scripts.typecheck, 'tsc --noEmit', '"typecheck" must equal "tsc --noEmit"');
   });
 
-  test('scripts object contains exactly three entries', () => {
+  test('scripts object contains exactly the expected entries', () => {
     const keys = Object.keys(scripts);
-    assert.deepEqual(keys.sort(), ['dev', 'start', 'typecheck'], 'scripts must contain exactly dev, start, typecheck');
+    assert.deepEqual(
+      keys.sort(),
+      ['dev', 'format', 'format:check', 'lint', 'lint:fix', 'start', 'typecheck'],
+      'scripts must contain exactly dev, format, format:check, lint, lint:fix, start, typecheck',
+    );
   });
 });
 
@@ -294,7 +289,7 @@ describe('@anthropic-ai/sdk dependency (Task 01)', () => {
     assert.equal(
       deps['@anthropic-ai/sdk'],
       '^0.104.1',
-      `@anthropic-ai/sdk version must be ^0.104.1, got ${deps['@anthropic-ai/sdk']}`
+      `@anthropic-ai/sdk version must be ^0.104.1, got ${deps['@anthropic-ai/sdk']}`,
     );
   });
 });
@@ -312,13 +307,13 @@ describe('NFR-1: @anthropic-ai/sdk not in application layer (Task 01)', () => {
       const { stdout } = spawnSync(
         'grep',
         ['-r', '--include=*.ts', '--exclude=*.test.ts', pat, appDir],
-        { encoding: 'utf-8', cwd: ROOT }
+        { encoding: 'utf-8', cwd: ROOT },
       );
       const output = stdout.trim();
       assert.equal(
         output,
         '',
-        `Forbidden SDK import @anthropic-ai/sdk found in src/application/ (${pat}):\n${output}`
+        `Forbidden SDK import @anthropic-ai/sdk found in src/application/ (${pat}):\n${output}`,
       );
     }
   });
@@ -335,20 +330,21 @@ describe('Application purity — no infrastructure imports (Task 01)', () => {
     const { stdout } = spawnSync(
       'grep',
       [
-        '-E', '-r',
+        '-E',
+        '-r',
         '--include=*.ts',
         '--exclude=*.test.ts',
         '--exclude=*.spec.ts',
         `from[[:space:]]+['"][^'"]*infrastructure[^'"]*['"]`,
         appDir,
       ],
-      { encoding: 'utf-8', cwd: ROOT }
+      { encoding: 'utf-8', cwd: ROOT },
     );
     const output = stdout.trim();
     assert.equal(
       output,
       '',
-      `Forbidden infrastructure layer import found in src/application/:\n${output}`
+      `Forbidden infrastructure layer import found in src/application/:\n${output}`,
     );
   });
 });
@@ -359,16 +355,15 @@ describe('Application purity — no infrastructure imports (Task 01)', () => {
 
 describe('Full-project typecheck (Task 01)', () => {
   test('npm run typecheck exits 0 with no errors', () => {
-    const { status, stdout, stderr } = spawnSync(
-      'npx',
-      ['tsc', '--noEmit'],
-      { encoding: 'utf-8', cwd: ROOT }
-    );
+    const { status, stdout, stderr } = spawnSync('npx', ['tsc', '--noEmit'], {
+      encoding: 'utf-8',
+      cwd: ROOT,
+    });
 
     assert.equal(
       status,
       0,
-      `tsc --noEmit failed with exit ${status}\nstdout: ${stdout}\nstderr: ${stderr}`
+      `tsc --noEmit failed with exit ${status}\nstdout: ${stdout}\nstderr: ${stderr}`,
     );
     assert.equal(stderr.trim(), '', `tsc produced stderr: ${stderr}`);
   });
@@ -393,23 +388,22 @@ describe('TypeScript compilation', () => {
         'tsc',
         '--noEmit',
         '--strict',
-        '--target', 'ES2023',
-        '--module', 'NodeNext',
-        '--moduleResolution', 'NodeNext',
+        '--target',
+        'ES2023',
+        '--module',
+        'NodeNext',
+        '--moduleResolution',
+        'NodeNext',
         '--esModuleInterop',
         '--skipLibCheck',
         '--resolveJsonModule',
         '--isolatedModules',
         ...domainFiles,
       ],
-      { encoding: 'utf-8', cwd: ROOT }
+      { encoding: 'utf-8', cwd: ROOT },
     );
 
-    assert.equal(
-      status,
-      0,
-      `tsc failed with exit ${status}\nstdout: ${stdout}\nstderr: ${stderr}`
-    );
+    assert.equal(status, 0, `tsc failed with exit ${status}\nstdout: ${stdout}\nstderr: ${stderr}`);
     assert.equal(stderr.trim(), '', `tsc produced stderr: ${stderr}`);
   });
 });

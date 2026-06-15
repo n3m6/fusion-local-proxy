@@ -92,13 +92,17 @@ export function buildSynthesisUserPrompt(
     }
   } else {
     parts.push('=== NOTE ===');
-    parts.push('Panel-level analysis is unavailable. Work directly from the raw panel responses above.');
+    parts.push(
+      'Panel-level analysis is unavailable. Work directly from the raw panel responses above.',
+    );
   }
 
   parts.push('');
   parts.push('=== INSTRUCTIONS ===');
   parts.push('Using the above materials, produce the final synthesized response for the end user.');
-  parts.push('Integrate the panel responses, the analysis (if available), and address the original question comprehensively.');
+  parts.push(
+    'Integrate the panel responses, the analysis (if available), and address the original question comprehensively.',
+  );
 
   return parts.join('\n');
 }

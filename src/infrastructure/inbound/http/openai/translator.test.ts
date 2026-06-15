@@ -215,9 +215,7 @@ test('fusionStreamToOpenAiResponse returns valid ChatCompletion shape', async ()
     },
   ];
 
-  const result = await fusionStreamToOpenAiResponse(
-    await asyncIterableFrom(events),
-  );
+  const result = await fusionStreamToOpenAiResponse(await asyncIterableFrom(events));
 
   assert.equal(result.object, 'chat.completion');
   assert.equal(typeof result.id, 'string');
@@ -271,9 +269,7 @@ test('fusionStreamToOpenAiResponse handles empty content', async () => {
     },
   ];
 
-  const result = await fusionStreamToOpenAiResponse(
-    await asyncIterableFrom(events),
-  );
+  const result = await fusionStreamToOpenAiResponse(await asyncIterableFrom(events));
 
   const choices = result.choices as Array<Record<string, unknown>>;
   const message = choices[0].message as Record<string, unknown>;
@@ -290,9 +286,7 @@ test('fusionStreamToOpenAiResponse handles model-less done event', async () => {
     },
   ];
 
-  const result = await fusionStreamToOpenAiResponse(
-    await asyncIterableFrom(events),
-  );
+  const result = await fusionStreamToOpenAiResponse(await asyncIterableFrom(events));
 
   assert.equal(result.model, '');
 });
@@ -330,9 +324,7 @@ test('fusionStreamToOpenAiResponse skips progress events', async () => {
     },
   ];
 
-  const result = await fusionStreamToOpenAiResponse(
-    await asyncIterableFrom(events),
-  );
+  const result = await fusionStreamToOpenAiResponse(await asyncIterableFrom(events));
 
   const choices = result.choices as Array<Record<string, unknown>>;
   const message = choices[0].message as Record<string, unknown>;
@@ -363,16 +355,12 @@ test('fusionStreamToOpenAiResponse collects failedModels from done', async () =>
     {
       type: 'done',
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-      failedModels: [
-        { modelId: 'gpt-3.5', errorCode: 'timeout', errorMessage: 'timeout' },
-      ],
+      failedModels: [{ modelId: 'gpt-3.5', errorCode: 'timeout', errorMessage: 'timeout' }],
       model: 'gpt-4o',
     },
   ];
 
-  const result = await fusionStreamToOpenAiResponse(
-    await asyncIterableFrom(events),
-  );
+  const result = await fusionStreamToOpenAiResponse(await asyncIterableFrom(events));
 
   // failedModels are collected internally but not exposed in the OpenAI response shape
   // — the translation is verified by the other fields being correct
@@ -391,9 +379,7 @@ test('fusionStreamToOpenAiResponse defaults usage to zeros when done omits usage
     },
   ];
 
-  const result = await fusionStreamToOpenAiResponse(
-    await asyncIterableFrom(events),
-  );
+  const result = await fusionStreamToOpenAiResponse(await asyncIterableFrom(events));
 
   const usage = result.usage as Record<string, unknown>;
   assert.equal(usage.prompt_tokens, 0);
@@ -421,7 +407,6 @@ test('fusionStreamToOpenAiResponse throws when stream completes without done eve
   );
 });
 
-
 // ---------------------------------------------------------------------------
 // fusionStreamToOpenAiSSE
 // ---------------------------------------------------------------------------
@@ -434,10 +419,7 @@ test('fusionStreamToOpenAiSSE delegates to SSE encoder', async () => {
   ];
 
   const strings: string[] = [];
-  for await (const s of fusionStreamToOpenAiSSE(
-    await asyncIterableFrom(events),
-    'gpt-4o',
-  )) {
+  for await (const s of fusionStreamToOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o')) {
     strings.push(s);
   }
 
@@ -462,10 +444,7 @@ test('fusionStreamToOpenAiSSE handles empty stream with [DONE]', async () => {
   const events: FusionStreamEvent[] = [];
 
   const strings: string[] = [];
-  for await (const s of fusionStreamToOpenAiSSE(
-    await asyncIterableFrom(events),
-    'gpt-4o',
-  )) {
+  for await (const s of fusionStreamToOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o')) {
     strings.push(s);
   }
 

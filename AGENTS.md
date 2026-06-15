@@ -15,15 +15,20 @@ TypeScript, ESM, Node.js 20+. No build step — everything runs through `tsx`.
 
 ## Commands
 
-| Task | Command |
-|---|---|
-| Dev server | `npm run dev` (alias: `npm start`) |
-| Type-check | `npm run typecheck` |
-| Run tests | `node --import tsx --test "src/**/*.test.ts"` |
+| Task              | Command                                             |
+| ----------------- | --------------------------------------------------- |
+| Dev server        | `npm run dev` (alias: `npm start`)                  |
+| Type-check        | `npm run typecheck`                                 |
+| Run tests         | `node --import tsx --test "src/**/*.test.ts"`       |
 | Run one test file | `node --import tsx --test src/path/to/file.test.ts` |
+| Lint              | `npm run lint`                                      |
+| Lint + fix        | `npm run lint:fix`                                  |
+| Format            | `npm run format`                                    |
+| Format check      | `npm run format:check`                              |
 
-Always run `npm run typecheck` and the test suite before considering a change
-done. There is no separate build/lint step.
+Always run `npm run typecheck`, the test suite, `npm run lint`, and
+`npm run format:check` before considering a change done. There is no
+separate build step.
 
 ## Architecture (hexagonal / ports-and-adapters)
 

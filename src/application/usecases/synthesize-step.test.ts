@@ -5,11 +5,16 @@ import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../domain/model/chat-types.js';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ChatStreamChunk,
+  TokenUsage,
+} from '../../domain/model/chat-types.js';
 import type { ModelRef, PanelResult } from '../../domain/model/fusion-types.js';
 import type { Analysis } from '../../domain/services/analysis-schema.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
-import { buildSynthesisSystemPrompt, buildSynthesisUserPrompt } from '../../domain/services/synthesis-prompt.js';
+import { buildSynthesisSystemPrompt } from '../../domain/services/synthesis-prompt.js';
 
 // ---------------------------------------------------------------------------
 // Stubs
@@ -88,12 +93,17 @@ function stubConfigPort(overrides?: {
   timeoutMs?: number;
 }): StubConfigPort {
   const calls = { getSynthesizerModel: 0, getTimeoutMs: 0 };
-  const synthesizerModel = overrides?.synthesizerModel ?? modelRef({ model: 'gpt-4o', provider: 'openai' });
+  const synthesizerModel =
+    overrides?.synthesizerModel ?? modelRef({ model: 'gpt-4o', provider: 'openai' });
   const timeoutMs = overrides?.timeoutMs ?? 30000;
   return {
     _calls: calls,
-    getPanelModels(): ModelRef[] { return []; },
-    getJudgeModel(): ModelRef | null { return null; },
+    getPanelModels(): ModelRef[] {
+      return [];
+    },
+    getJudgeModel(): ModelRef | null {
+      return null;
+    },
     getSynthesizerModel(): ModelRef {
       calls.getSynthesizerModel++;
       return synthesizerModel;
@@ -190,7 +200,9 @@ function sampleAnalysis(): Analysis {
   };
 }
 
-async function collectEvents(iterable: AsyncIterable<FusionStreamEvent>): Promise<FusionStreamEvent[]> {
+async function collectEvents(
+  iterable: AsyncIterable<FusionStreamEvent>,
+): Promise<FusionStreamEvent[]> {
   const events: FusionStreamEvent[] = [];
   for await (const event of iterable) {
     events.push(event);
@@ -288,9 +300,7 @@ test('correct event sequence: exactly three events, no extras', async () => {
 
   const step = new SynthesizeStep(chat, config, logger, clock);
 
-  const events = await collectEvents(
-    step.synthesize([], [], null),
-  );
+  const events = await collectEvents(step.synthesize([], [], null));
 
   assert.equal(events.length, 3);
   assert.equal(events[0].type, 'content_delta');
@@ -366,11 +376,7 @@ test('error propagation: iterator rejects with same error, logStageStart called,
 
   const step = new SynthesizeStep(chat, config, logger, clock);
 
-  const iterator = step.synthesize(
-    samplePanelResults(),
-    sampleOriginalMessages,
-    sampleAnalysis(),
-  );
+  const iterator = step.synthesize(samplePanelResults(), sampleOriginalMessages, sampleAnalysis());
 
   // Iterating should reject with the same error
   await assert.rejects(
@@ -432,7 +438,10 @@ test('prompt builder integration: user prompt includes analysis consensus when a
   assert.equal(chat._calls.length, 1);
   const userContent = chat._calls[0].messages[1].content;
   // The user prompt should contain the analysis consensus text
-  assert.ok(userContent.includes('Paris is the capital of France'), 'user prompt should include consensus point');
+  assert.ok(
+    userContent.includes('Paris is the capital of France'),
+    'user prompt should include consensus point',
+  );
   assert.ok(userContent.includes('PANEL ANALYSIS'), 'user prompt should include analysis section');
 });
 
@@ -444,9 +453,7 @@ test('prompt builder integration: user prompt includes fallback note when analys
 
   const step = new SynthesizeStep(chat, config, logger, clock);
 
-  await collectEvents(
-    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
-  );
+  await collectEvents(step.synthesize(samplePanelResults(), sampleOriginalMessages, null));
 
   assert.equal(chat._calls.length, 1);
   const userContent = chat._calls[0].messages[1].content;
@@ -456,7 +463,10 @@ test('prompt builder integration: user prompt includes fallback note when analys
     'user prompt should include fallback note when analysis is null',
   );
   // Should NOT contain PANEL ANALYSIS section
-  assert.ok(!userContent.includes('PANEL ANALYSIS'), 'user prompt should not include analysis section when null');
+  assert.ok(
+    !userContent.includes('PANEL ANALYSIS'),
+    'user prompt should not include analysis section when null',
+  );
 });
 
 test('system prompt is always included in the ChatRequest', async () => {
@@ -477,7 +487,12 @@ test('system prompt is always included in the ChatRequest', async () => {
 });
 
 test('ChatRequest includes correct model reference', async () => {
-  const customModel = modelRef({ model: 'custom-synth', provider: 'anthropic', baseURL: 'http://custom', apiKey: 'k' });
+  const customModel = modelRef({
+    model: 'custom-synth',
+    provider: 'anthropic',
+    baseURL: 'http://custom',
+    apiKey: 'k',
+  });
   const chat = stubChatPort();
   const config = stubConfigPort({ synthesizerModel: customModel });
   const logger = stubLoggerPort();
@@ -534,4 +549,3 @@ test('no signal timeout for zero or negative timeoutMs', async () => {
   assert.equal(events[1].type, 'content_stop');
   assert.equal(events[2].type, 'done');
 });
-

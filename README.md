@@ -117,15 +117,15 @@ The server reads `fusion.config.json` (or the path in `FUSION_CONFIG_PATH`) at
 startup. Each entry in `providers` is a model backend assigned a role in the
 ensemble.
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `providers` | array | yes | Array of provider objects. Each provider is a model backend with an assigned role. |
-| `providers[].type` | `"openai" \| "anthropic"` | yes | Protocol/API type of the provider. Determines which outbound adapter is used. |
-| `providers[].role` | `"panel" \| "judge" \| "synthesizer"` | yes | Role in the ensemble pipeline. At least one `"synthesizer"` is required. `judge` is optional (analysis is skipped when absent), and a `panel` role should be present for meaningful ensemble behavior. |
-| `providers[].model` | string | yes | Model name passed to the upstream API (e.g. `"llama3:8b"`, `"gpt-4o"`, `"claude-sonnet-4-20250514"`). |
-| `providers[].baseURL` | string | yes | Base URL of the API endpoint, including the path prefix (e.g. `"http://localhost:11434/v1"` for local Ollama, `"https://api.openai.com/v1"` for OpenAI). |
-| `providers[].apiKeyEnv` | string | yes | Name of the environment variable holding the API key. The adapter reads `process.env[apiKeyEnv]` at startup and fails fast if it is unset. |
-| `timeoutMs` | number | no | Per-call timeout in milliseconds (default: `30000`). Applies to each outbound LLM call. |
+| Field                   | Type                                  | Required | Description                                                                                                                                                                                            |
+| ----------------------- | ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `providers`             | array                                 | yes      | Array of provider objects. Each provider is a model backend with an assigned role.                                                                                                                     |
+| `providers[].type`      | `"openai" \| "anthropic"`             | yes      | Protocol/API type of the provider. Determines which outbound adapter is used.                                                                                                                          |
+| `providers[].role`      | `"panel" \| "judge" \| "synthesizer"` | yes      | Role in the ensemble pipeline. At least one `"synthesizer"` is required. `judge` is optional (analysis is skipped when absent), and a `panel` role should be present for meaningful ensemble behavior. |
+| `providers[].model`     | string                                | yes      | Model name passed to the upstream API (e.g. `"llama3:8b"`, `"gpt-4o"`, `"claude-sonnet-4-20250514"`).                                                                                                  |
+| `providers[].baseURL`   | string                                | yes      | Base URL of the API endpoint, including the path prefix (e.g. `"http://localhost:11434/v1"` for local Ollama, `"https://api.openai.com/v1"` for OpenAI).                                               |
+| `providers[].apiKeyEnv` | string                                | yes      | Name of the environment variable holding the API key. The adapter reads `process.env[apiKeyEnv]` at startup and fails fast if it is unset.                                                             |
+| `timeoutMs`             | number                                | no       | Per-call timeout in milliseconds (default: `30000`). Applies to each outbound LLM call.                                                                                                                |
 
 Multiple providers can share the same `role` (e.g. several `panel` members). The
 `type` must match the actual API protocol of the backend — note that
@@ -188,12 +188,16 @@ Returns a stub `object: "list"` of the configured models.
 
 ## Development workflow
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start the dev server (`tsx src/main.ts`). |
-| `npm start` | Same as `npm run dev`. |
-| `npm run typecheck` | Type-check the project (`tsc --noEmit`). |
+| Command                                       | Description                                              |
+| --------------------------------------------- | -------------------------------------------------------- |
+| `npm run dev`                                 | Start the dev server (`tsx src/main.ts`).                |
+| `npm start`                                   | Same as `npm run dev`.                                   |
+| `npm run typecheck`                           | Type-check the project (`tsc --noEmit`).                 |
 | `node --import tsx --test "src/**/*.test.ts"` | Run the test suite (`node:test` + `node:assert/strict`). |
+| `npm run lint`                                | Lint with ESLint (flat config + typescript-eslint).      |
+| `npm run lint:fix`                            | Lint and auto-fix fixable violations.                    |
+| `npm run format`                              | Format all files with Prettier.                          |
+| `npm run format:check`                        | Check formatting without writing files.                  |
 
 The default port is `3000`; override it with the `PORT` environment variable.
 
@@ -203,14 +207,14 @@ The default port is `3000`; override it with the `PORT` environment variable.
 
 ## Environment variables
 
-| Variable | Required | Purpose |
-|---|---|---|
-| `OPENAI_API_KEY` | if a provider has `apiKeyEnv: "OPENAI_API_KEY"` | API key for OpenAI-compatible backends |
-| `ANTHROPIC_API_KEY` | if a provider has `apiKeyEnv: "ANTHROPIC_API_KEY"` | API key for Anthropic backends |
-| `OLLAMA_API_KEY` | if a provider has `apiKeyEnv: "OLLAMA_API_KEY"` | API key for local Ollama (any non-empty string) |
-| `OPENROUTER_API_KEY` | if a provider has `apiKeyEnv: "OPENROUTER_API_KEY"` | API key for OpenRouter |
-| `PORT` | no | HTTP server port (default: `3000`) |
-| `FUSION_CONFIG_PATH` | no | Path to the config file (default: `fusion.config.json`) |
+| Variable             | Required                                            | Purpose                                                 |
+| -------------------- | --------------------------------------------------- | ------------------------------------------------------- |
+| `OPENAI_API_KEY`     | if a provider has `apiKeyEnv: "OPENAI_API_KEY"`     | API key for OpenAI-compatible backends                  |
+| `ANTHROPIC_API_KEY`  | if a provider has `apiKeyEnv: "ANTHROPIC_API_KEY"`  | API key for Anthropic backends                          |
+| `OLLAMA_API_KEY`     | if a provider has `apiKeyEnv: "OLLAMA_API_KEY"`     | API key for local Ollama (any non-empty string)         |
+| `OPENROUTER_API_KEY` | if a provider has `apiKeyEnv: "OPENROUTER_API_KEY"` | API key for OpenRouter                                  |
+| `PORT`               | no                                                  | HTTP server port (default: `3000`)                      |
+| `FUSION_CONFIG_PATH` | no                                                  | Path to the config file (default: `fusion.config.json`) |
 
 See [`.env.example`](./.env.example) for a template.
 

@@ -4,7 +4,12 @@ import { PanelRunner } from './panel-runner.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../domain/model/chat-types.js';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ChatStreamChunk,
+  TokenUsage,
+} from '../../domain/model/chat-types.js';
 import type { ModelRef } from '../../domain/model/fusion-types.js';
 import type { FailedModelInfo } from '../../domain/model/stream-types.js';
 import { FusionError } from '../../domain/model/fusion-types.js';
@@ -288,11 +293,7 @@ test('AbortSignal passthrough: signal is set on ChatRequest', async () => {
 
   const runner = new PanelRunner([port], logger, clock);
 
-  await runner.run(
-    [sampleMessage],
-    [modelRef({ model: 'm0' })],
-    5000,
-  );
+  await runner.run([sampleMessage], [modelRef({ model: 'm0' })], 5000);
 
   assert.ok(port._calls.length >= 1);
   const req = port._calls[0];
@@ -311,11 +312,7 @@ test('latency measurement: PanelResult.latencyMs equals clock difference', async
 
   const runner = new PanelRunner([port], logger, clock);
 
-  const result = await runner.run(
-    [sampleMessage],
-    [modelRef({ model: 'm0' })],
-    30000,
-  );
+  const result = await runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000);
 
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].latencyMs, 150); // 250 - 100
@@ -329,11 +326,7 @@ test('FailedModelInfo from FusionError: errorCode and errorMessage copied', asyn
   const runner = new PanelRunner([port], logger, clock);
 
   await assert.rejects(
-    () => runner.run(
-      [sampleMessage],
-      [modelRef({ model: 'm0' })],
-      30000,
-    ),
+    () => runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000),
     (err: unknown) => {
       assert.ok(err instanceof FusionError);
       const fe = err as FusionError;
@@ -359,11 +352,7 @@ test('FailedModelInfo from generic Error: errorCode is Error, message truncated'
   const runner = new PanelRunner([port], logger, clock);
 
   await assert.rejects(
-    () => runner.run(
-      [sampleMessage],
-      [modelRef({ model: 'm0' })],
-      30000,
-    ),
+    () => runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000),
     (err: unknown) => {
       assert.ok(err instanceof FusionError);
       const fe = err as FusionError;
@@ -397,10 +386,7 @@ test('loggerPort.logStageEnd called per successful model with correct usage', as
 
   await runner.run(
     [sampleMessage],
-    [
-      modelRef({ model: 'm0' }),
-      modelRef({ model: 'm1', provider: 'anthropic' }),
-    ],
+    [modelRef({ model: 'm0' }), modelRef({ model: 'm1', provider: 'anthropic' })],
     30000,
   );
 
@@ -441,11 +427,7 @@ test('FailedModelInfo from generic Error uses constructor.name as errorCode', as
   const runner = new PanelRunner([port], logger, clock);
 
   await assert.rejects(
-    () => runner.run(
-      [sampleMessage],
-      [modelRef({ model: 'm0' })],
-      30000,
-    ),
+    () => runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000),
     (err: unknown) => {
       assert.ok(err instanceof FusionError);
       const fe = err as FusionError;
@@ -484,8 +466,16 @@ test('partial-failure does not throw (non-zero successes)', async () => {
 });
 
 test('chatRequest includes model ref and messages for each panel model', async () => {
-  const port0 = stubChatPort({ content: 'r0', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, model: 'x' });
-  const port1 = stubChatPort({ content: 'r1', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, model: 'y' });
+  const port0 = stubChatPort({
+    content: 'r0',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'x',
+  });
+  const port1 = stubChatPort({
+    content: 'r1',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'y',
+  });
 
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 10, 20, 30]);

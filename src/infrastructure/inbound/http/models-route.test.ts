@@ -43,7 +43,7 @@ test('GET /v1/models returns panel model in data array', async () => {
   const res = await app.request('/v1/models');
   assert.equal(res.status, 200);
 
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   assert.equal(body.object, 'list');
   assert.ok(Array.isArray(body.data));
 
@@ -63,7 +63,7 @@ test('GET /v1/models includes judge model when configured', async () => {
   app.get('/v1/models', createModelsRoute(config));
 
   const res = await app.request('/v1/models');
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const data = body.data as Array<Record<string, unknown>>;
 
   assert.equal(data.length, 3);
@@ -74,16 +74,12 @@ test('GET /v1/models includes judge model when configured', async () => {
 });
 
 test('GET /v1/models includes synthesizer model', async () => {
-  const config = stubConfigPort(
-    [makeModelRef('gpt-4o')],
-    null,
-    makeModelRef('synthesizer-model'),
-  );
+  const config = stubConfigPort([makeModelRef('gpt-4o')], null, makeModelRef('synthesizer-model'));
   const app = new Hono();
   app.get('/v1/models', createModelsRoute(config));
 
   const res = await app.request('/v1/models');
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const data = body.data as Array<Record<string, unknown>>;
 
   assert.equal(data.length, 2);
@@ -96,7 +92,7 @@ test('GET /v1/models returns only synthesizer when no panel or judge configured'
   app.get('/v1/models', createModelsRoute(config));
 
   const res = await app.request('/v1/models');
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const data = body.data as Array<Record<string, unknown>>;
 
   assert.equal(data.length, 1);
@@ -114,7 +110,7 @@ test('GET /v1/models handles both judge and synthesizer simultaneously', async (
   app.get('/v1/models', createModelsRoute(config));
 
   const res = await app.request('/v1/models');
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const data = body.data as Array<Record<string, unknown>>;
 
   assert.equal(data.length, 3);

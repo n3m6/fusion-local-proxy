@@ -7,7 +7,9 @@ import type { ChatRequest, ChatStreamChunk } from '../../../domain/model/chat-ty
 // Stub helpers for the Anthropic SDK client used by the adapter
 // ---------------------------------------------------------------------------
 
-type ContentBlock = { type: 'text'; text: string } | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
 
 interface StubCreateResult {
   content: ContentBlock[];
@@ -15,13 +17,22 @@ interface StubCreateResult {
   model: string;
 }
 
-type CreateFn = (params: Record<string, unknown>, options?: Record<string, unknown>) => Promise<StubCreateResult>;
+type CreateFn = (
+  params: Record<string, unknown>,
+  options?: Record<string, unknown>,
+) => Promise<StubCreateResult>;
 
-function stubAnthropicClient(createFn: CreateFn, streamFn?: (params: Record<string, unknown>, options?: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>): any {
+function stubAnthropicClient(
+  createFn: CreateFn,
+  streamFn?: (
+    params: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ) => AsyncIterable<Record<string, unknown>>,
+): any {
   return {
     messages: {
       create: createFn,
-      stream: streamFn ?? (async function* () {}),
+      stream: streamFn ?? async function* () {},
     },
   };
 }
@@ -33,7 +44,12 @@ function stubAnthropicClient(createFn: CreateFn, streamFn?: (params: Record<stri
 function makeRequest(overrides?: Partial<ChatRequest>): ChatRequest {
   return {
     messages: [{ role: 'user', content: 'Hello' }],
-    model: { provider: 'anthropic', model: 'claude-3', baseURL: 'https://api.anthropic.com', apiKey: 'sk-test' },
+    model: {
+      provider: 'anthropic',
+      model: 'claude-3',
+      baseURL: 'https://api.anthropic.com',
+      apiKey: 'sk-test',
+    },
     options: undefined,
     ...overrides,
   };
@@ -69,9 +85,7 @@ test('System message extraction: system message removed from messages, placed in
   const params = capturedParams.value!;
   assert.ok(params);
   assert.equal(params.system, 'You are helpful.');
-  assert.deepEqual(params.messages, [
-    { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
-  ]);
+  assert.deepEqual(params.messages, [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }]);
 });
 
 test('Multiple system messages concatenation: two system messages joined by newlines', async () => {
@@ -100,9 +114,7 @@ test('Multiple system messages concatenation: two system messages joined by newl
 
   const params = capturedParams.value!;
   assert.equal(params.system, 'You are helpful.\n\nBe concise.');
-  assert.deepEqual(params.messages, [
-    { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
-  ]);
+  assert.deepEqual(params.messages, [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }]);
 });
 
 test('No system messages: system param absent', async () => {
@@ -160,7 +172,10 @@ test('User/assistant message mapping: roles and content block format', async () 
   await adapter.complete(request);
 
   const params = capturedParams.value!;
-  const messages = params.messages as Array<{ role: string; content: Array<{ type: string; text: string }> }>;
+  const messages = params.messages as Array<{
+    role: string;
+    content: Array<{ type: string; text: string }>;
+  }>;
   assert.equal(messages.length, 2);
   assert.equal(messages[0].role, 'user');
   assert.deepEqual(messages[0].content, [{ type: 'text', text: 'Question?' }]);
@@ -234,9 +249,7 @@ test('Options mapping: output_config set for json_schema responseFormat', async 
 
 test('Response content extraction: first text block text returned', async () => {
   const client = stubAnthropicClient(async () => ({
-    content: [
-      { type: 'text', text: 'Hello world' },
-    ],
+    content: [{ type: 'text', text: 'Hello world' }],
     usage: { input_tokens: 10, output_tokens: 5 },
     model: 'claude-3',
   }));
@@ -256,9 +269,7 @@ test('Response content extraction: first text block text returned', async () => 
 
 test('Empty response content: no text blocks throws error', async () => {
   const client = stubAnthropicClient(async () => ({
-    content: [
-      { type: 'tool_use', id: 'tu1', name: 'get_weather', input: { city: 'Paris' } },
-    ],
+    content: [{ type: 'tool_use', id: 'tu1', name: 'get_weather', input: { city: 'Paris' } }],
     usage: { input_tokens: 1, output_tokens: 1 },
     model: 'claude-3',
   }));
@@ -281,13 +292,10 @@ test('SDK error propagation for complete(): rejected promise propagates', async 
   const adapter = new AnthropicChatAdapter(client);
   const request = makeRequest();
 
-  await assert.rejects(
-    adapter.complete(request),
-    (err: unknown) => {
-      assert.strictEqual(err, sdkError);
-      return true;
-    },
-  );
+  await assert.rejects(adapter.complete(request), (err: unknown) => {
+    assert.strictEqual(err, sdkError);
+    return true;
+  });
 });
 
 test('AbortSignal forwarding for complete(): signal passed in second argument', async () => {
@@ -346,7 +354,10 @@ function stubAnthropicStreamingClient(
       async create() {
         return { content: [], usage: { input_tokens: 0, output_tokens: 0 }, model: 'claude-3' };
       },
-      stream(_params: Record<string, unknown>, options?: Record<string, unknown>): AsyncIterable<Record<string, unknown>> {
+      stream(
+        _params: Record<string, unknown>,
+        options?: Record<string, unknown>,
+      ): AsyncIterable<Record<string, unknown>> {
         if (capturedOptions) capturedOptions.value = options ?? null;
         return asyncIterable(events);
       },
@@ -375,7 +386,10 @@ function stubAnthropicStreamingClientReject(error: Error): any {
   };
 }
 
-async function collectStreamChunks(adapter: AnthropicChatAdapter, request: ChatRequest): Promise<ChatStreamChunk[]> {
+async function collectStreamChunks(
+  adapter: AnthropicChatAdapter,
+  request: ChatRequest,
+): Promise<ChatStreamChunk[]> {
   const chunks: ChatStreamChunk[] = [];
   for await (const chunk of adapter.stream(request)) {
     chunks.push(chunk);
@@ -438,9 +452,15 @@ test('Stream content_stop before usage: message_stop yields content_stop then us
   const usageIndex = chunks.findIndex((c) => c.type === 'usage');
   assert.ok(stopIndex >= 0, 'content_stop not found');
   assert.ok(usageIndex >= 0, 'usage not found');
-  assert.ok(stopIndex < usageIndex, `content_stop (index ${stopIndex}) must precede usage (index ${usageIndex})`);
+  assert.ok(
+    stopIndex < usageIndex,
+    `content_stop (index ${stopIndex}) must precede usage (index ${usageIndex})`,
+  );
 
-  const usageChunk = chunks[usageIndex] as { type: 'usage'; usage: { promptTokens: number; completionTokens: number; totalTokens: number } };
+  const usageChunk = chunks[usageIndex] as {
+    type: 'usage';
+    usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+  };
   assert.equal(usageChunk.usage.promptTokens, 100);
   assert.equal(usageChunk.usage.completionTokens, 50);
   assert.equal(usageChunk.usage.totalTokens, 150);

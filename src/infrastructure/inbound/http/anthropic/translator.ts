@@ -21,9 +21,10 @@ export function anthropicRequestToFusion(body: Record<string, unknown>): FusionR
 
   const messages = Array.isArray(body.messages)
     ? (body.messages as Array<Record<string, unknown>>).map((m) => {
-        const role = typeof m.role === 'string' && (m.role === 'user' || m.role === 'assistant')
-          ? m.role
-          : 'user';
+        const role =
+          typeof m.role === 'string' && (m.role === 'user' || m.role === 'assistant')
+            ? m.role
+            : 'user';
         let content: string;
         if (typeof m.content === 'string') {
           content = m.content;

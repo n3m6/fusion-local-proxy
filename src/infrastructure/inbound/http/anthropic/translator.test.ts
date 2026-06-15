@@ -505,10 +505,7 @@ test('SSE encoder emits full 6-event sequence in correct order', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   // Expected sequence: heartbeat, message_start, content_block_start,
@@ -552,10 +549,7 @@ test('SSE encoder each event has both event: and data: fields', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   // Every non-heartbeat string should have both event: and data: lines
@@ -576,10 +570,7 @@ test('SSE encoder emits keep-alive for progress events', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   assert.equal(strings[0], ': heartbeat\n\n');
@@ -593,10 +584,7 @@ test('SSE encoder message_start payload contains model and msg_ id', async () =>
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   const msgStart = strings[0];
@@ -632,10 +620,7 @@ test('SSE encoder message_delta has stop_reason and output_tokens', async () => 
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   // message_delta should be the second-to-last event
@@ -659,10 +644,7 @@ test('SSE encoder message_stop terminates stream', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   const last = strings[strings.length - 1];
@@ -706,7 +688,7 @@ test('SSE encoder error event with no prior content emits only before throwing',
     { type: 'error', code: 'UPSTREAM_FAIL', message: 'Service unavailable' },
   ];
 
-  let emitted: string[] = [];
+  const emitted: string[] = [];
   await assert.rejects(
     async () => {
       for await (const s of fusionStreamToAnthropicSSE(
@@ -753,8 +735,8 @@ test('SSE encoder error event after content_start stops without terminal events'
   // Should have message_start, content_block_start, content_block_delta
   // but NOT content_block_stop, message_delta, or message_stop
   const eventTypes = strings
-    .filter(s => s !== ': heartbeat\n\n')
-    .map(s => {
+    .filter((s) => s !== ': heartbeat\n\n')
+    .map((s) => {
       const match = s.match(/^event: (\w+)/);
       return match ? match[1] : 'unknown';
     });
@@ -771,10 +753,7 @@ test('SSE encoder emits terminal sequence for empty stream', async () => {
   const events: FusionStreamEvent[] = [];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   // Should emit message_start, content_block_start, content_block_stop, message_delta, message_stop
@@ -799,10 +778,7 @@ test('SSE encoder handles stream with only content_stop and done', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   // message_start, content_block_start, content_block_stop, message_delta, message_stop
@@ -820,10 +796,7 @@ test('SSE encoder message_delta defaults output_tokens to 0 when done has no usa
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   const msgDelta = strings[strings.length - 2];
@@ -841,14 +814,11 @@ test('SSE encoder content_block_start has correct shape', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   // content_block_start should be the second event
-  const cbsIdx = strings.findIndex(s => s.startsWith('event: content_block_start\n'));
+  const cbsIdx = strings.findIndex((s) => s.startsWith('event: content_block_start\n'));
   assert.ok(cbsIdx >= 0, 'content_block_start not found');
 
   const cbs = strings[cbsIdx];
@@ -869,13 +839,10 @@ test('SSE encoder content_block_delta has correct shape', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
-  const cbdIdx = strings.findIndex(s => s.startsWith('event: content_block_delta\n'));
+  const cbdIdx = strings.findIndex((s) => s.startsWith('event: content_block_delta\n'));
   assert.ok(cbdIdx >= 0, 'content_block_delta not found');
 
   const cbd = strings[cbdIdx];
@@ -897,12 +864,9 @@ test('SSE encoder generates unique message IDs per call', async () => {
 
   const collectFirstId = async () => {
     const strings = await collectStrings(
-      fusionStreamToAnthropicSSE(
-        await asyncIterableFrom(events),
-        'claude-3-opus-20240229',
-      ),
+      fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
     );
-    const msgStart = strings.find(s => s.startsWith('event: message_start\n'))!;
+    const msgStart = strings.find((s) => s.startsWith('event: message_start\n'))!;
     const jsonStart = msgStart.indexOf('data: ') + 'data: '.length;
     const jsonStr = msgStart.slice(jsonStart).trim();
     return JSON.parse(jsonStr).message.id as string;
@@ -926,10 +890,7 @@ test('SSE encoder handles done event with 0 completionTokens', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
   const msgDelta = strings[strings.length - 2];
@@ -978,7 +939,10 @@ test('fusionStreamToAnthropicResponse buffers deltas into a Messages object', as
   assert.equal(usage.output_tokens, 25);
 
   const id = response.id as string;
-  assert.ok(typeof id === 'string' && id.startsWith('msg_'), `expected id starting with msg_, got ${id}`);
+  assert.ok(
+    typeof id === 'string' && id.startsWith('msg_'),
+    `expected id starting with msg_, got ${id}`,
+  );
 });
 
 test('fusionStreamToAnthropicResponse uses model from done event over request model', async () => {
@@ -1035,13 +999,10 @@ test('SSE encoder content_block_stop has correct shape', async () => {
   ];
 
   const strings = await collectStrings(
-    fusionStreamToAnthropicSSE(
-      await asyncIterableFrom(events),
-      'claude-3-opus-20240229',
-    ),
+    fusionStreamToAnthropicSSE(await asyncIterableFrom(events), 'claude-3-opus-20240229'),
   );
 
-  const cbsIdx = strings.findIndex(s => s.startsWith('event: content_block_stop\n'));
+  const cbsIdx = strings.findIndex((s) => s.startsWith('event: content_block_stop\n'));
   assert.ok(cbsIdx >= 0, 'content_block_stop not found');
 
   const cbs = strings[cbsIdx];

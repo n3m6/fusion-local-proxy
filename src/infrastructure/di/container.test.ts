@@ -178,7 +178,10 @@ test('createApp throws on missing synthesizer', () => {
         (err: unknown) => {
           assert.ok(err instanceof Error);
           const msg = (err as Error).message;
-          assert.ok(msg.includes('synthesizer'), `expected message to mention synthesizer, got: ${msg}`);
+          assert.ok(
+            msg.includes('synthesizer'),
+            `expected message to mention synthesizer, got: ${msg}`,
+          );
           return true;
         },
       );
@@ -219,7 +222,10 @@ test('createApp throws on missing env var', () => {
         (err: unknown) => {
           assert.ok(err instanceof Error);
           const msg = (err as Error).message;
-          assert.ok(msg.includes('MISSING_API_KEY_VAR'), `expected env var name in message, got: ${msg}`);
+          assert.ok(
+            msg.includes('MISSING_API_KEY_VAR'),
+            `expected env var name in message, got: ${msg}`,
+          );
           return true;
         },
       );
@@ -314,9 +320,27 @@ test('createApp wires ensemble with panel, judge, and synthesizer (all roles)', 
   withConfigAndEnv(
     {
       providers: [
-        { type: 'openai', role: 'panel', model: 'llama3:8b', baseURL: 'http://localhost:11434/v1', apiKeyEnv: 'OLLAMA_API_KEY' },
-        { type: 'openai', role: 'judge', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY' },
-        { type: 'anthropic', role: 'synthesizer', model: 'claude-sonnet-4-20250514', baseURL: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY' },
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'llama3:8b',
+          baseURL: 'http://localhost:11434/v1',
+          apiKeyEnv: 'OLLAMA_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'anthropic',
+          role: 'synthesizer',
+          model: 'claude-sonnet-4-20250514',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
       ],
       timeoutMs: 30000,
     },
@@ -347,8 +371,20 @@ test('createApp wires ensemble when judge is absent (no-op stub path)', () => {
   withConfigAndEnv(
     {
       providers: [
-        { type: 'openai', role: 'panel', model: 'llama3:8b', baseURL: 'http://localhost:11434/v1', apiKeyEnv: 'OLLAMA_API_KEY' },
-        { type: 'openai', role: 'synthesizer', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY' },
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'llama3:8b',
+          baseURL: 'http://localhost:11434/v1',
+          apiKeyEnv: 'OLLAMA_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
       timeoutMs: 30000,
     },
@@ -369,9 +405,27 @@ test('createApp resolves anthropic providers in all roles without throwing', () 
   withConfigAndEnv(
     {
       providers: [
-        { type: 'anthropic', role: 'panel', model: 'claude-haiku', baseURL: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY' },
-        { type: 'anthropic', role: 'judge', model: 'claude-opus', baseURL: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY' },
-        { type: 'anthropic', role: 'synthesizer', model: 'claude-sonnet', baseURL: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY' },
+        {
+          type: 'anthropic',
+          role: 'panel',
+          model: 'claude-haiku',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
+        {
+          type: 'anthropic',
+          role: 'judge',
+          model: 'claude-opus',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
+        {
+          type: 'anthropic',
+          role: 'synthesizer',
+          model: 'claude-sonnet',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
       ],
       timeoutMs: 30000,
     },
@@ -392,7 +446,13 @@ test('createApp wires zero panel models without throwing', () => {
   withConfigAndEnv(
     {
       providers: [
-        { type: 'openai', role: 'synthesizer', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY' },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
       timeoutMs: 30000,
     },
@@ -409,8 +469,20 @@ test('createApp wires a single panel model without throwing', () => {
   withConfigAndEnv(
     {
       providers: [
-        { type: 'openai', role: 'panel', model: 'gpt-4o-mini', baseURL: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY' },
-        { type: 'openai', role: 'synthesizer', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY' },
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'gpt-4o-mini',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
       timeoutMs: 30000,
     },
@@ -426,14 +498,43 @@ test('createApp wires multiple panel models without throwing', () => {
   withConfigAndEnv(
     {
       providers: [
-        { type: 'openai', role: 'panel', model: 'llama3:8b', baseURL: 'http://localhost:11434/v1', apiKeyEnv: 'OLLAMA_API_KEY' },
-        { type: 'openai', role: 'panel', model: 'openai/gpt-4.1-mini', baseURL: 'https://openrouter.ai/api/v1', apiKeyEnv: 'OPENROUTER_API_KEY' },
-        { type: 'anthropic', role: 'panel', model: 'claude-haiku', baseURL: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY' },
-        { type: 'openai', role: 'synthesizer', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY' },
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'llama3:8b',
+          baseURL: 'http://localhost:11434/v1',
+          apiKeyEnv: 'OLLAMA_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'openai/gpt-4.1-mini',
+          baseURL: 'https://openrouter.ai/api/v1',
+          apiKeyEnv: 'OPENROUTER_API_KEY',
+        },
+        {
+          type: 'anthropic',
+          role: 'panel',
+          model: 'claude-haiku',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
       ],
       timeoutMs: 30000,
     },
-    { OLLAMA_API_KEY: 'ollama', OPENROUTER_API_KEY: 'sk-or', ANTHROPIC_API_KEY: 'sk-ant', OPENAI_API_KEY: 'sk-openai' },
+    {
+      OLLAMA_API_KEY: 'ollama',
+      OPENROUTER_API_KEY: 'sk-or',
+      ANTHROPIC_API_KEY: 'sk-ant',
+      OPENAI_API_KEY: 'sk-openai',
+    },
     () => {
       const { configPort, fusionService } = createApp();
       assert.equal(configPort.getPanelModels().length, 3);

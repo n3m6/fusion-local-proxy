@@ -10,21 +10,17 @@ import type { Analysis } from './analysis-schema.js';
 // PanelResult does not yet exist in fusion-types.ts (forward ref for Task 03).
 const samplePanelResults: any[] = [
   { modelId: 'gpt-4o', content: 'Paris is the capital of France, known for landmarks.' },
-  { modelId: 'claude-3-opus', content: 'France\'s capital is Paris, with rich cultural history.' },
+  { modelId: 'claude-3-opus', content: "France's capital is Paris, with rich cultural history." },
 ];
 
-const sampleMessages = [
-  { role: 'user' as const, content: 'Tell me about the capital of France.' },
-];
+const sampleMessages = [{ role: 'user' as const, content: 'Tell me about the capital of France.' }];
 
 const validAnalysis: Analysis = {
   consensus: ['Paris is the capital of France', 'France is in Europe'],
   contradictions: [
     { topic: 'Best time to visit', perspectives: ['Spring is ideal', 'Fall is better'] },
   ],
-  unique_insights: [
-    { model: 'gpt-4o', insight: 'Paris has over 400 municipal parks' },
-  ],
+  unique_insights: [{ model: 'gpt-4o', insight: 'Paris has over 400 municipal parks' }],
   blind_spots: ['No model mentioned the Paris Metro system'],
 };
 
@@ -53,7 +49,10 @@ test('buildSynthesisSystemPrompt contains grounding instructions', () => {
     prompt.includes('not present in the provided materials') ||
     prompt.includes('ground every factual claim') ||
     prompt.includes('do not invent');
-  assert.ok(hasGrounding, `must contain grounding/fact-constraint language. Got excerpt: ${prompt.substring(0, 300)}`);
+  assert.ok(
+    hasGrounding,
+    `must contain grounding/fact-constraint language. Got excerpt: ${prompt.substring(0, 300)}`,
+  );
 });
 
 test('buildSynthesisSystemPrompt contains consensus integration instructions', () => {
@@ -64,8 +63,10 @@ test('buildSynthesisSystemPrompt contains consensus integration instructions', (
 test('buildSynthesisSystemPrompt contains contradiction handling instructions', () => {
   const prompt = buildSynthesisSystemPrompt().toLowerCase();
   assert.ok(
-    prompt.includes('contradiction') || prompt.includes('disagreement') || prompt.includes('conflicting'),
-    'must mention contradiction handling'
+    prompt.includes('contradiction') ||
+      prompt.includes('disagreement') ||
+      prompt.includes('conflicting'),
+    'must mention contradiction handling',
   );
 });
 
@@ -126,7 +127,10 @@ test('buildSynthesisUserPrompt with analysis includes unique insight content', (
     sampleMessages as any,
     validAnalysis,
   );
-  assert.ok(prompt.includes('municipal parks') || prompt.includes('400'), 'must include unique insight content');
+  assert.ok(
+    prompt.includes('municipal parks') || prompt.includes('400'),
+    'must include unique insight content',
+  );
 });
 
 test('buildSynthesisUserPrompt with analysis includes blind spot content', () => {
@@ -135,7 +139,10 @@ test('buildSynthesisUserPrompt with analysis includes blind spot content', () =>
     sampleMessages as any,
     validAnalysis,
   );
-  assert.ok(prompt.includes('Metro') || prompt.includes('metro'), 'must include blind spot content');
+  assert.ok(
+    prompt.includes('Metro') || prompt.includes('metro'),
+    'must include blind spot content',
+  );
 });
 
 test('buildSynthesisUserPrompt with analysis has PANEL ANALYSIS section', () => {
@@ -161,57 +168,40 @@ test('buildSynthesisUserPrompt with analysis has INSTRUCTIONS section', () => {
 // ---------------------------------------------------------------------------
 
 test('buildSynthesisUserPrompt with null analysis returns a non-empty string', () => {
-  const prompt = buildSynthesisUserPrompt(
-    samplePanelResults as any,
-    sampleMessages as any,
-    null,
-  );
+  const prompt = buildSynthesisUserPrompt(samplePanelResults as any, sampleMessages as any, null);
   assert.ok(typeof prompt === 'string');
   assert.ok(prompt.trim().length > 0);
 });
 
 test('buildSynthesisUserPrompt with null analysis references panel results', () => {
-  const prompt = buildSynthesisUserPrompt(
-    samplePanelResults as any,
-    sampleMessages as any,
-    null,
-  );
+  const prompt = buildSynthesisUserPrompt(samplePanelResults as any, sampleMessages as any, null);
   assert.ok(prompt.includes('gpt-4o'), 'must include modelId when analysis is null');
   assert.ok(prompt.includes('claude-3-opus'), 'must include second modelId when analysis is null');
 });
 
 test('buildSynthesisUserPrompt with null analysis does NOT include PANEL ANALYSIS section', () => {
-  const prompt = buildSynthesisUserPrompt(
-    samplePanelResults as any,
-    sampleMessages as any,
-    null,
+  const prompt = buildSynthesisUserPrompt(samplePanelResults as any, sampleMessages as any, null);
+  assert.ok(
+    !prompt.includes('PANEL ANALYSIS'),
+    'must not include analysis section when analysis is null',
   );
-  assert.ok(!prompt.includes('PANEL ANALYSIS'), 'must not include analysis section when analysis is null');
 });
 
 test('buildSynthesisUserPrompt with null analysis includes fallback language', () => {
-  const prompt = buildSynthesisUserPrompt(
-    samplePanelResults as any,
-    sampleMessages as any,
-    null,
-  );
+  const prompt = buildSynthesisUserPrompt(samplePanelResults as any, sampleMessages as any, null);
   const hasFallback =
     prompt.toLowerCase().includes('unavailable') ||
     prompt.toLowerCase().includes('not available') ||
     prompt.toLowerCase().includes('work directly');
-  assert.ok(hasFallback, `must include fallback language when analysis is null. Got excerpt: ${prompt.substring(0, 500)}`);
+  assert.ok(
+    hasFallback,
+    `must include fallback language when analysis is null. Got excerpt: ${prompt.substring(0, 500)}`,
+  );
 });
 
 test('buildSynthesisUserPrompt with null analysis includes NOTE about missing analysis', () => {
-  const prompt = buildSynthesisUserPrompt(
-    samplePanelResults as any,
-    sampleMessages as any,
-    null,
-  );
-  assert.ok(
-    prompt.includes('NOTE'),
-    'must include a note section when analysis is null'
-  );
+  const prompt = buildSynthesisUserPrompt(samplePanelResults as any, sampleMessages as any, null);
+  assert.ok(prompt.includes('NOTE'), 'must include a note section when analysis is null');
 });
 
 // ---------------------------------------------------------------------------
@@ -247,9 +237,7 @@ test('buildSynthesisUserPrompt with null analysis excludes analysis-specific ter
 });
 
 test('buildSynthesisUserPrompt with null analysis still references panel content', () => {
-  const panelResults: any[] = [
-    { modelId: 'model-a', content: 'distinctive panel output text' },
-  ];
+  const panelResults: any[] = [{ modelId: 'model-a', content: 'distinctive panel output text' }];
   const prompt = buildSynthesisUserPrompt(panelResults, sampleMessages as any, null);
   assert.ok(prompt.includes('distinctive panel output text'), 'must include raw panel content');
 });
@@ -287,7 +275,7 @@ import { fileURLToPath } from 'node:url';
 
 const synthesisPromptSource = readFileSync(
   fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.ts'),
-  'utf-8'
+  'utf-8',
 );
 
 test('synthesis-prompt.ts has zero imports from src/application/', () => {

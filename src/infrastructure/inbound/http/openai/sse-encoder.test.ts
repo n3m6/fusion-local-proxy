@@ -41,9 +41,7 @@ test('encodeOpenAiSSE emits keep-alive comment for panel progress', async () => 
     { type: 'done' },
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   assert.ok(strings[0].startsWith(': panel'));
   assert.ok(strings[0].includes('running'));
@@ -56,9 +54,7 @@ test('encodeOpenAiSSE emits keep-alive comment for judge progress', async () => 
     { type: 'done' },
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   assert.ok(strings[0].startsWith(': judging'));
   assert.ok(strings[0].endsWith('\n\n'));
@@ -70,9 +66,7 @@ test('encodeOpenAiSSE emits keep-alive comment for generic progress', async () =
     { type: 'done' },
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   assert.ok(strings[0].startsWith(': custom working'));
   assert.ok(strings[0].endsWith('\n\n'));
@@ -83,14 +77,9 @@ test('encodeOpenAiSSE emits keep-alive comment for generic progress', async () =
 // ---------------------------------------------------------------------------
 
 test('encodeOpenAiSSE emits chat.completion.chunk for content_delta', async () => {
-  const events: FusionStreamEvent[] = [
-    { type: 'content_delta', delta: 'Hello' },
-    { type: 'done' },
-  ];
+  const events: FusionStreamEvent[] = [{ type: 'content_delta', delta: 'Hello' }, { type: 'done' }];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   assert.ok(strings[0].startsWith('data: '));
   const jsonStr = strings[0].slice('data: '.length).trim();
@@ -119,9 +108,7 @@ test('encodeOpenAiSSE emits ordered chunks for multiple content_delta events', a
     { type: 'done' },
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   const chunkDeltas = strings
     .filter((s) => s.startsWith('data: ') && s.includes('chat.completion.chunk'))
@@ -139,14 +126,9 @@ test('encodeOpenAiSSE emits ordered chunks for multiple content_delta events', a
 // ---------------------------------------------------------------------------
 
 test('encodeOpenAiSSE emits chat.completion.chunk with finish_reason stop for content_stop', async () => {
-  const events: FusionStreamEvent[] = [
-    { type: 'content_stop' },
-    { type: 'done' },
-  ];
+  const events: FusionStreamEvent[] = [{ type: 'content_stop' }, { type: 'done' }];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   assert.ok(strings[0].startsWith('data: '));
   const jsonStr = strings[0].slice('data: '.length).trim();
@@ -169,14 +151,9 @@ test('encodeOpenAiSSE emits chat.completion.chunk with finish_reason stop for co
 // ---------------------------------------------------------------------------
 
 test('encodeOpenAiSSE emits [DONE] on done event', async () => {
-  const events: FusionStreamEvent[] = [
-    { type: 'content_delta', delta: 'Hi' },
-    { type: 'done' },
-  ];
+  const events: FusionStreamEvent[] = [{ type: 'content_delta', delta: 'Hi' }, { type: 'done' }];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   // Last string should be [DONE]
   const last = strings[strings.length - 1];
@@ -190,9 +167,7 @@ test('encodeOpenAiSSE emits [DONE] when stream ends without done event', async (
     // No done event!
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   // Last string should be [DONE]
   const last = strings[strings.length - 1];
@@ -210,9 +185,7 @@ test('encodeOpenAiSSE uses consistent id and created across all chunks', async (
     { type: 'done' },
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   const ids = new Set<string>();
   const createds = new Set<number>();
@@ -242,9 +215,7 @@ test('encodeOpenAiSSE yields error JSON line and stops without [DONE]', async ()
     { type: 'done' }, // should never be reached
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   // Should have content_delta line and error line, but NO [DONE]
   assert.equal(strings.length, 2);
@@ -273,9 +244,7 @@ test('encodeOpenAiSSE handles error event with details', async () => {
     { type: 'error', code: 'TIMEOUT', message: 'timed out', details: { retry: true } },
   ];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   assert.equal(strings.length, 1);
   assert.ok(strings[0].startsWith('data: '));
@@ -294,9 +263,7 @@ test('encodeOpenAiSSE handles error event with details', async () => {
 test('encodeOpenAiSSE emits only [DONE] for empty stream', async () => {
   const events: FusionStreamEvent[] = [];
 
-  const strings = await collectStrings(
-    encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'),
-  );
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
 
   assert.equal(strings.length, 1);
   assert.equal(strings[0].trim(), 'data: [DONE]');

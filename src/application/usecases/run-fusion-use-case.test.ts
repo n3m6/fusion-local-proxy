@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RunFusionUseCase } from './run-fusion-use-case.js';
 import type { FusionService } from '../ports/fusion-service.js';
-import type { FusionRequest, FusionError, PanelMeta, PanelResult } from '../../domain/model/fusion-types.js';
+import type { FusionError, PanelMeta, PanelResult } from '../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
@@ -117,7 +117,12 @@ interface StubJudgeStep {
     judgeModel: ModelRef;
     timeoutMs: number;
   }>;
-  analyze(panelResults: PanelResult[], originalMessages: Message[], judgeModel: ModelRef, timeoutMs: number): Promise<Analysis | null>;
+  analyze(
+    panelResults: PanelResult[],
+    originalMessages: Message[],
+    judgeModel: ModelRef,
+    timeoutMs: number,
+  ): Promise<Analysis | null>;
 }
 
 function stubJudgeStep(result?: Analysis | null): StubJudgeStep {
@@ -137,14 +142,22 @@ interface StubSynthesizeStep {
     originalMessages: Message[];
     analysis: Analysis | null;
   }>;
-  synthesize(panelResults: PanelResult[], originalMessages: Message[], analysis: Analysis | null): AsyncIterable<FusionStreamEvent>;
+  synthesize(
+    panelResults: PanelResult[],
+    originalMessages: Message[],
+    analysis: Analysis | null,
+  ): AsyncIterable<FusionStreamEvent>;
 }
 
 function stubSynthesizeStep(events?: FusionStreamEvent[]): StubSynthesizeStep {
   const defaultEvents: FusionStreamEvent[] = [
     { type: 'content_delta', delta: 'synthesized response' },
     { type: 'content_stop' },
-    { type: 'done', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 }, model: 'gpt-4o' },
+    {
+      type: 'done',
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      model: 'gpt-4o',
+    },
   ];
   const stub: StubSynthesizeStep = {
     _synthesizeCalls: [],
@@ -176,10 +189,18 @@ function stubConfigPort(opts?: {
     _judgeModel: opts?.judgeModel !== undefined ? opts.judgeModel : defaultModelRef,
     _synthesizerModel: opts?.synthesizerModel ?? defaultModelRef,
     _timeoutMs: opts?.timeoutMs ?? 30000,
-    getPanelModels() { return this._panelModels; },
-    getJudgeModel() { return this._judgeModel; },
-    getSynthesizerModel() { return this._synthesizerModel; },
-    getTimeoutMs() { return this._timeoutMs; },
+    getPanelModels() {
+      return this._panelModels;
+    },
+    getJudgeModel() {
+      return this._judgeModel;
+    },
+    getSynthesizerModel() {
+      return this._synthesizerModel;
+    },
+    getTimeoutMs() {
+      return this._timeoutMs;
+    },
   };
 }
 
@@ -194,7 +215,11 @@ function stubLoggerPort(): StubLoggerPort {
     logStageStart(stage: string): void {
       calls.push({ method: 'logStageStart', args: [stage] });
     },
-    logStageEnd(stage: string, durationMs: number, usage?: import('../../domain/model/chat-types.js').TokenUsage): void {
+    logStageEnd(
+      stage: string,
+      durationMs: number,
+      usage?: import('../../domain/model/chat-types.js').TokenUsage,
+    ): void {
       calls.push({ method: 'logStageEnd', args: [stage, durationMs, usage] });
     },
     logFailedModels(models): void {
@@ -238,12 +263,17 @@ test('constructor accepts new dependencies and satisfies FusionService interface
   const clockPort = stubClockPort([0]);
 
   const service: FusionService = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   assert.ok(service instanceof RunFusionUseCase);
   assert.ok(typeof service.runFusion === 'function');
-  });
+});
 
 // 2. Full ensemble happy path yields correct event sequence
 test('full ensemble happy path yields correct event sequence', async () => {
@@ -255,7 +285,12 @@ test('full ensemble happy path yields correct event sequence', async () => {
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   const events = await collectEvents(
@@ -266,23 +301,40 @@ test('full ensemble happy path yields correct event sequence', async () => {
   assert.ok(events.length >= 5, `expected at least 5 events, got ${events.length}`);
 
   // Panel progress
-  assert.deepStrictEqual(events[0], { type: 'progress', stage: 'panel', message: 'Panel stage complete' });
+  assert.deepStrictEqual(events[0], {
+    type: 'progress',
+    stage: 'panel',
+    message: 'Panel stage complete',
+  });
   // Judge progress
-  assert.deepStrictEqual(events[1], { type: 'progress', stage: 'judge', message: 'Judge stage complete' });
+  assert.deepStrictEqual(events[1], {
+    type: 'progress',
+    stage: 'judge',
+    message: 'Judge stage complete',
+  });
   // Content delta from synthesis
   assert.deepStrictEqual(events[2], { type: 'content_delta', delta: 'synthesized response' });
   // Content stop from synthesis
   assert.deepStrictEqual(events[3], { type: 'content_stop' });
   // Final done event
   assert.equal(events[4].type, 'done');
-  const doneEvent = events[4] as { type: 'done'; failedModels?: unknown; usage?: unknown; model?: unknown };
+  const doneEvent = events[4] as {
+    type: 'done';
+    failedModels?: unknown;
+    usage?: unknown;
+    model?: unknown;
+  };
   assert.deepStrictEqual(doneEvent.failedModels, []);
   assert.ok(doneEvent.usage !== undefined);
   assert.ok(doneEvent.model !== undefined);
 
   // Logging is now owned by PanelRunner and JudgeStep; the use case itself makes no log calls
   const logCalls = (loggerPort as unknown as StubLoggerPort)._calls;
-  assert.equal(logCalls.length, 0, 'expected 0 use-case logger calls: panel/judge logging is step-owned');
+  assert.equal(
+    logCalls.length,
+    0,
+    'expected 0 use-case logger calls: panel/judge logging is step-owned',
+  );
 });
 
 // 3. Panel progress event is yielded before judge progress event
@@ -295,17 +347,30 @@ test('panel progress event is yielded before judge progress event', async () => 
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   const events = await collectEvents(
     useCase.runFusion({ messages: [{ role: 'user', content: 'hello' }] }),
   );
 
-  const progressEvents = events.filter(e => e.type === 'progress');
+  const progressEvents = events.filter((e) => e.type === 'progress');
   assert.equal(progressEvents.length, 2);
-  assert.deepStrictEqual(progressEvents[0], { type: 'progress', stage: 'panel', message: 'Panel stage complete' });
-  assert.deepStrictEqual(progressEvents[1], { type: 'progress', stage: 'judge', message: 'Judge stage complete' });
+  assert.deepStrictEqual(progressEvents[0], {
+    type: 'progress',
+    stage: 'panel',
+    message: 'Panel stage complete',
+  });
+  assert.deepStrictEqual(progressEvents[1], {
+    type: 'progress',
+    stage: 'judge',
+    message: 'Judge stage complete',
+  });
 });
 
 // 4. SynthesizeStep receives correct panel results
@@ -329,12 +394,15 @@ test('SynthesizeStep receives correct panel results', async () => {
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
-  await collectEvents(
-    useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
-  );
+  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
 
   const calls = (synthesizeStep as unknown as StubSynthesizeStep)._synthesizeCalls;
   assert.equal(calls.length, 1);
@@ -351,7 +419,12 @@ test('SynthesizeStep receives messages with system prompt prepended', async () =
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   await collectEvents(
@@ -378,12 +451,15 @@ test('SynthesizeStep receives analysis from JudgeStep', async () => {
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
-  await collectEvents(
-    useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
-  );
+  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
 
   const calls = (synthesizeStep as unknown as StubSynthesizeStep)._synthesizeCalls;
   assert.equal(calls.length, 1);
@@ -400,7 +476,12 @@ test('judge null path skips JudgeStep and passes null analysis', async () => {
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   const events = await collectEvents(
@@ -411,7 +492,7 @@ test('judge null path skips JudgeStep and passes null analysis', async () => {
   assert.equal((judgeStep as unknown as StubJudgeStep)._analyzeCalls.length, 0);
 
   // Judge progress still yielded
-  const judgeProgress = events.find(e => e.type === 'progress' && e.stage === 'judge');
+  const judgeProgress = events.find((e) => e.type === 'progress' && e.stage === 'judge');
   assert.ok(judgeProgress, 'expected judge progress event even when skipped');
 
   // SynthesizeStep called with analysis: null
@@ -423,14 +504,19 @@ test('judge null path skips JudgeStep and passes null analysis', async () => {
 // 8. JudgeStep returning null degrades gracefully
 test('JudgeStep returning null degrades gracefully', async () => {
   const panelRunner = stubPanelRunner() as unknown as PanelRunner;
-  const judgeStep = stubJudgeStep(null) as unknown as JudgeStep;  // returns null
+  const judgeStep = stubJudgeStep(null) as unknown as JudgeStep; // returns null
   const synthesizeStep = stubSynthesizeStep() as unknown as SynthesizeStep;
-  const configPort = stubConfigPort() as ConfigPort;  // judgeModel is non-null
+  const configPort = stubConfigPort() as ConfigPort; // judgeModel is non-null
   const loggerPort = stubLoggerPort();
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   const events = await collectEvents(
@@ -446,7 +532,9 @@ test('JudgeStep returning null degrades gracefully', async () => {
   assert.equal(synthCalls[0].analysis, null);
 
   // Pipeline produced content events normally
-  const contentEvents = events.filter(e => e.type === 'content_delta' || e.type === 'content_stop');
+  const contentEvents = events.filter(
+    (e) => e.type === 'content_delta' || e.type === 'content_stop',
+  );
   assert.ok(contentEvents.length > 0, 'expected content events');
 });
 
@@ -464,14 +552,22 @@ test('partial panel failure reported in done event', async () => {
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   const events = await collectEvents(
     useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
   );
 
-  const doneEvent = events.find(e => e.type === 'done') as { type: 'done'; failedModels?: unknown };
+  const doneEvent = events.find((e) => e.type === 'done') as {
+    type: 'done';
+    failedModels?: unknown;
+  };
   assert.ok(doneEvent, 'expected done event');
   assert.deepStrictEqual(doneEvent.failedModels, [sampleFailedModel]);
 });
@@ -488,14 +584,17 @@ test('all-panels-failed error propagates and yields no further events', async ()
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   await assert.rejects(
     async () => {
-      await collectEvents(
-        useCase.runFusion({ messages: [{ role: 'user', content: 'hello' }] }),
-      );
+      await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'hello' }] }));
     },
     (err: unknown) => {
       assert.ok(err instanceof Error);
@@ -521,12 +620,15 @@ test('timeout value is passed through to PanelRunner and JudgeStep', async () =>
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
-  await collectEvents(
-    useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
-  );
+  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
 
   // PanelRunner received timeoutMs
   assert.equal((panelRunner as unknown as StubPanelRunner)._lastTimeoutMs, 15000);
@@ -545,7 +647,12 @@ test('empty panel models does not block synthesis', async () => {
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   const events = await collectEvents(
@@ -558,7 +665,10 @@ test('empty panel models does not block synthesis', async () => {
   assert.deepStrictEqual(synthCalls[0].panelResults, []);
 
   // Pipeline completed with done event (no failedModels since no failures)
-  const doneEvent = events.find(e => e.type === 'done') as { type: 'done'; failedModels?: unknown };
+  const doneEvent = events.find((e) => e.type === 'done') as {
+    type: 'done';
+    failedModels?: unknown;
+  };
   assert.ok(doneEvent, 'expected done event');
   assert.deepStrictEqual(doneEvent.failedModels, []);
 });
@@ -590,7 +700,11 @@ test('withHeartbeat emits panel heartbeat events before Panel stage complete', a
 
   const useCase = new RunFusionUseCase(
     slowPanelRunner as unknown as PanelRunner,
-    judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
     10, // heartbeatIntervalMs: small value so heartbeats fire during the 60ms delay
   );
 
@@ -599,20 +713,28 @@ test('withHeartbeat emits panel heartbeat events before Panel stage complete', a
   );
 
   const panelHeartbeats = events.filter(
-    (e) => e.type === 'progress' && (e as { stage?: string }).stage === 'panel' &&
-            (e as { message?: string }).message === 'panel running',
+    (e) =>
+      e.type === 'progress' &&
+      (e as { stage?: string }).stage === 'panel' &&
+      (e as { message?: string }).message === 'panel running',
   );
-  assert.ok(panelHeartbeats.length >= 1, `expected at least 1 panel heartbeat, got ${panelHeartbeats.length}`);
+  assert.ok(
+    panelHeartbeats.length >= 1,
+    `expected at least 1 panel heartbeat, got ${panelHeartbeats.length}`,
+  );
 
   const panelCompleteIdx = events.findIndex(
     (e) => e.type === 'progress' && (e as { message?: string }).message === 'Panel stage complete',
   );
   const lastHeartbeatIdx = events.reduce(
     (max, e, i) =>
-      (e.type === 'progress' && (e as { message?: string }).message === 'panel running') ? i : max,
+      e.type === 'progress' && (e as { message?: string }).message === 'panel running' ? i : max,
     -1,
   );
-  assert.ok(panelCompleteIdx > lastHeartbeatIdx, 'Panel stage complete should come after heartbeats');
+  assert.ok(
+    panelCompleteIdx > lastHeartbeatIdx,
+    'Panel stage complete should come after heartbeats',
+  );
 });
 
 // 14. Messages from request are not mutated
@@ -625,13 +747,16 @@ test('messages from request are not mutated', async () => {
   const clockPort = stubClockPort([0]);
 
   const useCase = new RunFusionUseCase(
-    panelRunner, judgeStep, synthesizeStep, configPort, loggerPort, clockPort,
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
   );
 
   const originalMessages: Message[] = [{ role: 'user', content: 'hello' }];
-  await collectEvents(
-    useCase.runFusion({ messages: originalMessages }),
-  );
+  await collectEvents(useCase.runFusion({ messages: originalMessages }));
 
   assert.equal(originalMessages.length, 1);
   assert.deepStrictEqual(originalMessages[0], { role: 'user', content: 'hello' });

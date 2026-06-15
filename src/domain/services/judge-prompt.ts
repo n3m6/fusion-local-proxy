@@ -53,7 +53,9 @@ export function buildJudgeUserPrompt(
 
   parts.push('=== INSTRUCTIONS ===');
   parts.push('Analyze the above panel model responses against the original conversation.');
-  parts.push('Produce a single JSON object with the fields: consensus, contradictions, unique_insights, and blind_spots.');
+  parts.push(
+    'Produce a single JSON object with the fields: consensus, contradictions, unique_insights, and blind_spots.',
+  );
   parts.push('Output only the JSON object — no preamble, no explanation, no markdown fences.');
 
   return parts.join('\n');

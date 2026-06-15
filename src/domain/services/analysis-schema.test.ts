@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analysisSchema } from './analysis-schema.js';
-import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // analysisSchema — valid input
@@ -16,9 +15,7 @@ test('analysisSchema — valid input with all four fields', () => {
         perspectives: ['Spring is best', 'Fall is best'],
       },
     ],
-    unique_insights: [
-      { model: 'gpt-4', insight: 'Paris has over 400 parks' },
-    ],
+    unique_insights: [{ model: 'gpt-4', insight: 'Paris has over 400 parks' }],
     blind_spots: ['None of the models mentioned the Paris sewer system'],
   };
 
@@ -46,12 +43,12 @@ test('analysisSchema — missing required field (consensus absent)', () => {
   const result = analysisSchema.safeParse(input);
   assert.equal(result.success, false);
   if (!result.success) {
-    const issueMessages = result.error.issues.map(i => i.message ?? '').join(' ');
-    const issuePaths = result.error.issues.map(i => i.path.join('.')).join(' ');
+    const issueMessages = result.error.issues.map((i) => i.message ?? '').join(' ');
+    const issuePaths = result.error.issues.map((i) => i.path.join('.')).join(' ');
     const relevant = issueMessages + ' ' + issuePaths;
     assert.ok(
       relevant.toLowerCase().includes('consensus'),
-      `Expected error about missing consensus, got: ${JSON.stringify(result.error.issues)}`
+      `Expected error about missing consensus, got: ${JSON.stringify(result.error.issues)}`,
     );
   }
 });
@@ -117,9 +114,7 @@ test('analysisSchema — extra top-level fields are stripped from parsed data', 
 test('analysisSchema — unknown nested fields are stripped from contradiction entries', () => {
   const input = {
     consensus: [],
-    contradictions: [
-      { topic: 'A vs B', perspectives: ['A is better'], severity: 'high' },
-    ],
+    contradictions: [{ topic: 'A vs B', perspectives: ['A is better'], severity: 'high' }],
     unique_insights: [],
     blind_spots: [],
   };
@@ -202,11 +197,10 @@ test('analysisSchema — consensus array of numbers fails', () => {
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 
 const analysisSchemaSource = readFileSync(
   fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.ts'),
-  'utf-8'
+  'utf-8',
 );
 
 test('analysis-schema.ts has zero imports from src/application/', () => {

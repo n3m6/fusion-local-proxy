@@ -78,12 +78,22 @@ function stubFusionServiceWithErrorEvent(code: string, message: string): FusionS
 
 function stubConfigPort(panelModels?: ModelRef[]): ConfigPort {
   const models = panelModels ?? [
-    { provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' },
+    {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
   ];
   return {
     getPanelModels: () => models,
     getJudgeModel: () => null,
-    getSynthesizerModel: () => ({ provider: 'openai', model: 'gpt-4o', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-test' }),
+    getSynthesizerModel: () => ({
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    }),
     getTimeoutMs: () => 30000,
   };
 }
@@ -116,7 +126,7 @@ test('POST /v1/chat/completions returns 200 with ChatCompletion JSON', async () 
 
   assert.equal(res.status, 200);
 
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   assert.equal(body.object, 'chat.completion');
   assert.equal(typeof body.id, 'string');
   assert.ok((body.id as string).startsWith('chatcmpl-'));
@@ -143,7 +153,7 @@ test('GET /v1/models returns 200 with model list', async () => {
   const res = await app.request('/v1/models');
   assert.equal(res.status, 200);
 
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   assert.equal(body.object, 'list');
   assert.ok(Array.isArray(body.data));
 });
@@ -160,7 +170,7 @@ test('POST /v1/chat/completions with invalid JSON body returns 400', async () =>
   });
 
   assert.equal(res.status, 400);
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const error = body.error as Record<string, unknown>;
   assert.ok(error);
   assert.equal(error.message, 'Invalid JSON body');
@@ -181,7 +191,7 @@ test('POST /v1/chat/completions returns 500 on fusion service error', async () =
   });
 
   assert.equal(res.status, 500);
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const error = body.error as Record<string, unknown>;
   assert.ok(error);
   assert.equal(error.message, 'Internal server error');
@@ -202,7 +212,7 @@ test('POST /v1/chat/completions returns 500 on async iterable error event', asyn
   });
 
   assert.equal(res.status, 500);
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const error = body.error as Record<string, unknown>;
   assert.ok(error);
   assert.equal(error.message, 'Upstream model unavailable');
@@ -223,14 +233,12 @@ test('POST /v1/chat/completions empty messages returns 200 (passthrough)', async
   });
 
   assert.equal(res.status, 200);
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   assert.equal(body.object, 'chat.completion');
 });
 
 test('POST /v1/chat/completions returns 500 with FusionError body on all_panels_failed', async () => {
-  const failedModels = [
-    { modelId: 'm1', errorCode: 'TIMEOUT', errorMessage: 'timed out' },
-  ];
+  const failedModels = [{ modelId: 'm1', errorCode: 'TIMEOUT', errorMessage: 'timed out' }];
   const error = new FusionError('all_panels_failed', 'All panel models failed', { failedModels });
 
   const fusionService: FusionService = {
@@ -253,7 +261,7 @@ test('POST /v1/chat/completions returns 500 with FusionError body on all_panels_
   });
 
   assert.equal(res.status, 500);
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   const err = body.error as Record<string, unknown>;
   assert.ok(err);
   assert.equal(err.code, 'all_panels_failed');
@@ -267,7 +275,6 @@ test('POST /v1/chat/completions returns 500 with FusionError body on all_panels_
   assert.equal(models[0].modelId, 'm1');
   assert.equal(models[0].errorCode, 'TIMEOUT');
 });
-
 
 // ---------------------------------------------------------------------------
 // Streaming (SSE) route tests
@@ -290,7 +297,10 @@ test('POST /v1/chat/completions with stream:true returns text/event-stream conte
 
   assert.equal(res.status, 200);
   const contentType = res.headers.get('Content-Type') ?? '';
-  assert.ok(contentType.includes('text/event-stream'), `expected text/event-stream, got ${contentType}`);
+  assert.ok(
+    contentType.includes('text/event-stream'),
+    `expected text/event-stream, got ${contentType}`,
+  );
 });
 
 test('POST /v1/chat/completions with stream:true body contains data: lines', async () => {
@@ -333,7 +343,10 @@ test('POST /v1/chat/completions with stream:true includes chat.completion.chunk'
   });
 
   const body = await res.text();
-  assert.ok(body.includes('chat.completion.chunk'), 'SSE body should contain chat.completion.chunk object');
+  assert.ok(
+    body.includes('chat.completion.chunk'),
+    'SSE body should contain chat.completion.chunk object',
+  );
 });
 
 test('POST /v1/chat/completions with stream:false returns JSON', async () => {
@@ -353,7 +366,7 @@ test('POST /v1/chat/completions with stream:false returns JSON', async () => {
 
   assert.equal(res.status, 200);
 
-  const body = await res.json() as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
   assert.equal(body.object, 'chat.completion');
   // Should NOT contain SSE-specific markers
   const textBody = JSON.stringify(body);
@@ -378,7 +391,10 @@ test('POST /v1/chat/completions with stream:true handles error event via SSE', a
 
   assert.equal(res.status, 200);
   const contentType = res.headers.get('Content-Type') ?? '';
-  assert.ok(contentType.includes('text/event-stream'), `expected text/event-stream, got ${contentType}`);
+  assert.ok(
+    contentType.includes('text/event-stream'),
+    `expected text/event-stream, got ${contentType}`,
+  );
 
   const body = await res.text();
   // Should contain the error in SSE format

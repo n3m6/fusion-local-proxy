@@ -1,6 +1,11 @@
 import OpenAI from 'openai';
 import type { ChatModelPort } from '../../../domain/ports/chat-model-port.js';
-import type { ChatRequest, ChatResponse, ChatStreamChunk, TokenUsage } from '../../../domain/model/chat-types.js';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ChatStreamChunk,
+  TokenUsage,
+} from '../../../domain/model/chat-types.js';
 
 export interface AdapterConfig {
   readonly baseURL: string;
@@ -55,7 +60,9 @@ export class OpenAiChatAdapter implements ChatModelPort {
       }
     }
 
-    const response = await this.client.chat.completions.create(params, { signal: request.options?.signal });
+    const response = await this.client.chat.completions.create(params, {
+      signal: request.options?.signal,
+    });
 
     const choice = response.choices[0];
     const content = choice?.message?.content ?? '';

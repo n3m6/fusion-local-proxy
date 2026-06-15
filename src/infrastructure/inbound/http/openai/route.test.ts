@@ -83,7 +83,10 @@ test('POST /v1/chat/completions with stream:true returns text/event-stream', asy
 
   assert.equal(res.status, 200);
   const contentType = res.headers.get('Content-Type') ?? '';
-  assert.ok(contentType.includes('text/event-stream'), `expected text/event-stream, got ${contentType}`);
+  assert.ok(
+    contentType.includes('text/event-stream'),
+    `expected text/event-stream, got ${contentType}`,
+  );
 });
 
 test('POST /v1/chat/completions streaming body contains chunks and terminates with [DONE]', async () => {
@@ -102,11 +105,13 @@ test('POST /v1/chat/completions streaming body contains chunks and terminates wi
 });
 
 test('POST /v1/chat/completions streaming emits keep-alive comments for progress', async () => {
-  const app = createApp(stubFusionService([
-    { type: 'progress', stage: 'panel', message: 'Running panel models' },
-    { type: 'content_delta', delta: 'Hi' },
-    { type: 'done', model: 'gpt-4o' },
-  ]));
+  const app = createApp(
+    stubFusionService([
+      { type: 'progress', stage: 'panel', message: 'Running panel models' },
+      { type: 'content_delta', delta: 'Hi' },
+      { type: 'done', model: 'gpt-4o' },
+    ]),
+  );
 
   const res = await postJson(app, {
     model: 'gpt-4o',
@@ -116,13 +121,16 @@ test('POST /v1/chat/completions streaming emits keep-alive comments for progress
 
   const body = await res.text();
   const lines = body.split('\n');
-  assert.ok(lines.some((l) => l.startsWith(': ')), 'must contain at least one SSE comment line');
+  assert.ok(
+    lines.some((l) => l.startsWith(': ')),
+    'must contain at least one SSE comment line',
+  );
 });
 
 test('POST /v1/chat/completions streaming surfaces FusionService errors in the stream', async () => {
-  const app = createApp(stubFusionServiceThatThrows(
-    new FusionError('all_panels_failed', 'All panel models failed'),
-  ));
+  const app = createApp(
+    stubFusionServiceThatThrows(new FusionError('all_panels_failed', 'All panel models failed')),
+  );
 
   const res = await postJson(app, {
     model: 'gpt-4o',
@@ -132,7 +140,10 @@ test('POST /v1/chat/completions streaming surfaces FusionService errors in the s
 
   const body = await res.text();
   const surfaced = res.status !== 200 || body.includes('all_panels_failed');
-  assert.ok(surfaced, `expected non-200 status or error in stream body, got status ${res.status} body ${body}`);
+  assert.ok(
+    surfaced,
+    `expected non-200 status or error in stream body, got status ${res.status} body ${body}`,
+  );
   assert.ok(!body.includes('[DONE]'), 'must not emit [DONE] after an error');
 });
 
@@ -150,7 +161,10 @@ test('POST /v1/chat/completions without stream returns JSON chat.completion', as
 
   assert.equal(res.status, 200);
   const contentType = res.headers.get('Content-Type') ?? '';
-  assert.ok(contentType.includes('application/json'), `expected application/json, got ${contentType}`);
+  assert.ok(
+    contentType.includes('application/json'),
+    `expected application/json, got ${contentType}`,
+  );
 
   const json = (await res.json()) as Record<string, unknown>;
   assert.equal(json.object, 'chat.completion');
