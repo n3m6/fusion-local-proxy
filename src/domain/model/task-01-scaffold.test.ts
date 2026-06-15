@@ -325,6 +325,35 @@ describe('NFR-1: @anthropic-ai/sdk not in application layer (Task 01)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Task 01: Application purity — no infrastructure imports in src/application/
+// ---------------------------------------------------------------------------
+
+describe('Application purity — no infrastructure imports (Task 01)', () => {
+  const appDir = projectFile('src/application');
+
+  test('no infrastructure layer import in src/application/', () => {
+    const { stdout } = spawnSync(
+      'grep',
+      [
+        '-E', '-r',
+        '--include=*.ts',
+        '--exclude=*.test.ts',
+        '--exclude=*.spec.ts',
+        `from[[:space:]]+['"][^'"]*infrastructure[^'"]*['"]`,
+        appDir,
+      ],
+      { encoding: 'utf-8', cwd: ROOT }
+    );
+    const output = stdout.trim();
+    assert.equal(
+      output,
+      '',
+      `Forbidden infrastructure layer import found in src/application/:\n${output}`
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Task 01: Full-project typecheck using tsc --noEmit (matches "typecheck" script)
 // ---------------------------------------------------------------------------
 
