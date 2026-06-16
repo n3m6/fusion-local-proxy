@@ -217,10 +217,10 @@ test('ConsoleLoggerAdapter wraps each level in its ANSI color when useColor is o
   });
 
   const colorOf: Record<string, string> = {
-    debug: '\x1b[90m',
-    info: '\x1b[36m',
-    warn: '\x1b[33m',
-    error: '\x1b[31m',
+    debug: '\x1b[37m',
+    info: '\x1b[96m',
+    warn: '\x1b[93m',
+    error: '\x1b[91m',
   };
 
   // eslint-disable-next-line no-control-regex -- intentionally matching ANSI escapes

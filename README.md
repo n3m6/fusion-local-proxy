@@ -278,9 +278,10 @@ lines go to stderr, everything else to stdout. Verbosity is controlled by
 `LOG_LEVEL` (default `info`).
 
 When stdout is an interactive terminal, each line is colored by level
-(debug=gray, info=cyan, warn=yellow, error=red) for quick scanning. Color is
-disabled automatically when output is piped/redirected so the JSON stays
-parseable; override with `NO_COLOR` (force off) or `FORCE_COLOR` (force on).
+(debug=white, info=bright cyan, warn=bright yellow, error=bright red) for quick
+scanning. Color is disabled automatically when output is piped/redirected so the
+JSON stays parseable; override with `NO_COLOR` (force off) or `FORCE_COLOR`
+(force on).
 
 At `info` you get the high-level lifecycle: `fusion_run_start` /
 `fusion_run_end` (with a `requestId` correlating every stage of a single run),
