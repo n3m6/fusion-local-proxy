@@ -19,6 +19,7 @@ export class PanelRunner {
     panelModels: ModelRef[],
     timeoutMs: number,
     requestId?: string,
+    sampling?: { temperature?: number; maxTokens?: number },
   ): Promise<PanelMeta> {
     if (panelModels.length === 0) {
       return { results: [], failedModels: [] };
@@ -35,7 +36,13 @@ export class PanelRunner {
       const request: ChatRequest = {
         messages,
         model: modelRef,
-        options: { signal: AbortSignal.timeout(timeoutMs), requestId, stage: 'panel' },
+        options: {
+          signal: AbortSignal.timeout(timeoutMs),
+          requestId,
+          stage: 'panel',
+          ...(sampling?.temperature !== undefined ? { temperature: sampling.temperature } : {}),
+          ...(sampling?.maxTokens !== undefined ? { maxTokens: sampling.maxTokens } : {}),
+        },
       };
       this.loggerPort.logRequest({
         requestId,

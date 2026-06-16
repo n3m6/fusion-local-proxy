@@ -124,16 +124,20 @@ function stubClockPort(times: number[]): ClockPort & { _callCount: number } {
 // ---------------------------------------------------------------------------
 
 const validAnalysisJson = JSON.stringify({
-  consensus: ['All models agree Paris is the capital of France'],
-  contradictions: [{ topic: 'Best cuisine', perspectives: ['French', 'Italian'] }],
-  unique_insights: [{ model: 'gpt-4o', insight: 'Paris has over 400 parks' }],
-  blind_spots: ['No model mentioned the Paris catacombs'],
+  agreements: ['All models agree Paris is the capital of France'],
+  discrepancies: [
+    { topic: 'Best cuisine', positions: ['French', 'Italian'], assessment: 'unclear' },
+  ],
+  issues: [{ severity: 'low', candidate: 'gpt-4o', description: 'Paris has over 400 parks' }],
+  gaps: ['No model mentioned the Paris catacombs'],
+  recommendation: 'Combine both responses; fill in the catacombs gap.',
 });
 
-const validAnalysisMissingConsensus = JSON.stringify({
-  contradictions: [],
-  unique_insights: [],
-  blind_spots: [],
+const validAnalysisMissingAgreements = JSON.stringify({
+  discrepancies: [],
+  issues: [],
+  gaps: [],
+  recommendation: '',
 });
 
 function judgeModel(overrides?: Partial<ModelRef>): ModelRef {
@@ -182,11 +186,11 @@ test('successful analysis parse returns Analysis with all fields populated', asy
   const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
 
   assert.ok(result !== null, 'expected non-null Analysis');
-  assert.equal(result!.consensus.length, 1);
-  assert.equal(result!.consensus[0], 'All models agree Paris is the capital of France');
-  assert.equal(result!.contradictions.length, 1);
-  assert.equal(result!.unique_insights.length, 1);
-  assert.equal(result!.blind_spots.length, 1);
+  assert.equal(result!.agreements.length, 1);
+  assert.equal(result!.agreements[0], 'All models agree Paris is the capital of France');
+  assert.equal(result!.discrepancies.length, 1);
+  assert.equal(result!.issues.length, 1);
+  assert.equal(result!.gaps.length, 1);
 
   // loggerPort.logStageStart('judge') called once
   const startCalls = logger._calls.filter((c) => c.method === 'logStageStart');
@@ -209,9 +213,9 @@ test('successful analysis parse returns Analysis with all fields populated', asy
 // Test: Schema validation failure returns null
 // ---------------------------------------------------------------------------
 
-test('schema validation failure (missing consensus) returns null', async () => {
+test('schema validation failure (missing agreements) returns null', async () => {
   const chatPort = stubChatPort({
-    content: validAnalysisMissingConsensus,
+    content: validAnalysisMissingAgreements,
     usage: responseWithUsage,
     model: 'gpt-4o-judge',
   });
@@ -229,8 +233,8 @@ test('schema validation failure (missing consensus) returns null', async () => {
   assert.equal(errorCalls[0].args[0], 'judge');
   assert.ok(errorCalls[0].args[1] instanceof Error);
   // ZodError has .issues property
-  const zodError = errorCalls[0].args[1] as Error & { issues?: unknown[] };
-  assert.ok(zodError.issues !== undefined, 'expected ZodError with issues');
+  const zodErr = errorCalls[0].args[1] as Error & { issues?: unknown[] };
+  assert.ok(zodErr.issues !== undefined, 'expected ZodError with issues');
 
   // loggerPort.logStageEnd() NOT called
   const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
@@ -287,6 +291,46 @@ test('invalid JSON response returns null and logs SyntaxError', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Test: Markdown code-fence stripping
+// ---------------------------------------------------------------------------
+
+test('markdown code fences are stripped before JSON.parse', async () => {
+  const fencedContent = '```json\n' + validAnalysisJson + '\n```';
+  const chatPort = stubChatPort({
+    content: fencedContent,
+    usage: responseWithUsage,
+    model: 'gpt-4o-judge',
+  });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([100, 200]);
+
+  const step = new JudgeStep(chatPort, logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+
+  assert.ok(result !== null, 'expected non-null Analysis even with code fences');
+  assert.equal(result!.agreements.length, 1);
+
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
+  assert.equal(errorCalls.length, 0, 'no errors expected when fences are stripped correctly');
+});
+
+test('markdown code fences without language tag are stripped', async () => {
+  const fencedContent = '```\n' + validAnalysisJson + '\n```';
+  const chatPort = stubChatPort({
+    content: fencedContent,
+    usage: responseWithUsage,
+    model: 'gpt-4o-judge',
+  });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([100, 200]);
+
+  const step = new JudgeStep(chatPort, logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+
+  assert.ok(result !== null, 'expected non-null Analysis even with bare code fences');
+});
+
+// ---------------------------------------------------------------------------
 // Test: Empty panel results handled
 // ---------------------------------------------------------------------------
 
@@ -304,7 +348,7 @@ test('empty panel results does not throw and proceeds with judge call', async ()
 
   // Should not throw and should return an Analysis
   assert.ok(result !== null, 'expected non-null Analysis with empty panels');
-  assert.equal(result!.consensus.length, 1);
+  assert.equal(result!.agreements.length, 1);
 
   // The judge call should have proceeded normally
   assert.equal(chatPort._calls.length, 1);
@@ -347,7 +391,7 @@ test('logger called exactly once on each failure scenario', async () => {
   // Test 3: Schema validation failure
   {
     const chatPort = stubChatPort({
-      content: validAnalysisMissingConsensus,
+      content: validAnalysisMissingAgreements,
       usage: responseWithUsage,
       model: 'm',
     });

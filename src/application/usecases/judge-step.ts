@@ -14,43 +14,46 @@ import {
 const ANALYSIS_JSON_SCHEMA = {
   type: 'object',
   properties: {
-    consensus: {
+    agreements: {
       type: 'array',
       items: { type: 'string' },
     },
-    contradictions: {
+    discrepancies: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           topic: { type: 'string' },
-          perspectives: {
+          positions: {
             type: 'array',
             items: { type: 'string' },
           },
+          assessment: { type: 'string' },
         },
-        required: ['topic', 'perspectives'],
+        required: ['topic', 'positions', 'assessment'],
         additionalProperties: false,
       },
     },
-    unique_insights: {
+    issues: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          model: { type: 'string' },
-          insight: { type: 'string' },
+          severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+          candidate: { type: 'string' },
+          description: { type: 'string' },
         },
-        required: ['model', 'insight'],
+        required: ['severity', 'candidate', 'description'],
         additionalProperties: false,
       },
     },
-    blind_spots: {
+    gaps: {
       type: 'array',
       items: { type: 'string' },
     },
+    recommendation: { type: 'string' },
   },
-  required: ['consensus', 'contradictions', 'unique_insights', 'blind_spots'],
+  required: ['agreements', 'discrepancies', 'issues', 'gaps', 'recommendation'],
   additionalProperties: false,
 };
 
@@ -127,9 +130,15 @@ export class JudgeStep {
       clearTimeout(timeoutId);
     }
 
+    // Strip markdown code fences that some models emit even when instructed not to.
+    const rawContent = response.content
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '')
+      .trim();
+
     let parsedJson: unknown;
     try {
-      parsedJson = JSON.parse(response.content);
+      parsedJson = JSON.parse(rawContent);
     } catch (jsonError) {
       this.loggerPort.logError('judge', jsonError as Error, {
         requestId,
@@ -162,10 +171,10 @@ export class JudgeStep {
         modelId: judgeModel.model,
         latencyMs: durationMs,
         contentChars: response.content.length,
-        consensusCount: parsed.data.consensus.length,
-        contradictionCount: parsed.data.contradictions.length,
-        uniqueInsightCount: parsed.data.unique_insights.length,
-        blindSpotCount: parsed.data.blind_spots.length,
+        agreementsCount: parsed.data.agreements.length,
+        discrepancyCount: parsed.data.discrepancies.length,
+        issueCount: parsed.data.issues.length,
+        gapCount: parsed.data.gaps.length,
         tokens: {
           prompt: response.usage.promptTokens,
           completion: response.usage.completionTokens,

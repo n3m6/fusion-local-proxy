@@ -47,8 +47,13 @@ export class RunFusionUseCase implements FusionService {
     });
 
     // 3. Panel stage (periodic heartbeats keep the connection alive during long runs)
+    const sampling = {
+      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      ...(request.maxTokens !== undefined ? { maxTokens: request.maxTokens } : {}),
+    };
+
     const panelMeta: PanelMeta = yield* this.withHeartbeat(
-      this.panelRunner.run(messages, panelModels, timeoutMs, requestId),
+      this.panelRunner.run(messages, panelModels, timeoutMs, requestId, sampling),
       { type: 'progress', stage: 'panel', message: 'panel running' },
     );
 
@@ -78,6 +83,7 @@ export class RunFusionUseCase implements FusionService {
       messages,
       analysis,
       requestId,
+      sampling,
     )) {
       if (event.type === 'content_delta') {
         yield { type: 'content_delta', delta: event.delta };

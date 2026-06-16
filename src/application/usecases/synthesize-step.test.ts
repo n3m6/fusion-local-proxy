@@ -200,12 +200,17 @@ function samplePanelResults(): PanelResult[] {
 
 function sampleAnalysis(): Analysis {
   return {
-    consensus: ['Paris is the capital of France'],
-    contradictions: [],
-    unique_insights: [
-      { model: 'gpt-4o', insight: 'Noted that Paris has been the capital since the 10th century' },
+    agreements: ['Paris is the capital of France'],
+    discrepancies: [],
+    issues: [
+      {
+        severity: 'low',
+        candidate: 'gpt-4o',
+        description: 'Noted that Paris has been the capital since the 10th century',
+      },
     ],
-    blind_spots: ['No model mentioned the population of Paris'],
+    gaps: ['No model mentioned the population of Paris'],
+    recommendation: 'Both models are essentially correct. Prefer the more detailed response.',
   };
 }
 
@@ -453,7 +458,7 @@ test('timeout signal: ChatRequest.options.signal is an AbortSignal when timeoutM
   assert.ok(req.options.signal instanceof AbortSignal, 'expected signal to be an AbortSignal');
 });
 
-test('prompt builder integration: user prompt includes analysis consensus when analysis is present', async () => {
+test('prompt builder integration: user prompt includes analysis agreements when analysis is present', async () => {
   const chat = stubChatPort();
   const config = stubConfigPort();
   const logger = stubLoggerPort();
@@ -467,10 +472,10 @@ test('prompt builder integration: user prompt includes analysis consensus when a
 
   assert.equal(chat._calls.length, 1);
   const userContent = chat._calls[0].messages[1].content;
-  // The user prompt should contain the analysis consensus text
+  // The user prompt should contain the analysis agreements text
   assert.ok(
     userContent.includes('Paris is the capital of France'),
-    'user prompt should include consensus point',
+    'user prompt should include agreements point',
   );
   assert.ok(userContent.includes('PANEL ANALYSIS'), 'user prompt should include analysis section');
 });

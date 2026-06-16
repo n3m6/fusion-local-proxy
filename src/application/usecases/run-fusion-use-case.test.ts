@@ -48,10 +48,11 @@ const samplePanelResult: PanelResult = {
 };
 
 const sampleAnalysis: Analysis = {
-  consensus: ['agree on X'],
-  contradictions: [{ topic: 'Y', perspectives: ['A', 'B'] }],
-  unique_insights: [{ model: 'gpt-4o', insight: 'insight Z' }],
-  blind_spots: ['missed W'],
+  agreements: ['agree on X'],
+  discrepancies: [{ topic: 'Y', positions: ['A', 'B'], assessment: 'unclear' }],
+  issues: [{ severity: 'low', candidate: 'gpt-4o', description: 'insight Z' }],
+  gaps: ['missed W'],
+  recommendation: 'Follow approach A.',
 };
 
 const sampleFailedModel = {
@@ -68,8 +69,15 @@ interface StubPanelRunner {
   _lastMessages: Message[] | null;
   _lastPanelModels: ModelRef[] | null;
   _lastTimeoutMs: number;
+  _lastSampling: { temperature?: number; maxTokens?: number } | undefined;
   _callCount: number;
-  run(messages: Message[], panelModels: ModelRef[], timeoutMs: number): Promise<PanelMeta>;
+  run(
+    messages: Message[],
+    panelModels: ModelRef[],
+    timeoutMs: number,
+    requestId?: string,
+    sampling?: { temperature?: number; maxTokens?: number },
+  ): Promise<PanelMeta>;
 }
 
 function stubPanelRunner(result?: PanelMeta): StubPanelRunner {
@@ -81,12 +89,14 @@ function stubPanelRunner(result?: PanelMeta): StubPanelRunner {
     _lastMessages: null,
     _lastPanelModels: null,
     _lastTimeoutMs: -1,
+    _lastSampling: undefined,
     _callCount: 0,
-    async run(messages, panelModels, timeoutMs) {
+    async run(messages, panelModels, timeoutMs, _requestId, sampling) {
       stub._callCount++;
       stub._lastMessages = messages;
       stub._lastPanelModels = panelModels;
       stub._lastTimeoutMs = timeoutMs;
+      stub._lastSampling = sampling;
       return result ?? defaultResult;
     },
   };
@@ -98,12 +108,14 @@ function stubPanelRunnerThrowing(error: FusionError): StubPanelRunner {
     _lastMessages: null,
     _lastPanelModels: null,
     _lastTimeoutMs: -1,
+    _lastSampling: undefined,
     _callCount: 0,
-    async run(messages, panelModels, timeoutMs) {
+    async run(messages, panelModels, timeoutMs, _requestId, sampling) {
       stub._callCount++;
       stub._lastMessages = messages;
       stub._lastPanelModels = panelModels;
       stub._lastTimeoutMs = timeoutMs;
+      stub._lastSampling = sampling;
       throw error;
     },
   };
@@ -141,11 +153,14 @@ interface StubSynthesizeStep {
     panelResults: PanelResult[];
     originalMessages: Message[];
     analysis: Analysis | null;
+    sampling: { temperature?: number; maxTokens?: number } | undefined;
   }>;
   synthesize(
     panelResults: PanelResult[],
     originalMessages: Message[],
     analysis: Analysis | null,
+    requestId?: string,
+    sampling?: { temperature?: number; maxTokens?: number },
   ): AsyncIterable<FusionStreamEvent>;
 }
 
@@ -161,8 +176,8 @@ function stubSynthesizeStep(events?: FusionStreamEvent[]): StubSynthesizeStep {
   ];
   const stub: StubSynthesizeStep = {
     _synthesizeCalls: [],
-    async *synthesize(panelResults, originalMessages, analysis) {
-      stub._synthesizeCalls.push({ panelResults, originalMessages, analysis });
+    async *synthesize(panelResults, originalMessages, analysis, _requestId, sampling) {
+      stub._synthesizeCalls.push({ panelResults, originalMessages, analysis, sampling });
       for (const ev of events ?? defaultEvents) {
         yield ev;
       }
@@ -688,12 +703,14 @@ test('withHeartbeat emits panel heartbeat events before Panel stage complete', a
     _lastMessages: null,
     _lastPanelModels: null,
     _lastTimeoutMs: -1,
+    _lastSampling: undefined,
     _callCount: 0,
-    async run(messages, panelModels, timeoutMs) {
+    async run(messages, panelModels, timeoutMs, _requestId, sampling) {
       slowPanelRunner._callCount++;
       slowPanelRunner._lastMessages = messages;
       slowPanelRunner._lastPanelModels = panelModels;
       slowPanelRunner._lastTimeoutMs = timeoutMs;
+      slowPanelRunner._lastSampling = sampling;
       await delay(60);
       return { results: [samplePanelResult], failedModels: [] };
     },
@@ -767,4 +784,65 @@ test('messages from request are not mutated', async () => {
 
   assert.equal(originalMessages.length, 1);
   assert.deepStrictEqual(originalMessages[0], { role: 'user', content: 'hello' });
+});
+
+// 15. Sampling params are forwarded to PanelRunner and SynthesizeStep
+test('sampling params from FusionRequest are forwarded to PanelRunner and SynthesizeStep', async () => {
+  const panelRunner = stubPanelRunner() as unknown as PanelRunner;
+  const judgeStep = stubJudgeStep() as unknown as JudgeStep;
+  const synthesizeStep = stubSynthesizeStep() as unknown as SynthesizeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+  );
+
+  await collectEvents(
+    useCase.runFusion({
+      messages: [{ role: 'user', content: 'x' }],
+      temperature: 0.7,
+      maxTokens: 512,
+    }),
+  );
+
+  const pr = panelRunner as unknown as StubPanelRunner;
+  assert.deepStrictEqual(pr._lastSampling, { temperature: 0.7, maxTokens: 512 });
+
+  const synthCalls = (synthesizeStep as unknown as StubSynthesizeStep)._synthesizeCalls;
+  assert.equal(synthCalls.length, 1);
+  assert.deepStrictEqual(synthCalls[0].sampling, { temperature: 0.7, maxTokens: 512 });
+});
+
+// 16. Absent sampling params are not forwarded (no spurious keys)
+test('absent sampling params result in empty sampling object forwarded', async () => {
+  const panelRunner = stubPanelRunner() as unknown as PanelRunner;
+  const judgeStep = stubJudgeStep() as unknown as JudgeStep;
+  const synthesizeStep = stubSynthesizeStep() as unknown as SynthesizeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+  );
+
+  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+
+  const pr = panelRunner as unknown as StubPanelRunner;
+  // sampling should be an empty object (no temperature, no maxTokens keys)
+  assert.ok(pr._lastSampling !== undefined, 'sampling arg is always passed (even if empty)');
+  assert.equal('temperature' in (pr._lastSampling ?? {}), false);
+  assert.equal('maxTokens' in (pr._lastSampling ?? {}), false);
 });

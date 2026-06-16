@@ -40,23 +40,35 @@ test('buildJudgeSystemPrompt returns a non-empty string of at least 100 characte
   assert.ok(prompt.trim().length > 0, 'must be non-empty');
 });
 
-test('buildJudgeSystemPrompt contains comparative analysis instructions', () => {
+test('buildJudgeSystemPrompt contains correctness-oriented analysis instructions', () => {
   const prompt = buildJudgeSystemPrompt().toLowerCase();
   assert.ok(
-    prompt.includes('consensus') || prompt.includes('analy'),
-    'must mention consensus or analysis',
+    prompt.includes('agreement') || prompt.includes('analy'),
+    'must mention agreements or analysis',
   );
   assert.ok(
-    prompt.includes('contradiction') || prompt.includes('conflict'),
-    'must mention contradictions or conflicts',
+    prompt.includes('discrepanc') || prompt.includes('conflict') || prompt.includes('different'),
+    'must mention discrepancies or conflicting answers',
   );
-  assert.ok(prompt.includes('insight') || prompt.includes('unique'), 'must mention insights');
-  assert.ok(prompt.includes('blind') && prompt.includes('spot'), 'must mention blind spots');
+  assert.ok(
+    prompt.includes('issue') || prompt.includes('error') || prompt.includes('bug'),
+    'must mention issues or errors',
+  );
+  assert.ok(prompt.includes('gap') || prompt.includes('missing'), 'must mention gaps');
+  assert.ok(prompt.includes('recommendation'), 'must mention recommendation');
 });
 
 test('buildJudgeSystemPrompt instructs JSON output', () => {
   const prompt = buildJudgeSystemPrompt().toLowerCase();
   assert.ok(prompt.includes('json'), 'must mention JSON output format');
+});
+
+test('buildJudgeSystemPrompt instructs task type inference', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('coding') || prompt.includes('technical') || prompt.includes('task type'),
+    'must mention task type inference',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -131,6 +143,15 @@ test('buildJudgeUserPrompt includes panel content text for each result', () => {
   const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
   assert.ok(prompt.includes('Eiffel Tower'), 'must include first panel content');
   assert.ok(prompt.includes('cuisine and art'), 'must include second panel content');
+});
+
+test('buildJudgeUserPrompt instructions reference new field names', () => {
+  const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
+  assert.ok(prompt.includes('agreements'), 'instructions must reference agreements');
+  assert.ok(prompt.includes('discrepancies'), 'instructions must reference discrepancies');
+  assert.ok(prompt.includes('issues'), 'instructions must reference issues');
+  assert.ok(prompt.includes('gaps'), 'instructions must reference gaps');
+  assert.ok(prompt.includes('recommendation'), 'instructions must reference recommendation');
 });
 
 // ---------------------------------------------------------------------------

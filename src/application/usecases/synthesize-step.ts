@@ -25,6 +25,7 @@ export class SynthesizeStep {
     originalMessages: Message[],
     analysis: Analysis | null,
     requestId?: string,
+    sampling?: { temperature?: number; maxTokens?: number },
   ): AsyncIterable<FusionStreamEvent> {
     const synthesizerModel = this.configPort.getSynthesizerModel();
     const timeoutMs = this.configPort.getTimeoutMs();
@@ -46,7 +47,13 @@ export class SynthesizeStep {
           { role: 'user', content: userPrompt },
         ],
         model: synthesizerModel,
-        options: { signal: controller.signal, requestId, stage: 'synthesis' },
+        options: {
+          signal: controller.signal,
+          requestId,
+          stage: 'synthesis',
+          ...(sampling?.temperature !== undefined ? { temperature: sampling.temperature } : {}),
+          ...(sampling?.maxTokens !== undefined ? { maxTokens: sampling.maxTokens } : {}),
+        },
       };
 
       this.loggerPort.logStageStart('synthesis');

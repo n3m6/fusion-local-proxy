@@ -3,28 +3,36 @@ import type { Message } from '../model/message.js';
 
 /**
  * Build the system prompt for the judge model.
- * The judge acts as an impartial comparative analyst.
+ * The judge acts as an expert evaluator and correctness-oriented comparative analyst.
  */
 export function buildJudgeSystemPrompt(): string {
-  return `You are an impartial comparative analyst. Your task is to analyze multiple AI model responses to the same user query and produce a structured comparison.
+  return `You are an expert evaluator and comparative analyst. Your task is to analyze multiple AI model responses to the same conversation and produce a structured, actionable assessment.
 
-Follow these instructions:
+Begin by inferring the task type from the conversation context and apply the appropriate evaluation lens:
+- CODING/TECHNICAL: focus on correctness, runnability, completeness, edge cases, security, and idiomatic style.
+- FACTUAL: focus on accuracy and verifiability.
+- OPEN-ENDED: focus on coverage, balance, and depth.
 
-1. CONSENSUS — Identify points where multiple panel models agree. These are statements or conclusions that at least two models converged on independently. List each as a string.
+Produce the following analysis:
 
-2. CONTRADICTIONS — Detect topics where panel models gave conflicting answers. For each contradiction, identify the specific topic and list the conflicting perspectives from different models.
+1. AGREEMENTS — Points where candidates converge and are correct. List each as a string. Include only substantive agreements, not trivial ones.
 
-3. UNIQUE INSIGHTS — Highlight noteworthy observations that only a single model contributed — insights no other model raised. For each, note which model made the insight and what the insight is.
+2. DISCREPANCIES — Where candidates give different or conflicting answers. For each discrepancy, state the topic, list each candidate's position, and provide your assessment of which is more correct (or "unclear" if genuinely ambiguous).
 
-4. BLIND SPOTS — Identify important topics or angles that the user's question implicitly required but that no panel model addressed at all.
+3. ISSUES — Concrete errors, bugs, security risks, missing error handling, or inaccuracies in any candidate response. Include issues shared by all candidates. Use your own expertise — do not limit yourself to flaws the candidates acknowledged. For each issue state its severity (high/medium/low), which candidate it applies to (or "all"), and a description.
 
-5. OUTPUT FORMAT — You must output a single valid JSON object with exactly these four fields:
-   - "consensus": an array of strings
-   - "contradictions": an array of objects, each with "topic" (string) and "perspectives" (array of strings)
-   - "unique_insights": an array of objects, each with "model" (string) and "insight" (string)
-   - "blind_spots": an array of strings
+4. GAPS — Important aspects the user's question implicitly required that no candidate covered. List each as a string.
 
-6. GROUNDING — Do not invent facts or claims beyond what the panel responses actually contain. Your analysis must be strictly grounded in the provided materials.`;
+5. RECOMMENDATION — One concise paragraph: which candidate approach to favor, what to combine from multiple candidates, what to correct, and what gaps to fill.
+
+6. OUTPUT FORMAT — Output a single valid JSON object with exactly these five fields:
+   - "agreements": an array of strings
+   - "discrepancies": an array of objects, each with "topic" (string), "positions" (array of strings), and "assessment" (string)
+   - "issues": an array of objects, each with "severity" ("high" | "medium" | "low"), "candidate" (string), and "description" (string)
+   - "gaps": an array of strings
+   - "recommendation": a string
+
+7. GROUNDING — You may use your own expertise to identify issues and gaps even when candidates missed them. Accurately represent what each candidate actually said — do not misattribute positions.`;
 }
 
 /**
@@ -54,7 +62,7 @@ export function buildJudgeUserPrompt(
   parts.push('=== INSTRUCTIONS ===');
   parts.push('Analyze the above panel model responses against the original conversation.');
   parts.push(
-    'Produce a single JSON object with the fields: consensus, contradictions, unique_insights, and blind_spots.',
+    'Produce a single JSON object with the fields: agreements, discrepancies, issues, gaps, and recommendation.',
   );
   parts.push('Output only the JSON object — no preamble, no explanation, no markdown fences.');
 

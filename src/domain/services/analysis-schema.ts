@@ -5,24 +5,28 @@ import { z } from 'zod';
  * all panel model responses.
  */
 export const analysisSchema = z.object({
-  /** Points of agreement found across panel model responses. */
-  consensus: z.array(z.string()),
-  /** Topics where panel models gave conflicting answers. */
-  contradictions: z.array(
+  /** Points where candidates converged and are correct — high-confidence shared ground. */
+  agreements: z.array(z.string()),
+  /** Topics where candidates gave different or conflicting answers, with the judge's assessment. */
+  discrepancies: z.array(
     z.object({
       topic: z.string(),
-      perspectives: z.array(z.string()),
+      positions: z.array(z.string()),
+      assessment: z.string(),
     }),
   ),
-  /** Noteworthy observations made by a single model. */
-  unique_insights: z.array(
+  /** Concrete errors, bugs, security risks, or inaccuracies in any candidate response. */
+  issues: z.array(
     z.object({
-      model: z.string(),
-      insight: z.string(),
+      severity: z.enum(['high', 'medium', 'low']),
+      candidate: z.string(),
+      description: z.string(),
     }),
   ),
-  /** Important topics/angles that no panel model addressed. */
-  blind_spots: z.array(z.string()),
+  /** Important aspects the user's question required that no candidate covered. */
+  gaps: z.array(z.string()),
+  /** Concise guidance for the synthesizer: what to keep, combine, fix, and fill. */
+  recommendation: z.string(),
 });
 
 /** Inferred type from the analysis schema. */

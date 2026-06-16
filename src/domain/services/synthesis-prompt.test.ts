@@ -37,19 +37,31 @@ const sampleMessages: Message[] = [
 ];
 
 const validAnalysis: Analysis = {
-  consensus: ['Paris is the capital of France', 'France is in Europe'],
-  contradictions: [
-    { topic: 'Best time to visit', perspectives: ['Spring is ideal', 'Fall is better'] },
+  agreements: ['Paris is the capital of France', 'France is in Europe'],
+  discrepancies: [
+    {
+      topic: 'Best time to visit',
+      positions: ['Spring is ideal', 'Fall is better'],
+      assessment: 'unclear — both have merits',
+    },
   ],
-  unique_insights: [{ model: 'gpt-4o', insight: 'Paris has over 400 municipal parks' }],
-  blind_spots: ['No model mentioned the Paris Metro system'],
+  issues: [
+    {
+      severity: 'low',
+      candidate: 'gpt-4o',
+      description: 'Mentioned Paris has over 400 municipal parks but this is trivia, not an error',
+    },
+  ],
+  gaps: ['No model mentioned the Paris Metro system'],
+  recommendation: 'Both models agree on the key fact. Combine their complementary details.',
 };
 
 const emptyAnalysis: Analysis = {
-  consensus: [],
-  contradictions: [],
-  unique_insights: [],
-  blind_spots: [],
+  agreements: [],
+  discrepancies: [],
+  issues: [],
+  gaps: [],
+  recommendation: '',
 };
 
 // ---------------------------------------------------------------------------
@@ -63,31 +75,42 @@ test('buildSynthesisSystemPrompt returns a non-empty string of at least 100 char
   assert.ok(prompt.trim().length > 0, 'must be non-empty');
 });
 
-test('buildSynthesisSystemPrompt contains grounding instructions', () => {
+test('buildSynthesisSystemPrompt grants synthesizer authority to correct the panel', () => {
   const prompt = buildSynthesisSystemPrompt().toLowerCase();
-  const hasGrounding =
-    prompt.includes('do not introduce facts') ||
-    prompt.includes('not present in the provided materials') ||
-    prompt.includes('ground every factual claim') ||
-    prompt.includes('do not invent');
+  const hasAuthority =
+    prompt.includes('final authority') ||
+    prompt.includes('correct errors') ||
+    prompt.includes('you are the final') ||
+    prompt.includes('authoritative');
   assert.ok(
-    hasGrounding,
-    `must contain grounding/fact-constraint language. Got excerpt: ${prompt.substring(0, 300)}`,
+    hasAuthority,
+    `must contain authority language. Got excerpt: ${prompt.substring(0, 300)}`,
   );
 });
 
-test('buildSynthesisSystemPrompt contains consensus integration instructions', () => {
-  const prompt = buildSynthesisSystemPrompt().toLowerCase();
-  assert.ok(prompt.includes('consensus'), 'must mention consensus');
-});
-
-test('buildSynthesisSystemPrompt contains contradiction handling instructions', () => {
+test('buildSynthesisSystemPrompt mentions agreement integration', () => {
   const prompt = buildSynthesisSystemPrompt().toLowerCase();
   assert.ok(
-    prompt.includes('contradiction') ||
+    prompt.includes('agreement') || prompt.includes('converge'),
+    'must mention agreement integration',
+  );
+});
+
+test('buildSynthesisSystemPrompt mentions handling discrepancies or disagreements', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('discrepanc') ||
       prompt.includes('disagreement') ||
       prompt.includes('conflicting'),
-    'must mention contradiction handling',
+    'must mention discrepancy handling',
+  );
+});
+
+test('buildSynthesisSystemPrompt mentions task type adaptation', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('coding') || prompt.includes('technical') || prompt.includes('task type'),
+    'must mention task type adaptation',
   );
 });
 
@@ -112,30 +135,27 @@ test('buildSynthesisUserPrompt with analysis includes original message content',
   assert.ok(prompt.includes('capital of France'), 'must include message content');
 });
 
-test('buildSynthesisUserPrompt with analysis includes consensus field content', () => {
+test('buildSynthesisUserPrompt with analysis includes agreements content', () => {
   const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
-  assert.ok(prompt.includes('Paris is the capital of France'), 'must include consensus item');
+  assert.ok(prompt.includes('Paris is the capital of France'), 'must include agreements item');
 });
 
-test('buildSynthesisUserPrompt with analysis includes contradiction topic', () => {
+test('buildSynthesisUserPrompt with analysis includes discrepancy topic', () => {
   const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
-  assert.ok(prompt.includes('Best time to visit'), 'must include contradiction topic');
+  assert.ok(prompt.includes('Best time to visit'), 'must include discrepancy topic');
 });
 
-test('buildSynthesisUserPrompt with analysis includes unique insight content', () => {
+test('buildSynthesisUserPrompt with analysis includes issue content', () => {
   const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
   assert.ok(
     prompt.includes('municipal parks') || prompt.includes('400'),
-    'must include unique insight content',
+    'must include issue description content',
   );
 });
 
-test('buildSynthesisUserPrompt with analysis includes blind spot content', () => {
+test('buildSynthesisUserPrompt with analysis includes gap content', () => {
   const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
-  assert.ok(
-    prompt.includes('Metro') || prompt.includes('metro'),
-    'must include blind spot content',
-  );
+  assert.ok(prompt.includes('Metro') || prompt.includes('metro'), 'must include gap content');
 });
 
 test('buildSynthesisUserPrompt with analysis has PANEL ANALYSIS section', () => {
@@ -146,6 +166,15 @@ test('buildSynthesisUserPrompt with analysis has PANEL ANALYSIS section', () => 
 test('buildSynthesisUserPrompt with analysis has INSTRUCTIONS section', () => {
   const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
   assert.ok(prompt.includes('INSTRUCTIONS'), 'must include instructions section');
+});
+
+test('buildSynthesisUserPrompt with analysis includes recommendation content', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
+  assert.ok(
+    prompt.includes('Recommendation') || prompt.includes('recommendation'),
+    'must include recommendation section',
+  );
+  assert.ok(prompt.includes('complementary details'), 'must include recommendation text');
 });
 
 // ---------------------------------------------------------------------------
@@ -196,25 +225,23 @@ test('buildSynthesisUserPrompt with null analysis includes NOTE about missing an
 test('buildSynthesisUserPrompt with empty analysis still includes section headers', () => {
   const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, emptyAnalysis);
   assert.ok(prompt.includes('PANEL ANALYSIS'), 'must include analysis section');
-  assert.ok(prompt.includes('Consensus Points'), 'must include consensus header');
-  assert.ok(prompt.includes('Contradictions'), 'must include contradictions header');
-  assert.ok(prompt.includes('Unique Insights'), 'must include unique insights header');
-  assert.ok(prompt.includes('Blind Spots'), 'must include blind spots header');
+  assert.ok(prompt.includes('Agreements'), 'must include agreements header');
+  assert.ok(prompt.includes('Discrepancies'), 'must include discrepancies header');
+  assert.ok(prompt.includes('Issues'), 'must include issues header');
+  assert.ok(prompt.includes('Gaps'), 'must include gaps header');
+  assert.ok(prompt.includes('Recommendation'), 'must include recommendation header');
 });
 
-test('buildSynthesisUserPrompt with null analysis excludes analysis-specific terminology', () => {
+test('buildSynthesisUserPrompt with null analysis excludes analysis-specific field names', () => {
   const panelResults: PanelResult[] = [
     makePanelResult('model-a', 'Paris is the capital city.'),
     makePanelResult('model-b', 'The Eiffel Tower is a landmark.'),
   ];
   const prompt = buildSynthesisUserPrompt(panelResults, sampleMessages, null).toLowerCase();
 
-  assert.ok(!prompt.includes('consensus'), 'null path must not reference consensus');
-  assert.ok(!prompt.includes('contradiction'), 'null path must not reference contradiction');
-  assert.ok(!prompt.includes('blind_spot'), 'null path must not reference blind_spot');
-  assert.ok(!prompt.includes('blind spot'), 'null path must not reference blind spots');
-  assert.ok(!prompt.includes('unique_insight'), 'null path must not reference unique_insight');
-  assert.ok(!prompt.includes('unique insight'), 'null path must not reference unique insights');
+  assert.ok(!prompt.includes('agreements'), 'null path must not reference agreements');
+  assert.ok(!prompt.includes('discrepancies'), 'null path must not reference discrepancies');
+  assert.ok(!prompt.includes('recommendation'), 'null path must not reference recommendation');
 });
 
 test('buildSynthesisUserPrompt with null analysis still references panel content', () => {
@@ -237,10 +264,11 @@ test('buildSynthesisUserPrompt handles panel results with empty content', () => 
 
 test('buildSynthesisUserPrompt with empty analysis arrays emits empty-section fallbacks', () => {
   const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, emptyAnalysis);
-  assert.ok(prompt.includes('No consensus points identified'), 'must note empty consensus');
-  assert.ok(prompt.includes('No contradictions identified'), 'must note empty contradictions');
-  assert.ok(prompt.includes('No unique insights identified'), 'must note empty unique insights');
-  assert.ok(prompt.includes('No blind spots identified'), 'must note empty blind spots');
+  assert.ok(prompt.includes('No agreements identified'), 'must note empty agreements');
+  assert.ok(prompt.includes('No discrepancies identified'), 'must note empty discrepancies');
+  assert.ok(prompt.includes('No issues identified'), 'must note empty issues');
+  assert.ok(prompt.includes('No gaps identified'), 'must note empty gaps');
+  assert.ok(prompt.includes('No recommendation provided'), 'must note empty recommendation');
 });
 
 // ---------------------------------------------------------------------------

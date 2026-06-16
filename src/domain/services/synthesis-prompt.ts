@@ -4,24 +4,31 @@ import type { Analysis } from './analysis-schema.js';
 
 /**
  * Build the system prompt for the synthesizer model.
- * The synthesizer produces the final response for the end user.
+ * The synthesizer produces the final, authoritative response for the end user.
  */
 export function buildSynthesisSystemPrompt(): string {
-  return `You are a synthesis engine. Your task is to produce the final, polished response for the end user by integrating multiple AI model responses to the same query.
+  return `You are an expert synthesis engine. Your task is to produce the final, authoritative response for the end user, drawing on multiple AI model candidates and a structured panel analysis.
+
+Begin by inferring the task type from the conversation context and adapt your output accordingly:
+- CODING/TECHNICAL: Produce one clean, correct, copy-pasteable solution. Keep prose minimal. Avoid "Model N said..." attribution. Prioritize correctness over blending.
+- FACTUAL: Clear, accurate, well-structured, honest about genuine uncertainty.
+- OPEN-ENDED: Balanced, thorough, organized — honest about gaps.
 
 Follow these instructions:
 
-1. CONSENSUS INTEGRATION — Give more weight to points where multiple panel models agree. When several models converge on the same answer, present it with higher confidence.
+1. AUTHORITY — You are the final authority, not just a blender. Use the candidates as starting material. Correct errors identified in the analysis. Resolve discrepancies toward the most correct answer. Fill gaps the candidates missed. Add detail from your own expertise when it genuinely helps.
 
-2. CONTRADICTION HANDLING — When contradictions exist between panel models, acknowledge the disagreement and present the competing perspectives fairly. Do not pick one side arbitrarily — explain what each perspective offers.
+2. AGREEMENT INTEGRATION — Where candidates agree and the analysis confirms correctness, present that answer confidently without hedging.
 
-3. UNIQUE INSIGHTS — Incorporate noteworthy observations from individual models, attributing them where appropriate (e.g., "One model noted that...").
+3. DISCREPANCY RESOLUTION — Where candidates differ, resolve toward the more correct position identified in the analysis. If genuinely unclear, present both perspectives fairly.
 
-4. BLIND SPOTS — Address blind spots if you can provide useful context, or acknowledge what remains unknown. Be honest about gaps.
+4. ISSUE CORRECTION — Fix errors and issues flagged in the analysis, including bugs, security risks, and inaccuracies. Do not reproduce flaws even if both candidates share them.
 
-5. GROUNDING — Ground every factual claim in the panel responses or the provided analysis. Do not introduce facts, data, or claims not present in the provided materials. If you are uncertain, say so.
+5. GAP FILLING — Address gaps the candidates missed. You may draw on your own knowledge to fill them.
 
-6. TONE — Write in a helpful, conversational tone appropriate for the end user. Be clear, concise, and well-structured.`;
+6. ATTRIBUTION — Avoid "Model 1 said..." attribution in the final response. Write as a single coherent voice.
+
+7. TONE — Match format and depth to the task: concise code blocks for coding; clear prose for factual/open-ended. Be helpful and direct, not wordy.`;
 }
 
 /**
@@ -52,44 +59,50 @@ export function buildSynthesisUserPrompt(
   if (analysis !== null) {
     parts.push('=== PANEL ANALYSIS ===');
     parts.push('');
-    parts.push('-- Consensus Points --');
-    if (analysis.consensus.length > 0) {
-      for (const point of analysis.consensus) {
+    parts.push('-- Agreements --');
+    if (analysis.agreements.length > 0) {
+      for (const point of analysis.agreements) {
         parts.push(`- ${point}`);
       }
     } else {
-      parts.push('(No consensus points identified)');
+      parts.push('(No agreements identified)');
     }
     parts.push('');
-    parts.push('-- Contradictions --');
-    if (analysis.contradictions.length > 0) {
-      for (const c of analysis.contradictions) {
-        parts.push(`Topic: ${c.topic}`);
-        for (const p of c.perspectives) {
+    parts.push('-- Discrepancies --');
+    if (analysis.discrepancies.length > 0) {
+      for (const d of analysis.discrepancies) {
+        parts.push(`Topic: ${d.topic}`);
+        for (const p of d.positions) {
           parts.push(`  - ${p}`);
         }
+        parts.push(`  Assessment: ${d.assessment}`);
       }
     } else {
-      parts.push('(No contradictions identified)');
+      parts.push('(No discrepancies identified)');
     }
     parts.push('');
-    parts.push('-- Unique Insights --');
-    if (analysis.unique_insights.length > 0) {
-      for (const ui of analysis.unique_insights) {
-        parts.push(`[${ui.model}]: ${ui.insight}`);
+    parts.push('-- Issues --');
+    if (analysis.issues.length > 0) {
+      for (const issue of analysis.issues) {
+        parts.push(`[${issue.severity.toUpperCase()}] ${issue.candidate}: ${issue.description}`);
       }
     } else {
-      parts.push('(No unique insights identified)');
+      parts.push('(No issues identified)');
     }
     parts.push('');
-    parts.push('-- Blind Spots --');
-    if (analysis.blind_spots.length > 0) {
-      for (const bs of analysis.blind_spots) {
-        parts.push(`- ${bs}`);
+    parts.push('-- Gaps --');
+    if (analysis.gaps.length > 0) {
+      for (const gap of analysis.gaps) {
+        parts.push(`- ${gap}`);
       }
     } else {
-      parts.push('(No blind spots identified)');
+      parts.push('(No gaps identified)');
     }
+    parts.push('');
+    parts.push('-- Recommendation --');
+    parts.push(
+      analysis.recommendation.length > 0 ? analysis.recommendation : '(No recommendation provided)',
+    );
   } else {
     parts.push('=== NOTE ===');
     parts.push(
@@ -99,10 +112,15 @@ export function buildSynthesisUserPrompt(
 
   parts.push('');
   parts.push('=== INSTRUCTIONS ===');
-  parts.push('Using the above materials, produce the final synthesized response for the end user.');
-  parts.push(
-    'Integrate the panel responses, the analysis (if available), and address the original question comprehensively.',
-  );
+  if (analysis !== null) {
+    parts.push(
+      'Using the panel analysis and candidate responses above, produce the final synthesized response. Correct any identified issues, fill the gaps, resolve discrepancies appropriately, and follow the recommendation. Address the original conversation comprehensively.',
+    );
+  } else {
+    parts.push(
+      'Using the panel responses above, produce the final synthesized response for the end user. Address the original conversation comprehensively.',
+    );
+  }
 
   return parts.join('\n');
 }

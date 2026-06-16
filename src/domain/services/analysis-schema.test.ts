@@ -6,26 +6,29 @@ import { analysisSchema } from './analysis-schema.js';
 // analysisSchema — valid input
 // ---------------------------------------------------------------------------
 
-test('analysisSchema — valid input with all four fields', () => {
+test('analysisSchema — valid input with all five fields', () => {
   const input = {
-    consensus: ['Models agree that Paris is the capital of France'],
-    contradictions: [
+    agreements: ['Both models agree Paris is the capital of France'],
+    discrepancies: [
       {
         topic: 'Best time to visit Paris',
-        perspectives: ['Spring is best', 'Fall is best'],
+        positions: ['Spring is best', 'Fall is best'],
+        assessment: 'unclear — both seasons have merits',
       },
     ],
-    unique_insights: [{ model: 'gpt-4', insight: 'Paris has over 400 parks' }],
-    blind_spots: ['None of the models mentioned the Paris sewer system'],
+    issues: [{ severity: 'low', candidate: 'model-a', description: 'Minor stylistic issue' }],
+    gaps: ['None of the models mentioned the Paris sewer system'],
+    recommendation: 'Use the consensus answer and add sewer system info.',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.ok(result.success);
   if (result.success) {
-    assert.equal(result.data.consensus.length, 1);
-    assert.equal(result.data.contradictions.length, 1);
-    assert.equal(result.data.unique_insights.length, 1);
-    assert.equal(result.data.blind_spots.length, 1);
+    assert.equal(result.data.agreements.length, 1);
+    assert.equal(result.data.discrepancies.length, 1);
+    assert.equal(result.data.issues.length, 1);
+    assert.equal(result.data.gaps.length, 1);
+    assert.equal(typeof result.data.recommendation, 'string');
   }
 });
 
@@ -33,22 +36,21 @@ test('analysisSchema — valid input with all four fields', () => {
 // analysisSchema — missing required field
 // ---------------------------------------------------------------------------
 
-test('analysisSchema — missing required field (consensus absent)', () => {
+test('analysisSchema — missing required field (agreements absent)', () => {
   const input = {
-    contradictions: [],
-    unique_insights: [],
-    blind_spots: [],
+    discrepancies: [],
+    issues: [],
+    gaps: [],
+    recommendation: 'n/a',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.equal(result.success, false);
   if (!result.success) {
-    const issueMessages = result.error.issues.map((i) => i.message ?? '').join(' ');
     const issuePaths = result.error.issues.map((i) => i.path.join('.')).join(' ');
-    const relevant = issueMessages + ' ' + issuePaths;
     assert.ok(
-      relevant.toLowerCase().includes('consensus'),
-      `Expected error about missing consensus, got: ${JSON.stringify(result.error.issues)}`,
+      issuePaths.includes('agreements'),
+      `Expected error about missing agreements, got: ${JSON.stringify(result.error.issues)}`,
     );
   }
 });
@@ -57,12 +59,13 @@ test('analysisSchema — missing required field (consensus absent)', () => {
 // analysisSchema — malformed field type
 // ---------------------------------------------------------------------------
 
-test('analysisSchema — malformed field type (contradictions is a string)', () => {
+test('analysisSchema — malformed field type (discrepancies is a string)', () => {
   const input = {
-    consensus: ['Some point'],
-    contradictions: 'not an array',
-    unique_insights: [],
-    blind_spots: [],
+    agreements: ['Some point'],
+    discrepancies: 'not an array',
+    issues: [],
+    gaps: [],
+    recommendation: '',
   };
 
   const result = analysisSchema.safeParse(input);
@@ -73,21 +76,23 @@ test('analysisSchema — malformed field type (contradictions is a string)', () 
 // analysisSchema — empty valid input
 // ---------------------------------------------------------------------------
 
-test('analysisSchema — empty valid input (all fields empty arrays)', () => {
+test('analysisSchema — empty valid input (arrays empty, recommendation empty string)', () => {
   const input = {
-    consensus: [],
-    contradictions: [],
-    unique_insights: [],
-    blind_spots: [],
+    agreements: [],
+    discrepancies: [],
+    issues: [],
+    gaps: [],
+    recommendation: '',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.ok(result.success);
   if (result.success) {
-    assert.deepEqual(result.data.consensus, []);
-    assert.deepEqual(result.data.contradictions, []);
-    assert.deepEqual(result.data.unique_insights, []);
-    assert.deepEqual(result.data.blind_spots, []);
+    assert.deepEqual(result.data.agreements, []);
+    assert.deepEqual(result.data.discrepancies, []);
+    assert.deepEqual(result.data.issues, []);
+    assert.deepEqual(result.data.gaps, []);
+    assert.equal(result.data.recommendation, '');
   }
 });
 
@@ -97,10 +102,11 @@ test('analysisSchema — empty valid input (all fields empty arrays)', () => {
 
 test('analysisSchema — extra top-level fields are stripped from parsed data', () => {
   const input = {
-    consensus: ['Point A'],
-    contradictions: [],
-    unique_insights: [],
-    blind_spots: [],
+    agreements: ['Point A'],
+    discrepancies: [],
+    issues: [],
+    gaps: [],
+    recommendation: 'Go with A.',
     extra: 123,
   };
 
@@ -111,80 +117,138 @@ test('analysisSchema — extra top-level fields are stripped from parsed data', 
   }
 });
 
-test('analysisSchema — unknown nested fields are stripped from contradiction entries', () => {
+test('analysisSchema — unknown nested fields are stripped from discrepancy entries', () => {
   const input = {
-    consensus: [],
-    contradictions: [{ topic: 'A vs B', perspectives: ['A is better'], severity: 'high' }],
-    unique_insights: [],
-    blind_spots: [],
+    agreements: [],
+    discrepancies: [
+      { topic: 'A vs B', positions: ['A is better'], assessment: 'A wins', extra: true },
+    ],
+    issues: [],
+    gaps: [],
+    recommendation: '',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.ok(result.success);
   if (result.success) {
-    assert.equal('severity' in result.data.contradictions[0], false);
-    assert.equal(result.data.contradictions[0].topic, 'A vs B');
+    assert.equal('extra' in result.data.discrepancies[0], false);
+    assert.equal(result.data.discrepancies[0].topic, 'A vs B');
+    assert.equal(result.data.discrepancies[0].assessment, 'A wins');
   }
+});
+
+// ---------------------------------------------------------------------------
+// analysisSchema — issues severity enum
+// ---------------------------------------------------------------------------
+
+test('analysisSchema — issues severity must be high, medium, or low', () => {
+  const valid = {
+    agreements: [],
+    discrepancies: [],
+    issues: [{ severity: 'high', candidate: 'model-a', description: 'Critical bug' }],
+    gaps: [],
+    recommendation: '',
+  };
+  assert.ok(analysisSchema.safeParse(valid).success);
+
+  const invalidSeverity = {
+    agreements: [],
+    discrepancies: [],
+    issues: [{ severity: 'critical', candidate: 'model-a', description: 'Bug' }],
+    gaps: [],
+    recommendation: '',
+  };
+  assert.equal(analysisSchema.safeParse(invalidSeverity).success, false);
 });
 
 // ---------------------------------------------------------------------------
 // analysisSchema — malformed sub-fields
 // ---------------------------------------------------------------------------
 
-test('analysisSchema — contradiction topic as number fails', () => {
+test('analysisSchema — discrepancy topic as number fails', () => {
   const input = {
-    consensus: [],
-    contradictions: [{ topic: 42, perspectives: ['x'] }],
-    unique_insights: [],
-    blind_spots: [],
+    agreements: [],
+    discrepancies: [{ topic: 42, positions: ['x'], assessment: 'ok' }],
+    issues: [],
+    gaps: [],
+    recommendation: '',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.equal(result.success, false);
 });
 
-test('analysisSchema — contradiction missing perspectives fails', () => {
+test('analysisSchema — discrepancy missing positions fails', () => {
   const input = {
-    consensus: [],
-    contradictions: [{ topic: 'A vs B' }],
-    unique_insights: [],
-    blind_spots: [],
+    agreements: [],
+    discrepancies: [{ topic: 'A vs B', assessment: 'ok' }],
+    issues: [],
+    gaps: [],
+    recommendation: '',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.equal(result.success, false);
 });
 
-test('analysisSchema — unique_insights entry missing model fails', () => {
+test('analysisSchema — discrepancy missing assessment fails', () => {
   const input = {
-    consensus: [],
-    contradictions: [],
-    unique_insights: [{ insight: 'Only one model said this' }],
-    blind_spots: [],
+    agreements: [],
+    discrepancies: [{ topic: 'A vs B', positions: ['a', 'b'] }],
+    issues: [],
+    gaps: [],
+    recommendation: '',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.equal(result.success, false);
 });
 
-test('analysisSchema — unique_insights entry missing insight fails', () => {
+test('analysisSchema — issue missing candidate fails', () => {
   const input = {
-    consensus: [],
-    contradictions: [],
-    unique_insights: [{ model: 'gpt-4o' }],
-    blind_spots: [],
+    agreements: [],
+    discrepancies: [],
+    issues: [{ severity: 'high', description: 'Bug' }],
+    gaps: [],
+    recommendation: '',
   };
 
   const result = analysisSchema.safeParse(input);
   assert.equal(result.success, false);
 });
 
-test('analysisSchema — consensus array of numbers fails', () => {
+test('analysisSchema — issue missing description fails', () => {
   const input = {
-    consensus: [1, 2, 3],
-    contradictions: [],
-    unique_insights: [],
-    blind_spots: [],
+    agreements: [],
+    discrepancies: [],
+    issues: [{ severity: 'medium', candidate: 'model-a' }],
+    gaps: [],
+    recommendation: '',
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.equal(result.success, false);
+});
+
+test('analysisSchema — agreements array of numbers fails', () => {
+  const input = {
+    agreements: [1, 2, 3],
+    discrepancies: [],
+    issues: [],
+    gaps: [],
+    recommendation: '',
+  };
+
+  const result = analysisSchema.safeParse(input);
+  assert.equal(result.success, false);
+});
+
+test('analysisSchema — missing recommendation fails', () => {
+  const input = {
+    agreements: [],
+    discrepancies: [],
+    issues: [],
+    gaps: [],
   };
 
   const result = analysisSchema.safeParse(input);
