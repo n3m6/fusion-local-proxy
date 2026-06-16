@@ -425,7 +425,7 @@ test('total panel failure: all panels reject → runFusion rejects with all_pane
   assert.equal(synthPort.streamCalls.length, 0, 'synth must never be called when all panels fail');
 });
 
-test('no judge configured: judge port never called; synth receives null analysis → fallback note', async () => {
+test('no judge configured: judge port never called; synth receives self-judging prompt', async () => {
   const panelPort = fakeCompletingPort({
     content: 'Panel response',
     usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
@@ -454,11 +454,15 @@ test('no judge configured: judge port never called; synth receives null analysis
     'expected done event',
   );
 
-  // Synth receives null analysis → fallback note in user prompt
+  // Synth receives null analysis + no judge configured → self-judging prompt
   assert.equal(synthPort.streamCalls.length, 1);
   const synthUserPrompt = synthPort.streamCalls[0]!.messages[1]!.content;
   assert.ok(
-    synthUserPrompt.includes('Panel-level analysis is unavailable'),
-    'synth prompt must include fallback note when no judge is configured',
+    synthUserPrompt.includes('SELF-EVALUATION DIRECTIVE'),
+    'synth user prompt must include SELF-EVALUATION DIRECTIVE when no judge is configured',
+  );
+  assert.ok(
+    !synthUserPrompt.includes('Panel-level analysis is unavailable'),
+    'synth user prompt must not include the minimal fallback note when judge is not configured',
   );
 });

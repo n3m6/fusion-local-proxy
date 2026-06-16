@@ -44,8 +44,15 @@ export class SynthesizeStep {
     }
 
     try {
-      const systemPrompt = buildSynthesisSystemPrompt();
-      const userPrompt = buildSynthesisUserPrompt(panelResults, originalMessages, analysis);
+      const selfJudge = this.configPort.getJudgeModel() === null;
+      const promptOptions = { selfJudge };
+      const systemPrompt = buildSynthesisSystemPrompt(promptOptions);
+      const userPrompt = buildSynthesisUserPrompt(
+        panelResults,
+        originalMessages,
+        analysis,
+        promptOptions,
+      );
 
       const request: ChatRequest = {
         messages: [
@@ -69,6 +76,7 @@ export class SynthesizeStep {
         modelId: synthesizerModel.model,
         panelCount: panelResults.length,
         analysisPresent: analysis !== null,
+        selfJudge,
         systemPromptChars: systemPrompt.length,
         userPromptChars: userPrompt.length,
       });

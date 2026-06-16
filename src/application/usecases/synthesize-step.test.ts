@@ -91,18 +91,27 @@ interface StubConfigPort extends ConfigPort {
 function stubConfigPort(overrides?: {
   synthesizerModel?: ModelRef;
   timeoutMs?: number;
+  /**
+   * Controls getJudgeModel(). Pass null to simulate "no judge configured" (selfJudge mode).
+   * Defaults to a non-null ModelRef so existing tests run in non-self-judge mode.
+   */
+  judgeModel?: ModelRef | null;
 }): StubConfigPort {
   const calls = { getSynthesizerModel: 0, getTimeoutMs: 0 };
   const synthesizerModel =
     overrides?.synthesizerModel ?? modelRef({ model: 'gpt-4o', provider: 'openai' });
   const timeoutMs = overrides?.timeoutMs ?? 30000;
+  const judgeModel =
+    overrides !== undefined && Object.prototype.hasOwnProperty.call(overrides, 'judgeModel')
+      ? (overrides.judgeModel ?? null)
+      : modelRef({ model: 'judge-model', provider: 'openai' });
   return {
     _calls: calls,
     getPanelModels(): ModelRef[] {
       return [];
     },
     getJudgeModel(): ModelRef | null {
-      return null;
+      return judgeModel;
     },
     getSynthesizerModel(): ModelRef {
       calls.getSynthesizerModel++;
@@ -620,4 +629,89 @@ test('synthesis_truncated: yields error event when timeoutSignal fires before st
   // No done event when truncated
   const doneEvent = events.find((e) => e.type === 'done');
   assert.equal(doneEvent, undefined, 'expected no done event when truncated');
+});
+
+// ---------------------------------------------------------------------------
+// selfJudge mode (judgeModel === null in config)
+// ---------------------------------------------------------------------------
+
+test('selfJudge mode: system prompt equals buildSynthesisSystemPrompt({ selfJudge: true }) when judge not configured', async () => {
+  const chat = stubChatPort();
+  // null judgeModel => selfJudge = true
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+
+  await collectEvents(step.synthesize(samplePanelResults(), sampleOriginalMessages, null));
+
+  assert.equal(chat._calls.length, 1);
+  const systemContent = chat._calls[0].messages[0].content;
+  assert.equal(
+    systemContent,
+    buildSynthesisSystemPrompt({ selfJudge: true }),
+    'system prompt must be the self-judging variant when no judge is configured',
+  );
+});
+
+test('selfJudge mode: user prompt includes SELF-EVALUATION DIRECTIVE, not minimal fallback', async () => {
+  const chat = stubChatPort();
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+
+  await collectEvents(step.synthesize(samplePanelResults(), sampleOriginalMessages, null));
+
+  const userContent = chat._calls[0].messages[1].content;
+  assert.ok(
+    userContent.includes('SELF-EVALUATION DIRECTIVE'),
+    'user prompt must include SELF-EVALUATION DIRECTIVE section',
+  );
+  assert.ok(
+    !userContent.includes('Panel-level analysis is unavailable'),
+    'user prompt must not include the minimal fallback note in selfJudge mode',
+  );
+});
+
+test('selfJudge mode: standard 3-event sequence is preserved', async () => {
+  const chat = stubChatPort();
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+
+  const events = await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
+  );
+
+  assert.equal(events.length, 3);
+  assert.equal(events[0].type, 'content_delta');
+  assert.equal(events[1].type, 'content_stop');
+  assert.equal(events[2].type, 'done');
+});
+
+test('non-selfJudge mode (judge configured): null analysis still uses minimal fallback prompt', async () => {
+  const chat = stubChatPort();
+  // Default stub has a non-null judgeModel => selfJudge = false
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+
+  await collectEvents(step.synthesize(samplePanelResults(), sampleOriginalMessages, null));
+
+  const userContent = chat._calls[0].messages[1].content;
+  assert.ok(
+    userContent.includes('Panel-level analysis is unavailable'),
+    'when judge is configured but failed, user prompt must use the minimal fallback note',
+  );
+  assert.ok(
+    !userContent.includes('SELF-EVALUATION DIRECTIVE'),
+    'when judge is configured but failed, user prompt must not include SELF-EVALUATION DIRECTIVE',
+  );
 });

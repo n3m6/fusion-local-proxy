@@ -461,6 +461,160 @@ test('buildSynthesisUserPrompt instructions warn against regressions from behavi
 });
 
 // ---------------------------------------------------------------------------
+// selfJudge mode — system prompt
+// ---------------------------------------------------------------------------
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) includes SELF-EVALUATION FIRST section', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(prompt.includes('self-evaluation first'), 'must include SELF-EVALUATION FIRST heading');
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) instructs task classification', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    prompt.includes('classify the task') || prompt.includes('classify'),
+    'must instruct the model to classify the task type',
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) instructs convergence verification', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    prompt.includes('verify convergence') || prompt.includes('convergence does not imply'),
+    'must warn that convergence does not imply correctness',
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) instructs finding issues and gaps', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(prompt.includes('find issues'), 'must instruct finding issues');
+  assert.ok(prompt.includes('find gaps'), 'must instruct finding gaps');
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) does not instruct model to emit JSON evaluation', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    prompt.includes('do not output') || prompt.includes('do not emit'),
+    'must explicitly forbid emitting the evaluation as JSON or preamble',
+  );
+});
+
+test('buildSynthesisSystemPrompt() default does NOT include self-evaluation section (backward compat)', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    !prompt.includes('self-evaluation first'),
+    'default prompt must not include SELF-EVALUATION FIRST section',
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: false }) does NOT include self-evaluation section', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: false }).toLowerCase();
+  assert.ok(
+    !prompt.includes('self-evaluation first'),
+    'selfJudge:false must not include SELF-EVALUATION FIRST section',
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) instruction 2 does not reference external panel analysis', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    !prompt.includes('the output of another model'),
+    'selfJudge prompt must not claim the analysis is produced by another model — no external analysis exists',
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) instruction 2 is SELF-ANALYSIS AS FALLIBLE', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    prompt.includes('self-analysis as fallible') || prompt.includes('own internal evaluation'),
+    "selfJudge instruction 2 must address the model's own evaluation, not an external analysis",
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) instruction 7 does not reference a judge recommendation', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    !prompt.includes('treat the recommendation as advisory'),
+    'selfJudge prompt must not reference a judge recommendation that does not exist',
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) instruction 7 is SELF-CORRECTIONS', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    prompt.includes('self-corrections') || prompt.includes('your own identified issues'),
+    "selfJudge instruction 7 must address the model's own corrections, not an external recommendation",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// selfJudge mode — user prompt
+// ---------------------------------------------------------------------------
+
+test('buildSynthesisUserPrompt with selfJudge:true and null analysis includes SELF-EVALUATION DIRECTIVE', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, null, {
+    selfJudge: true,
+  });
+  assert.ok(
+    prompt.includes('SELF-EVALUATION DIRECTIVE'),
+    'must include SELF-EVALUATION DIRECTIVE section',
+  );
+});
+
+test('buildSynthesisUserPrompt with selfJudge:true and null analysis does not include minimal fallback note', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, null, {
+    selfJudge: true,
+  });
+  assert.ok(
+    !prompt.includes('Panel-level analysis is unavailable'),
+    'self-judge path must not show the minimal fallback note',
+  );
+});
+
+test('buildSynthesisUserPrompt with selfJudge:true still includes panel responses', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, null, {
+    selfJudge: true,
+  });
+  assert.ok(
+    prompt.includes('PANEL MODEL RESPONSES'),
+    'self-judge user prompt must still include the panel responses section',
+  );
+});
+
+test('buildSynthesisUserPrompt with selfJudge:true includes self-judging INSTRUCTIONS', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, null, {
+    selfJudge: true,
+  }).toLowerCase();
+  assert.ok(
+    prompt.includes('evaluate the panel candidates yourself'),
+    'INSTRUCTIONS must ask model to evaluate candidates itself',
+  );
+});
+
+test('buildSynthesisUserPrompt default (null analysis, no options) still shows minimal fallback (backward compat)', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, null);
+  assert.ok(
+    prompt.includes('Panel-level analysis is unavailable'),
+    'default null-analysis path must still show the minimal fallback note',
+  );
+});
+
+test('buildSynthesisUserPrompt with selfJudge:true and non-null analysis behaves identically to default (analysis wins)', () => {
+  const defaultPrompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
+  const selfJudgePrompt = buildSynthesisUserPrompt(
+    samplePanelResults,
+    sampleMessages,
+    validAnalysis,
+    { selfJudge: true },
+  );
+  assert.equal(
+    selfJudgePrompt,
+    defaultPrompt,
+    'when analysis is present, selfJudge flag must have no effect on the user prompt',
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------
 
