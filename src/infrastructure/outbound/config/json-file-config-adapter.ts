@@ -11,6 +11,7 @@ const providerSchema = z.object({
   apiKeyEnv: z.string().min(1),
   jsonMode: z.enum(['json_object', 'json_schema']).optional(),
   thinkingStrength: z.enum(['off', 'low', 'medium', 'high', 'xhigh']).optional(),
+  thinkingMode: z.enum(['lateral', 'vertical', 'systems', 'divergent']).optional(),
 });
 
 const configSchema = z.object({
@@ -60,6 +61,15 @@ export class JsonFileConfigAdapter implements ConfigPort {
     if (!hasSynthesizer) {
       throw new Error('Invalid configuration: at least one provider must have role "synthesizer"');
     }
+
+    const nonPanelWithThinkingMode = this.config.providers.find(
+      (p) => p.role !== 'panel' && p.thinkingMode !== undefined,
+    );
+    if (nonPanelWithThinkingMode !== undefined) {
+      throw new Error(
+        'Invalid configuration: thinkingMode is only valid on providers with role "panel"',
+      );
+    }
   }
 
   getPanelModels(): ModelRef[] {
@@ -94,6 +104,7 @@ export class JsonFileConfigAdapter implements ConfigPort {
       apiKey,
       ...(entry.jsonMode !== undefined ? { jsonMode: entry.jsonMode } : {}),
       ...(entry.thinkingStrength !== undefined ? { thinkingStrength: entry.thinkingStrength } : {}),
+      ...(entry.thinkingMode !== undefined ? { thinkingMode: entry.thinkingMode } : {}),
     };
   }
 }

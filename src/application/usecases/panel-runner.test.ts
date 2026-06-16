@@ -542,3 +542,97 @@ test('chatRequest includes model ref and messages for each panel model', async (
   assert.deepStrictEqual(port1._calls[0].messages, messages);
   assert.deepStrictEqual(port1._calls[0].model, m1);
 });
+
+test('thinkingMode: panelist with mode receives leading system message prepended', async () => {
+  const port = stubChatPort({
+    content: 'response',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'm0',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30]);
+
+  const messages = [{ role: 'user' as const, content: 'query' }];
+  const ref = modelRef({ model: 'm0', thinkingMode: 'lateral' });
+
+  const runner = new PanelRunner([{ modelRef: ref, port }], logger, clock);
+  await runner.run(messages, 30000);
+
+  assert.equal(port._calls.length, 1);
+  const sent = port._calls[0].messages;
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].role, 'system');
+  assert.ok(sent[0].content.length > 0, 'expected non-empty thinking mode prompt');
+  assert.deepStrictEqual(sent[1], messages[0]);
+});
+
+test('thinkingMode: panelist without mode receives original messages unchanged', async () => {
+  const port = stubChatPort({
+    content: 'response',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'm0',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30]);
+
+  const messages = [
+    { role: 'system' as const, content: 'be helpful' },
+    { role: 'user' as const, content: 'query' },
+  ];
+  const ref = modelRef({ model: 'm0' }); // no thinkingMode
+
+  const runner = new PanelRunner([{ modelRef: ref, port }], logger, clock);
+  await runner.run(messages, 30000);
+
+  assert.equal(port._calls.length, 1);
+  assert.deepStrictEqual(port._calls[0].messages, messages);
+});
+
+test('thinkingMode: two panelists receive independent mode-prefixed message arrays', async () => {
+  const port0 = stubChatPort({
+    content: 'r0',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'm0',
+  });
+  const port1 = stubChatPort({
+    content: 'r1',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'm1',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30, 40]);
+
+  const messages = [{ role: 'user' as const, content: 'hello' }];
+  const ref0 = modelRef({ model: 'm0', thinkingMode: 'lateral' });
+  const ref1 = modelRef({ model: 'm1', thinkingMode: 'vertical' });
+
+  const runner = new PanelRunner(
+    [
+      { modelRef: ref0, port: port0 },
+      { modelRef: ref1, port: port1 },
+    ],
+    logger,
+    clock,
+  );
+  await runner.run(messages, 30000);
+
+  const sent0 = port0._calls[0].messages;
+  const sent1 = port1._calls[0].messages;
+
+  // Both received a leading system message
+  assert.equal(sent0[0].role, 'system');
+  assert.equal(sent1[0].role, 'system');
+
+  // The system messages are distinct (different modes)
+  assert.notEqual(sent0[0].content, sent1[0].content);
+
+  // The original user message appears second in both
+  assert.deepStrictEqual(sent0[1], messages[0]);
+  assert.deepStrictEqual(sent1[1], messages[0]);
+
+  // Arrays are independent (different references)
+  assert.notEqual(sent0, sent1);
+});

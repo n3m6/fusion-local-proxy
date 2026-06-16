@@ -8,6 +8,9 @@ export type JsonMode = 'json_object' | 'json_schema';
 
 export type ThinkingStrength = 'off' | 'low' | 'medium' | 'high' | 'xhigh';
 
+/** Cognitive style injected as a leading system message for panel models. Panel-only. */
+export type ThinkingMode = 'lateral' | 'vertical' | 'systems' | 'divergent';
+
 export interface ModelRef {
   readonly provider: ProviderType;
   readonly model: string;
@@ -17,6 +20,8 @@ export interface ModelRef {
   readonly jsonMode?: JsonMode;
   /** Reasoning/thinking effort level. When set and not 'off', each adapter translates this to its provider-specific parameter. */
   readonly thinkingStrength?: ThinkingStrength;
+  /** Cognitive style for panel panelists. Panel-only; distinct from thinkingStrength (style vs. effort). */
+  readonly thinkingMode?: ThinkingMode;
 }
 
 /**

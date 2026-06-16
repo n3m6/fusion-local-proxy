@@ -1,6 +1,7 @@
 import type { Message } from '../../domain/model/message.js';
 import { promptChars } from '../../domain/model/message.js';
 import type { ModelRef, PanelMeta, PanelResult } from '../../domain/model/fusion-types.js';
+import { applyThinkingMode } from '../../domain/services/thinking-modes.js';
 import type {
   ChatRequest,
   ChatResponse,
@@ -44,12 +45,12 @@ export class PanelRunner {
 
     this.loggerPort.logStageStart('panel');
     const stageStart = this.clockPort.now();
-    const totalPromptChars = promptChars(messages);
 
     const signal = createTimeoutSignal(timeoutMs);
     const tasks = this.pairs.map(({ modelRef, port }) => {
+      const pairMessages = applyThinkingMode(messages, modelRef.thinkingMode);
       const request: ChatRequest = {
-        messages,
+        messages: pairMessages,
         model: modelRef,
         options: {
           ...(signal !== undefined ? { signal } : {}),
@@ -63,8 +64,9 @@ export class PanelRunner {
         stage: 'panel',
         provider: modelRef.provider,
         modelId: modelRef.model,
-        messageCount: messages.length,
-        promptChars: totalPromptChars,
+        messageCount: pairMessages.length,
+        promptChars: promptChars(pairMessages),
+        ...(modelRef.thinkingMode !== undefined ? { thinkingMode: modelRef.thinkingMode } : {}),
       });
       const startTime = this.clockPort.now();
       return port

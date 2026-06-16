@@ -5,14 +5,16 @@
       "role": "panel",
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
-      "apiKeyEnv": "DEEPSEEK_API_KEY"
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "thinkingMode": "lateral"
     },
     {
       "type": "openai",
       "role": "panel",
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
-      "apiKeyEnv": "DEEPSEEK_API_KEY"
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "thinkingMode": "vertical"
     },
     {
       "type": "openai",

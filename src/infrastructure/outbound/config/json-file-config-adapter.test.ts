@@ -838,6 +838,232 @@ test('JsonFileConfigAdapter throws on invalid thinkingStrength value', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// thinkingMode field
+// ---------------------------------------------------------------------------
+
+test('JsonFileConfigAdapter surfaces thinkingMode on ModelRef for a panel provider', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+          thinkingMode: 'lateral',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-test';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      const panel = adapter.getPanelModels();
+      assert.equal(panel.length, 1);
+      assert.equal(panel[0].thinkingMode, 'lateral');
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter accepts all valid thinkingMode values on panel providers', () => {
+  for (const value of ['lateral', 'vertical', 'systems', 'divergent'] as const) {
+    withTempDir((dir) => {
+      const path = writeConfig(dir, {
+        providers: [
+          {
+            type: 'openai',
+            role: 'panel',
+            model: 'gpt-4o',
+            baseURL: 'https://api.openai.com/v1',
+            apiKeyEnv: 'OPENAI_API_KEY',
+            thinkingMode: value,
+          },
+          {
+            type: 'openai',
+            role: 'synthesizer',
+            model: 'gpt-4o',
+            baseURL: 'https://api.openai.com/v1',
+            apiKeyEnv: 'OPENAI_API_KEY',
+          },
+        ],
+      });
+
+      process.env.OPENAI_API_KEY = 'sk-test';
+      try {
+        const adapter = new JsonFileConfigAdapter(path);
+        const panel = adapter.getPanelModels();
+        assert.equal(panel[0].thinkingMode, value);
+      } finally {
+        delete process.env.OPENAI_API_KEY;
+      }
+    });
+  }
+});
+
+test('JsonFileConfigAdapter omits thinkingMode from ModelRef when not specified', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-test';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      const panel = adapter.getPanelModels();
+      assert.equal(panel[0].thinkingMode, undefined);
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter throws on invalid thinkingMode value', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+          thinkingMode: 'creative',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    assert.throws(
+      () => new JsonFileConfigAdapter(path),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        const msg = (err as Error).message;
+        assert.ok(
+          msg.includes('thinkingMode') || msg.includes('Invalid') || msg.includes('enum'),
+          `expected message about invalid thinkingMode, got: ${msg}`,
+        );
+        return true;
+      },
+    );
+  });
+});
+
+test('JsonFileConfigAdapter throws when thinkingMode is set on a judge provider', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+          thinkingMode: 'lateral',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-test';
+    try {
+      assert.throws(
+        () => new JsonFileConfigAdapter(path),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          const msg = (err as Error).message;
+          assert.ok(
+            msg.includes('thinkingMode') && msg.includes('panel'),
+            `expected role restriction message, got: ${msg}`,
+          );
+          return true;
+        },
+      );
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter throws when thinkingMode is set on a synthesizer provider', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+          thinkingMode: 'systems',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-test';
+    try {
+      assert.throws(
+        () => new JsonFileConfigAdapter(path),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          const msg = (err as Error).message;
+          assert.ok(
+            msg.includes('thinkingMode') && msg.includes('panel'),
+            `expected role restriction message, got: ${msg}`,
+          );
+          return true;
+        },
+      );
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
 test('JsonFileConfigAdapter throws on empty env var value', () => {
   withTempDir((dir) => {
     const path = writeConfig(dir, {
