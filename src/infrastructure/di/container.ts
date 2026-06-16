@@ -6,6 +6,7 @@ import { PanelRunner } from '../../application/usecases/panel-runner.js';
 import { JudgeStep } from '../../application/usecases/judge-step.js';
 import { SynthesizeStep } from '../../application/usecases/synthesize-step.js';
 import { createServer } from '../inbound/http/server.js';
+import type { CreateServerOptions } from '../inbound/http/server.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
@@ -74,7 +75,9 @@ export function createApp(): {
     clockPort,
   );
 
-  const app = createServer(fusionService, configPort);
+  const enableDevUi = ['1', 'true'].includes((process.env.ENABLE_DEV_UI ?? '').toLowerCase());
+  const serverOptions: CreateServerOptions = { enableDevUi };
+  const app = createServer(fusionService, configPort, serverOptions);
 
   return { app, configPort, fusionService };
 }

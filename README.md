@@ -254,17 +254,39 @@ The default port is `3000`; override it with the `PORT` environment variable.
 
 ## Environment variables
 
-| Variable             | Required                                            | Purpose                                                 |
-| -------------------- | --------------------------------------------------- | ------------------------------------------------------- |
-| `OPENAI_API_KEY`     | if a provider has `apiKeyEnv: "OPENAI_API_KEY"`     | API key for OpenAI-compatible backends                  |
-| `ANTHROPIC_API_KEY`  | if a provider has `apiKeyEnv: "ANTHROPIC_API_KEY"`  | API key for Anthropic backends                          |
-| `OLLAMA_API_KEY`     | if a provider has `apiKeyEnv: "OLLAMA_API_KEY"`     | API key for local Ollama (any non-empty string)         |
-| `OPENROUTER_API_KEY` | if a provider has `apiKeyEnv: "OPENROUTER_API_KEY"` | API key for OpenRouter                                  |
-| `DEEPSEEK_API_KEY`   | if a provider has `apiKeyEnv: "DEEPSEEK_API_KEY"`   | API key for DeepSeek                                    |
-| `PORT`               | no                                                  | HTTP server port (default: `3000`)                      |
-| `FUSION_CONFIG_PATH` | no                                                  | Path to the config file (default: `fusion.config.json`) |
+| Variable             | Required                                            | Purpose                                                                 |
+| -------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| `OPENAI_API_KEY`     | if a provider has `apiKeyEnv: "OPENAI_API_KEY"`     | API key for OpenAI-compatible backends                                  |
+| `ANTHROPIC_API_KEY`  | if a provider has `apiKeyEnv: "ANTHROPIC_API_KEY"`  | API key for Anthropic backends                                          |
+| `OLLAMA_API_KEY`     | if a provider has `apiKeyEnv: "OLLAMA_API_KEY"`     | API key for local Ollama (any non-empty string)                         |
+| `OPENROUTER_API_KEY` | if a provider has `apiKeyEnv: "OPENROUTER_API_KEY"` | API key for OpenRouter                                                  |
+| `DEEPSEEK_API_KEY`   | if a provider has `apiKeyEnv: "DEEPSEEK_API_KEY"`   | API key for DeepSeek                                                    |
+| `PORT`               | no                                                  | HTTP server port (default: `3000`)                                      |
+| `FUSION_CONFIG_PATH` | no                                                  | Path to the config file (default: `fusion.config.json`)                 |
+| `ENABLE_DEV_UI`      | no                                                  | Set to `1` or `true` to enable the browser-based dev chat UI at `GET /` |
 
 See [`.env.example`](./.env.example) for a template.
+
+## Dev UI
+
+A lightweight browser-based chat tester is built into the server. It is disabled
+by default and must be enabled explicitly:
+
+```bash
+ENABLE_DEV_UI=1 npm run dev
+```
+
+Then open `http://localhost:3000/` in your browser.
+
+The UI:
+
+- Populates a model dropdown from `GET /v1/models` (reflects your `fusion.config.json`).
+- Sends messages as `POST /v1/chat/completions` with `stream: true` and renders the streamed response token-by-token.
+- Surfaces the ensemble progress comments (`: panel running`, `: judging`) as a status line while the pipeline runs.
+- Maintains the full conversation history for multi-turn sessions (use **Clear** to reset).
+
+The page is served from `public/index.html` as a static file by the existing Hono server.
+It is same-origin, so no CORS configuration is needed and your API keys never leave the server process.
 
 ## Project structure
 

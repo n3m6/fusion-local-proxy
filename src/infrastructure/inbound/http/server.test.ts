@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
 import { Hono } from 'hono';
 import { createServer } from './server.js';
 import type { FusionService } from '../../../application/ports/fusion-service.js';
@@ -438,4 +439,60 @@ test('POST /v1/messages route is mounted and returns non-404 for empty body', as
   });
 
   assert.notEqual(res.status, 404);
+});
+
+// ---------------------------------------------------------------------------
+// Dev UI route (ENABLE_DEV_UI)
+// ---------------------------------------------------------------------------
+
+test('GET / returns 404 when enableDevUi is not set', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort);
+
+  const res = await app.request('/');
+
+  assert.equal(res.status, 404);
+});
+
+test('GET / returns 404 when enableDevUi is explicitly false', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort, { enableDevUi: false });
+
+  const res = await app.request('/');
+
+  assert.equal(res.status, 404);
+});
+
+test('GET / returns 200 with HTML when enableDevUi is true', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort, { enableDevUi: true });
+
+  const res = await app.request('/');
+
+  assert.equal(res.status, 200);
+  const contentType = res.headers.get('Content-Type') ?? '';
+  assert.ok(contentType.includes('text/html'), `expected text/html, got ${contentType}`);
+  const body = await res.text();
+  assert.ok(body.includes('Fusion Chat'), 'HTML body should contain the page title');
+});
+
+test('GET / serves the dev UI even when cwd is not the project root', async () => {
+  const fusionService = stubFusionService();
+  const configPort = stubConfigPort();
+  const app = createServer(fusionService, configPort, { enableDevUi: true });
+
+  const originalCwd = process.cwd();
+  process.chdir(tmpdir());
+  try {
+    const res = await app.request('/');
+
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.ok(body.includes('Fusion Chat'), 'HTML body should contain the page title');
+  } finally {
+    process.chdir(originalCwd);
+  }
 });
