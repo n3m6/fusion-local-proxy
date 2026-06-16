@@ -210,6 +210,52 @@ test('buildJudgeSystemPrompt requires emitting taskType and requirementCoverage'
   );
 });
 
+test('buildJudgeSystemPrompt instructs judge to scale effort to task complexity', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    (prompt.includes('scale') && prompt.includes('complexity')) || prompt.includes('verbosity'),
+    'must instruct the judge to scale effort to task complexity',
+  );
+});
+
+test('buildJudgeSystemPrompt enforces explicit-example precedence over prose in issues', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('example') && (prompt.includes('governs') || prompt.includes('example wins')),
+    'must state that an explicit worked example governs output format over prose',
+  );
+});
+
+test('buildJudgeSystemPrompt restricts high severity to rubric cases and notes ambiguous formats', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('ambiguous') || (prompt.includes('naming') && prompt.includes('low')),
+    'must restrict high severity and flag ambiguous format variants as low at most',
+  );
+});
+
+test('buildJudgeSystemPrompt wires gap detection to test coverage for coding tasks', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('cross-check') ||
+      prompt.includes('no candidate test') ||
+      prompt.includes('no executable test'),
+    'must instruct cross-checking requirementCoverage and testResults to find coverage gaps',
+  );
+});
+
+test('buildJudgeSystemPrompt restricts test verdict to self-consistency, not requirement compliance', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('self-consistent') || prompt.includes('self-consistency'),
+    'must clarify the test verdict is a self-consistency check',
+  );
+  assert.ok(
+    prompt.includes('belong in') || prompt.includes('do not fold'),
+    'must clarify requirement-compliance judgments belong in issues/requirementCoverage, not the verdict',
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------

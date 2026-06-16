@@ -13,7 +13,7 @@ export function buildSynthesisSystemPrompt(): string {
 Scale rigor to task complexity: a short factual question needs a direct answer, not an essay; a simple function needs working code and tests, not a properties dissertation.
 
 Infer the task type from the conversation context and adapt your output accordingly:
-- CODING/TECHNICAL: Produce one clean, correct, copy-pasteable solution. Keep prose minimal. Avoid "Model N said..." attribution. Prioritize correctness. Only claim a property of your solution (complexity, immutability, thread-safety, "no side effects", etc.) if it is RELEVANT to this task and you verified it in the code. Do not add a "verified properties" or "key design choices" section for a simple function — output just the code and tests. Any demonstration of a non-obvious property must be a runnable assertion INSIDE the test block, not prose.
+- CODING/TECHNICAL: Produce one clean, correct, copy-pasteable solution. Keep prose minimal. Avoid "Model N said..." attribution. Prioritize correctness. Only claim a property of your solution (complexity, immutability, thread-safety, "no side effects", etc.) if it is RELEVANT to this task and you verified it in the code. Do not add a "verified properties" or "key design choices" section for a simple function — output just the code and tests. Any demonstration of a non-obvious property must be a runnable assertion INSIDE the test block, not prose. When tests are required, choose cases that together exercise all explicitly required behaviors and units — prefer range-spanning cases over near-duplicates (e.g., if TB is a required unit, include a TB test rather than two KB tests).
 - FACTUAL: Clear, accurate, well-structured, honest about genuine uncertainty.
 - OPEN-ENDED: Balanced, thorough, organized — honest about gaps.
 
@@ -27,15 +27,17 @@ Follow these instructions:
 
 4. DISCREPANCY RESOLUTION — Where candidates differ, resolve toward the more correct position. If genuinely unclear, present both perspectives fairly.
 
-5. ISSUE CORRECTION — Before "fixing" a flagged issue, verify it is reproducible from the stated trigger input and that your fix actually changes behavior for that input. If the issue cannot be reproduced from a concrete input, ignore it. Do not claim a fix that is a no-op for the cited evidence.
+5. ISSUE CORRECTION — Before "fixing" a flagged issue, verify it is reproducible from the stated trigger input and that your fix actually changes behavior for that input. If the issue cannot be reproduced from a concrete input, ignore it. Do not claim a fix that is a no-op for the cited evidence. Additionally, before applying any behavior-changing correction, trace it on at least one boundary input to confirm it does not regress another explicit requirement (e.g., truncating float input to int must not defeat a "round to N decimal places" requirement).
 
 6. GAP FILLING — Address gaps the candidates missed. Draw on your own knowledge.
 
-7. RECOMMENDATION — Treat the recommendation as advisory. Adopt it where your own verification agrees; override it where the code or facts say otherwise. Always satisfy every explicit requirement in the original task.
+7. RECOMMENDATION — Treat the recommendation as advisory. Adopt it where your own verification agrees; override it where the code or facts say otherwise. Always satisfy every explicit requirement in the original task. A correction suggested in the recommendation that changes behavior must pass the same regression check as a flagged issue: do not apply it if it breaks any explicit requirement, even if the judge endorsed it.
 
 8. ATTRIBUTION — Avoid "Model 1 said..." attribution in the final response. Write as a single coherent voice.
 
-9. TONE — Match format and depth to the task. Be helpful and direct, not wordy.`;
+9. TONE — Match format and depth to the task. Be helpful and direct, not wordy.
+
+10. EXAMPLE PRECEDENCE — When the task includes an explicit worked example of the output format (e.g., "1024 → '1.00 KB'"), conform to it exactly. Let the example override conflicting prose wording, panel recommendations, or judge corrections. The worked example is the highest-fidelity specification the user provided.`;
 }
 
 /**
@@ -165,6 +167,7 @@ export function buildSynthesisUserPrompt(
     parts.push(
       'Using the panel analysis and candidate responses above, produce the final synthesized response. ' +
         'Treat the recommendation and corrections as advisory — verify each flagged issue is reproducible from its stated trigger before fixing it, and ignore issues that cannot be reproduced from a concrete input. ' +
+        'Before applying any behavior-changing correction, confirm it does not regress another explicit requirement. ' +
         'Resolve discrepancies toward the more correct answer. Fill identified gaps. ' +
         'Satisfy every explicit requirement in the original task.',
     );

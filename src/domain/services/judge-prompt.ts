@@ -19,6 +19,8 @@ Apply the matching evaluation lens:
 - FACTUAL: focus on accuracy and verifiability.
 - OPEN-ENDED: focus on coverage, balance, and depth.
 
+SCALE EFFORT TO COMPLEXITY. Verbosity in this output is the dominant cost of the pipeline — spend it only where it changes the synthesizer's decision. For a simple, low-stakes task (a short function, a single factual question): keep each list to the few items that genuinely matter, one short sentence each; do not pad agreements or discrepancies to look thorough. Populate requirementCoverage only for requirements where the coverage verdict is non-trivial. Populate testResults only for tests whose verdict is "fail" or "unknown" — omit self-evidently passing tests on simple tasks.
+
 STEP 2 — EXTRACT REQUIREMENTS. List every explicit requirement from the task (e.g. numbered requirements, stated examples, stated constraints) in "requirementCoverage". For each, state how completely each candidate met it.
 
 STEP 3 — PRODUCE THE ANALYSIS. Output exactly these fields:
@@ -29,6 +31,7 @@ STEP 3 — PRODUCE THE ANALYSIS. Output exactly these fields:
 
 3. ISSUES — Concrete errors, bugs, or inaccuracies. Rules:
    - ONLY report an issue that violates an EXPLICIT requirement, a clearly-implied requirement, or produces demonstrably wrong output on a realistic input. Do NOT invent requirements the task never stated.
+   - OUTPUT FORMAT PRECEDENCE: When the task provides an explicit worked example of the output (e.g., "1024 → '1.00 KB'"), that example governs the exact output format. Do not promote a term mentioned in prose into a mandated literal output string, and do not invent an "expected" value the task never showed. If the example and prose conflict, the example wins.
    - For each issue you MUST provide:
        "trigger": the exact input that surfaces the issue AND the specific requirement or example it violates.
        "evidence": the actual output vs. the expected output (e.g., "actual: '0.00 B', expected: '0.00 Bytes' per requirement 1").
@@ -37,13 +40,14 @@ STEP 3 — PRODUCE THE ANALYSIS. Output exactly these fields:
        high   = crashes, wrong output on a required/valid input, or a false self-described guarantee.
        medium = fails a clearly-implied edge case the task expects.
        low    = style or robustness nit with no functional impact.
+   - Naming, labeling, or formatting choices with no functional impact are "low" at most — usually not worth reporting. Do not assign "high" to a format variant the task left ambiguous (no concrete worked example to contradict it).
    - Include issues shared by all candidates.
 
-4. GAPS — Important aspects the user's question explicitly or implicitly required that no candidate covered. Each gap must be grounded in the original task. Do not list gaps for things the task never asked about.
+4. GAPS — Important aspects the user's question explicitly or implicitly required that no candidate covered. Each gap must be grounded in the original task. Do not list gaps for things the task never asked about. For coding tasks, cross-check requirementCoverage and testResults: a required behavior or unit that is present in all candidate code but exercised by no candidate test is a gap. Explicitly named edge cases (e.g., negative numbers, non-integer inputs) and required output units or branches with no executable test are gaps even when the code appears to handle them.
 
 5. RECOMMENDATION — One concise paragraph: which candidate's approach to favor (or "none" for a fresh synthesis), what to combine, what concrete corrections are needed, and what gaps to fill. Be specific — the synthesizer will act on this directly.
 
-6. TEST RESULTS (coding tasks only) — For each executable test provided by each candidate, trace it to a computed expected value and record a "pass", "fail", or "unknown" verdict. Record in "testResults". This forces you to verify that candidate tests are self-consistent.
+6. TEST RESULTS (coding tasks only) — For each executable test provided by each candidate, trace it to a computed expected value and record a "pass", "fail", or "unknown" verdict. Record in "testResults". This forces you to verify that candidate tests are self-consistent. IMPORTANT: the verdict reflects only whether the assertion holds against the candidate's own code — it is a self-consistency check, not a requirement-compliance check. Do not fold requirement-compliance judgments into the verdict or detail; those belong in "issues" and "requirementCoverage".
 
 7. PREFERRED CANDIDATE — Set "preferredCandidate" to the label of the candidate whose approach to favor (e.g. "Model 1"), or "none" if the synthesizer should start fresh.
 

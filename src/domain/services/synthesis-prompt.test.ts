@@ -427,6 +427,39 @@ test('buildSynthesisUserPrompt instructions use advisory language, not imperativ
   );
 });
 
+test('buildSynthesisSystemPrompt requires regression check before applying behavior-changing corrections', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('regress'),
+    'must require a regression check before applying behavior-changing corrections',
+  );
+});
+
+test('buildSynthesisSystemPrompt instructs range-spanning test cases to exercise all required units', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('range-spanning') || (prompt.includes('required') && prompt.includes('unit')),
+    'must instruct range-spanning test cases to cover all explicitly required behaviors and units',
+  );
+});
+
+test('buildSynthesisSystemPrompt enforces explicit-example precedence over panel and judge guidance', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    (prompt.includes('example') && prompt.includes('override')) ||
+      prompt.includes('example precedence'),
+    'must state that an explicit worked example overrides conflicting prose or panel recommendations',
+  );
+});
+
+test('buildSynthesisUserPrompt instructions warn against regressions from behavior-changing corrections', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
+  assert.ok(
+    prompt.toLowerCase().includes('regress'),
+    'INSTRUCTIONS must warn against regressing explicit requirements when applying corrections',
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------
