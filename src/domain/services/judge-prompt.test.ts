@@ -154,6 +154,62 @@ test('buildJudgeUserPrompt instructions reference new field names', () => {
   assert.ok(prompt.includes('recommendation'), 'instructions must reference recommendation');
 });
 
+test('buildJudgeUserPrompt instructions reference all new structured-signal fields', () => {
+  const prompt = buildJudgeUserPrompt(samplePanelResults, sampleMessages);
+  assert.ok(prompt.includes('taskType'), 'instructions must reference taskType');
+  assert.ok(
+    prompt.includes('requirementCoverage'),
+    'instructions must reference requirementCoverage',
+  );
+  assert.ok(prompt.includes('testResults'), 'instructions must reference testResults');
+  assert.ok(
+    prompt.includes('preferredCandidate'),
+    'instructions must reference preferredCandidate',
+  );
+  assert.ok(prompt.includes('corrections'), 'instructions must reference corrections');
+});
+
+test('buildJudgeSystemPrompt contains severity rubric and trigger/evidence requirement', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('trigger') || prompt.includes('triggering input'),
+    'must require a triggering input for issues',
+  );
+  assert.ok(prompt.includes('evidence'), 'must require evidence for issues');
+  assert.ok(
+    prompt.includes('high') && prompt.includes('medium') && prompt.includes('low'),
+    'must define severity levels',
+  );
+});
+
+test('buildJudgeSystemPrompt forbids inventing requirements', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('do not invent') ||
+      prompt.includes('never stated') ||
+      prompt.includes('explicit requirement'),
+    'must instruct not to invent requirements',
+  );
+});
+
+test('buildJudgeSystemPrompt requires emitting preferredCandidate and corrections', () => {
+  const prompt = buildJudgeSystemPrompt();
+  assert.ok(
+    prompt.includes('preferredCandidate'),
+    'system prompt must mention preferredCandidate output field',
+  );
+  assert.ok(prompt.includes('corrections'), 'system prompt must mention corrections output field');
+});
+
+test('buildJudgeSystemPrompt requires emitting taskType and requirementCoverage', () => {
+  const prompt = buildJudgeSystemPrompt();
+  assert.ok(prompt.includes('taskType'), 'system prompt must mention taskType output field');
+  assert.ok(
+    prompt.includes('requirementCoverage'),
+    'system prompt must mention requirementCoverage output field',
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------

@@ -133,6 +133,18 @@ Multiple providers can share the same `role` (e.g. several `panel` members). The
 `type` must match the actual API protocol of the backend — note that
 OpenAI-compatible servers such as Ollama and OpenRouter use `type: "openai"`.
 
+### Panel diversity recommendation
+
+The ensemble pipeline produces the most value when the panel is **genuinely diverse** — different model families, sizes, or reasoning styles. A panel composed of repeated instances of the same model, or of models from the same fine-tuning lineage, tends to produce trivial agreements (shared training blind spots converge, not genuine correctness), marginal discrepancies (sampling noise, not real disagreement), and a judge that cannot distinguish between them.
+
+Similarly, using the same model family as both judge and panel undermines the judge's independent verification premise: a model cannot reliably spot its own blind spots.
+
+Recommendations:
+
+- Use at least two **distinct** model families in the panel (e.g. one open-weight local model via Ollama + one frontier API model).
+- Assign the `judge` role to a model that is **not** in the panel and preferably from a different provider/family.
+- The `synthesizer` may share a family with the judge but should be the strongest model available to you for the final answer.
+
 The bundled `fusion.config.json` is a realistic example that mixes a local
 Ollama panel model, a DeepSeek panel model, an OpenRouter panel model, an OpenAI
 judge, and an Anthropic synthesizer:

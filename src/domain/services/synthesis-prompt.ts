@@ -10,28 +10,32 @@ import { renderConversation, renderPanelResponses } from './prompt-sections.js';
 export function buildSynthesisSystemPrompt(): string {
   return `You are an expert synthesis engine. Your task is to produce the final, authoritative response for the end user, drawing on multiple AI model candidates and a structured panel analysis.
 
-Begin by inferring the task type from the conversation context and adapt your output accordingly:
-- CODING/TECHNICAL: Produce one clean, correct, copy-pasteable solution. Keep prose minimal. Avoid "Model N said..." attribution. Prioritize correctness over blending. For every property you claim about your solution (immutability, "no side effects", "does not mutate the input", complexity, safety), verify it directly from the code before stating it. Do not restate any guarantee from the panel analysis without independently confirming it holds in the code. Where appropriate, include a brief falsifying test or demonstration for any non-obvious property you claim (e.g., a mutation-guard assertion showing that the original input is unchanged after the call).
+Scale rigor to task complexity: a short factual question needs a direct answer, not an essay; a simple function needs working code and tests, not a properties dissertation.
+
+Infer the task type from the conversation context and adapt your output accordingly:
+- CODING/TECHNICAL: Produce one clean, correct, copy-pasteable solution. Keep prose minimal. Avoid "Model N said..." attribution. Prioritize correctness. Only claim a property of your solution (complexity, immutability, thread-safety, "no side effects", etc.) if it is RELEVANT to this task and you verified it in the code. Do not add a "verified properties" or "key design choices" section for a simple function — output just the code and tests. Any demonstration of a non-obvious property must be a runnable assertion INSIDE the test block, not prose.
 - FACTUAL: Clear, accurate, well-structured, honest about genuine uncertainty.
 - OPEN-ENDED: Balanced, thorough, organized — honest about gaps.
 
 Follow these instructions:
 
-1. AUTHORITY — You are the final authority, not just a blender. Use the candidates as starting material. Correct errors identified in the analysis. Resolve discrepancies toward the most correct answer. Fill gaps the candidates missed. Add detail from your own expertise when it genuinely helps.
+1. AUTHORITY — You are the final authority, not just a blender. Use the candidates as starting material. Correct errors. Resolve discrepancies toward the most correct answer. Fill gaps the candidates missed. Add detail from your own expertise when it genuinely helps.
 
-2. ANALYSIS AS FALLIBLE INPUT — The panel analysis is the output of another model and may be wrong. Do not treat its agreements or assessments as ground truth. Independently verify any claim before relying on it. If your own verification of the code or facts conflicts with the analysis, trust your verification and correct the response accordingly.
+2. ANALYSIS AS FALLIBLE INPUT — The panel analysis is the output of another model and may be wrong. Do not treat its agreements, assessments, or corrections as ground truth. Independently verify any claim before acting on it. If your own verification conflicts with the analysis, trust your verification.
 
-3. AGREEMENT INTEGRATION — Where candidates agree, independently verify the shared claim before presenting it confidently. Convergence does not imply correctness — multiple candidates trained similarly can agree on a wrong answer.
+3. AGREEMENT INTEGRATION — Where candidates agree, independently verify the shared claim before presenting it confidently. Convergence does not imply correctness.
 
-4. DISCREPANCY RESOLUTION — Where candidates differ, resolve toward the more correct position identified in the analysis. If genuinely unclear, present both perspectives fairly.
+4. DISCREPANCY RESOLUTION — Where candidates differ, resolve toward the more correct position. If genuinely unclear, present both perspectives fairly.
 
-5. ISSUE CORRECTION — Fix errors and issues flagged in the analysis, including bugs, security risks, and inaccuracies. Do not reproduce flaws even if both candidates share them.
+5. ISSUE CORRECTION — Before "fixing" a flagged issue, verify it is reproducible from the stated trigger input and that your fix actually changes behavior for that input. If the issue cannot be reproduced from a concrete input, ignore it. Do not claim a fix that is a no-op for the cited evidence.
 
-6. GAP FILLING — Address gaps the candidates missed. You may draw on your own knowledge to fill them.
+6. GAP FILLING — Address gaps the candidates missed. Draw on your own knowledge.
 
-7. ATTRIBUTION — Avoid "Model 1 said..." attribution in the final response. Write as a single coherent voice.
+7. RECOMMENDATION — Treat the recommendation as advisory. Adopt it where your own verification agrees; override it where the code or facts say otherwise. Always satisfy every explicit requirement in the original task.
 
-8. TONE — Match format and depth to the task: concise code blocks for coding; clear prose for factual/open-ended. Be helpful and direct, not wordy.`;
+8. ATTRIBUTION — Avoid "Model 1 said..." attribution in the final response. Write as a single coherent voice.
+
+9. TONE — Match format and depth to the task. Be helpful and direct, not wordy.`;
 }
 
 /**
@@ -52,6 +56,29 @@ export function buildSynthesisUserPrompt(
   if (analysis !== null) {
     parts.push('=== PANEL ANALYSIS ===');
     parts.push('');
+
+    if (analysis.taskType !== undefined) {
+      parts.push(`-- Task Type --`);
+      parts.push(analysis.taskType);
+      parts.push('');
+    }
+
+    if (analysis.preferredCandidate !== undefined) {
+      parts.push('-- Preferred Candidate --');
+      parts.push(analysis.preferredCandidate);
+      parts.push('');
+    }
+
+    parts.push('-- Corrections --');
+    if (analysis.corrections !== undefined && analysis.corrections.length > 0) {
+      for (const correction of analysis.corrections) {
+        parts.push(`- ${correction}`);
+      }
+    } else {
+      parts.push('(No corrections required)');
+    }
+    parts.push('');
+
     parts.push('-- Agreements --');
     if (analysis.agreements.length > 0) {
       for (const point of analysis.agreements) {
@@ -61,6 +88,7 @@ export function buildSynthesisUserPrompt(
       parts.push('(No agreements identified)');
     }
     parts.push('');
+
     parts.push('-- Discrepancies --');
     if (analysis.discrepancies.length > 0) {
       for (const d of analysis.discrepancies) {
@@ -74,15 +102,21 @@ export function buildSynthesisUserPrompt(
       parts.push('(No discrepancies identified)');
     }
     parts.push('');
+
     parts.push('-- Issues --');
     if (analysis.issues.length > 0) {
       for (const issue of analysis.issues) {
-        parts.push(`[${issue.severity.toUpperCase()}] ${issue.candidate}: ${issue.description}`);
+        const triggerPart = issue.trigger !== undefined ? ` | trigger: ${issue.trigger}` : '';
+        const evidencePart = issue.evidence !== undefined ? ` | evidence: ${issue.evidence}` : '';
+        parts.push(
+          `[${issue.severity.toUpperCase()}] ${issue.candidate}: ${issue.description}${triggerPart}${evidencePart}`,
+        );
       }
     } else {
       parts.push('(No issues identified)');
     }
     parts.push('');
+
     parts.push('-- Gaps --');
     if (analysis.gaps.length > 0) {
       for (const gap of analysis.gaps) {
@@ -92,6 +126,28 @@ export function buildSynthesisUserPrompt(
       parts.push('(No gaps identified)');
     }
     parts.push('');
+
+    parts.push('-- Requirement Coverage --');
+    if (analysis.requirementCoverage !== undefined && analysis.requirementCoverage.length > 0) {
+      for (const rc of analysis.requirementCoverage) {
+        parts.push(`Requirement: ${rc.requirement}`);
+        parts.push(`  Assessment: ${rc.assessment}`);
+      }
+    } else {
+      parts.push('(No requirement coverage provided)');
+    }
+    parts.push('');
+
+    parts.push('-- Test Results --');
+    if (analysis.testResults !== undefined && analysis.testResults.length > 0) {
+      for (const tr of analysis.testResults) {
+        parts.push(`[${tr.verdict.toUpperCase()}] ${tr.candidate}: ${tr.test} — ${tr.detail}`);
+      }
+    } else {
+      parts.push('(No test results provided)');
+    }
+    parts.push('');
+
     parts.push('-- Recommendation --');
     parts.push(
       analysis.recommendation.length > 0 ? analysis.recommendation : '(No recommendation provided)',
@@ -107,7 +163,10 @@ export function buildSynthesisUserPrompt(
   parts.push('=== INSTRUCTIONS ===');
   if (analysis !== null) {
     parts.push(
-      'Using the panel analysis and candidate responses above, produce the final synthesized response. Correct any identified issues, fill the gaps, resolve discrepancies appropriately, and follow the recommendation. Address the original conversation comprehensively.',
+      'Using the panel analysis and candidate responses above, produce the final synthesized response. ' +
+        'Treat the recommendation and corrections as advisory — verify each flagged issue is reproducible from its stated trigger before fixing it, and ignore issues that cannot be reproduced from a concrete input. ' +
+        'Resolve discrepancies toward the more correct answer. Fill identified gaps. ' +
+        'Satisfy every explicit requirement in the original task.',
     );
   } else {
     parts.push(

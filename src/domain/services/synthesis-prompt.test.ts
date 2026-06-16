@@ -272,6 +272,162 @@ test('buildSynthesisUserPrompt with empty analysis arrays emits empty-section fa
 });
 
 // ---------------------------------------------------------------------------
+// New structured-signal fields in analysis rendering
+// ---------------------------------------------------------------------------
+
+const analysisWithNewFields: Analysis = {
+  agreements: ['Both use binary (1024) units'],
+  discrepancies: [],
+  issues: [
+    {
+      severity: 'high',
+      candidate: 'Model 1',
+      description: 'Returns wrong unit for 0 bytes',
+      trigger: 'format_bytes(0)',
+      evidence: 'actual: "0.00 B", expected: "0.00 Bytes"',
+    },
+  ],
+  gaps: [],
+  recommendation: 'Use Model 2 overall.',
+  taskType: 'coding',
+  preferredCandidate: 'Model 2',
+  corrections: ['Remove unused import math from Model 1'],
+  requirementCoverage: [{ requirement: 'Support Bytes, KB, MB, GB, TB', assessment: 'Met by all' }],
+  testResults: [
+    {
+      candidate: 'Model 1',
+      test: 'format_bytes(1024) == "1.00 KB"',
+      verdict: 'pass',
+      detail: '1024/1024=1.0, formatted as "1.00 KB"',
+    },
+  ],
+};
+
+test('buildSynthesisUserPrompt renders preferredCandidate when present', () => {
+  const prompt = buildSynthesisUserPrompt(
+    samplePanelResults,
+    sampleMessages,
+    analysisWithNewFields,
+  );
+  assert.ok(
+    prompt.includes('Model 2') || prompt.includes('Preferred Candidate'),
+    'must render preferredCandidate',
+  );
+});
+
+test('buildSynthesisUserPrompt renders corrections when present', () => {
+  const prompt = buildSynthesisUserPrompt(
+    samplePanelResults,
+    sampleMessages,
+    analysisWithNewFields,
+  );
+  assert.ok(prompt.includes('import math'), 'must render corrections content');
+});
+
+test('buildSynthesisUserPrompt renders taskType when present', () => {
+  const prompt = buildSynthesisUserPrompt(
+    samplePanelResults,
+    sampleMessages,
+    analysisWithNewFields,
+  );
+  assert.ok(prompt.includes('coding'), 'must render taskType value');
+});
+
+test('buildSynthesisUserPrompt renders requirementCoverage when present', () => {
+  const prompt = buildSynthesisUserPrompt(
+    samplePanelResults,
+    sampleMessages,
+    analysisWithNewFields,
+  );
+  assert.ok(
+    prompt.includes('Support Bytes, KB, MB, GB, TB'),
+    'must render requirementCoverage requirement text',
+  );
+});
+
+test('buildSynthesisUserPrompt renders testResults when present', () => {
+  const prompt = buildSynthesisUserPrompt(
+    samplePanelResults,
+    sampleMessages,
+    analysisWithNewFields,
+  );
+  assert.ok(
+    prompt.includes('1024') && (prompt.includes('pass') || prompt.includes('PASS')),
+    'must render testResults with verdict',
+  );
+});
+
+test('buildSynthesisUserPrompt renders trigger and evidence in issues', () => {
+  const prompt = buildSynthesisUserPrompt(
+    samplePanelResults,
+    sampleMessages,
+    analysisWithNewFields,
+  );
+  assert.ok(prompt.includes('format_bytes(0)'), 'must render issue trigger in issues section');
+  assert.ok(
+    prompt.includes('0.00 B') || prompt.includes('0.00 Bytes'),
+    'must render issue evidence in issues section',
+  );
+});
+
+test('buildSynthesisUserPrompt falls back gracefully when optional fields are absent', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
+  assert.ok(
+    prompt.includes('No corrections required') || !prompt.includes('Corrections'),
+    'must handle missing corrections gracefully',
+  );
+});
+
+test('buildSynthesisSystemPrompt instructs to scale rigor to task complexity', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('scale') || prompt.includes('complexity') || prompt.includes('proportional'),
+    'must mention scaling rigor to complexity',
+  );
+});
+
+test('buildSynthesisSystemPrompt instructs to verify issues before fixing', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('verify') && (prompt.includes('trigger') || prompt.includes('reproduce')),
+    'must instruct to verify issues before fixing',
+  );
+});
+
+test('buildSynthesisSystemPrompt instructs advisory treatment of recommendation', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('advisory') || prompt.includes('treat the recommendation'),
+    'must describe recommendation as advisory',
+  );
+});
+
+test('buildSynthesisSystemPrompt instructs against vacuous property claims', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('relevant') &&
+      (prompt.includes('vacuous') || prompt.includes('simple function')),
+    'must warn against irrelevant/vacuous property claims',
+  );
+});
+
+test('buildSynthesisSystemPrompt instructs demonstrations to be runnable assertions in test block', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('test block') || prompt.includes('runnable assertion'),
+    'must require demonstrations to be in the test block, not prose',
+  );
+});
+
+test('buildSynthesisUserPrompt instructions use advisory language, not imperative follow-the-recommendation', () => {
+  const prompt = buildSynthesisUserPrompt(samplePanelResults, sampleMessages, validAnalysis);
+  assert.ok(
+    prompt.toLowerCase().includes('advisory') || prompt.toLowerCase().includes('verify'),
+    'INSTRUCTIONS section must use advisory language',
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Domain purity — no imports from application or infrastructure
 // ---------------------------------------------------------------------------
 
