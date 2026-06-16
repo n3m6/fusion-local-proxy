@@ -62,6 +62,8 @@ export class OpenAiChatAdapter implements ChatModelPort {
       maxTokens: request.options?.maxTokens,
       responseFormat: request.options?.responseFormat?.type,
       thinkingStrength: request.model.thinkingStrength,
+      // Full prompt; only surfaces at debug level (logRequest is debug).
+      prompt: request.messages,
     });
 
     const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
@@ -119,6 +121,8 @@ export class OpenAiChatAdapter implements ChatModelPort {
         completion: usage.completionTokens,
         total: usage.totalTokens,
       },
+      // Full response text; only surfaces at debug level (logResponse is debug).
+      content,
     });
 
     return {
@@ -139,6 +143,8 @@ export class OpenAiChatAdapter implements ChatModelPort {
       maxTokens: request.options?.maxTokens,
       responseFormat: request.options?.responseFormat?.type,
       thinkingStrength: request.model.thinkingStrength,
+      // Full prompt; only surfaces at debug level (logRequest is debug).
+      prompt: request.messages,
     });
 
     const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
@@ -203,6 +209,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
     let contentChars = 0;
     let ttftMs: number | undefined;
     let lastUsage: TokenUsage | undefined;
+    let fullContent = '';
     for await (const chunk of stream) {
       const choice = chunk.choices[0];
 
@@ -212,6 +219,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
         }
         deltaCount++;
         contentChars += choice.delta.content.length;
+        fullContent += choice.delta.content;
         yield { type: 'content_delta', delta: choice.delta.content };
       }
 
@@ -248,6 +256,8 @@ export class OpenAiChatAdapter implements ChatModelPort {
             total: lastUsage.totalTokens,
           }
         : undefined,
+      // Full streamed response text; only surfaces at debug level.
+      content: fullContent,
     });
   }
 }

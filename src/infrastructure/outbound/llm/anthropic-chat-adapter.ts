@@ -62,6 +62,8 @@ export class AnthropicChatAdapter implements ChatModelPort {
       maxTokens: request.options?.maxTokens,
       responseFormat: request.options?.responseFormat?.type,
       thinkingStrength: request.model.thinkingStrength,
+      // Full prompt; only surfaces at debug level (logRequest is debug).
+      prompt: request.messages,
     });
 
     const params = this.buildCreateParams(request);
@@ -96,6 +98,8 @@ export class AnthropicChatAdapter implements ChatModelPort {
         completion: usage.completionTokens,
         total: usage.totalTokens,
       },
+      // Full response text; only surfaces at debug level (logResponse is debug).
+      content,
     });
 
     return { content, usage, model: response.model };
@@ -112,6 +116,8 @@ export class AnthropicChatAdapter implements ChatModelPort {
       maxTokens: request.options?.maxTokens,
       responseFormat: request.options?.responseFormat?.type,
       thinkingStrength: request.model.thinkingStrength,
+      // Full prompt; only surfaces at debug level (logRequest is debug).
+      prompt: request.messages,
     });
 
     const params = this.buildCreateParams(request);
@@ -127,6 +133,7 @@ export class AnthropicChatAdapter implements ChatModelPort {
     let deltaCount = 0;
     let contentChars = 0;
     let ttftMs: number | undefined;
+    let fullContent = '';
 
     for await (const event of messageStream) {
       switch (event.type) {
@@ -141,6 +148,7 @@ export class AnthropicChatAdapter implements ChatModelPort {
             }
             deltaCount++;
             contentChars += event.delta.text.length;
+            fullContent += event.delta.text;
             yield { type: 'content_delta', delta: event.delta.text };
           }
           break;
@@ -190,6 +198,8 @@ export class AnthropicChatAdapter implements ChatModelPort {
         completion: outputTokens,
         total: inputTokens + outputTokens,
       },
+      // Full streamed response text; only surfaces at debug level.
+      content: fullContent,
     });
   }
 

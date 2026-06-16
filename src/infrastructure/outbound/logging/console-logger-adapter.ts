@@ -9,6 +9,16 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   error: 40,
 };
 
+const RESET = '\x1b[0m';
+
+/** ANSI foreground colors keyed by level: debug=gray, info=cyan, warn=yellow, error=red. */
+const LEVEL_COLOR: Record<LogLevel, string> = {
+  debug: '\x1b[90m',
+  info: '\x1b[36m',
+  warn: '\x1b[33m',
+  error: '\x1b[31m',
+};
+
 /**
  * Parse a free-form level string (e.g. from `LOG_LEVEL`) into a `LogLevel`,
  * falling back to `'info'` for unknown/empty values.
@@ -29,12 +39,19 @@ export function parseLogLevel(value: string | undefined): LogLevel {
  * timestamp and level so output can be piped into log processors. Lines below
  * the configured `minLevel` are dropped; `error` goes to stderr, `warn` to
  * `console.warn`, everything else to stdout.
+ *
+ * When `useColor` is enabled, each line is wrapped in an ANSI color matching its
+ * level so a human reading a terminal can scan levels at a glance. Color is
+ * opt-in (default off) so piped/JSON-consumed output stays clean; the
+ * composition root decides whether the destination is an interactive TTY.
  */
 export class ConsoleLoggerAdapter implements LoggerPort {
   private readonly minLevel: number;
+  private readonly useColor: boolean;
 
-  constructor(level: LogLevel = 'info') {
+  constructor(level: LogLevel = 'info', useColor = false) {
     this.minLevel = LEVEL_ORDER[level];
+    this.useColor = useColor;
   }
 
   private emit(level: LogLevel, payload: Record<string, unknown>): void {
@@ -42,12 +59,13 @@ export class ConsoleLoggerAdapter implements LoggerPort {
       return;
     }
     const line = JSON.stringify({ ts: new Date().toISOString(), level, ...payload });
+    const out = this.useColor ? `${LEVEL_COLOR[level]}${line}${RESET}` : line;
     if (level === 'error') {
-      console.error(line);
+      console.error(out);
     } else if (level === 'warn') {
-      console.warn(line);
+      console.warn(out);
     } else {
-      console.log(line);
+      console.log(out);
     }
   }
 

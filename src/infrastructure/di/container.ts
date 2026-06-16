@@ -33,6 +33,22 @@ const noopChatModelPort: ChatModelPort = {
   },
 };
 
+/**
+ * Decide whether console logs should be ANSI-colored. Follows the de-facto
+ * conventions: `NO_COLOR` (any value) disables, `FORCE_COLOR` forces on, and
+ * otherwise color is enabled only when stdout is an interactive TTY so piped or
+ * redirected JSON output stays uncolored and parseable.
+ */
+function shouldUseColor(): boolean {
+  if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== '') {
+    return false;
+  }
+  if (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '') {
+    return true;
+  }
+  return process.stdout.isTTY === true;
+}
+
 export function createApp(): {
   app: ReturnType<typeof createServer>;
   configPort: ConfigPort;
@@ -42,7 +58,10 @@ export function createApp(): {
 
   const configPort: ConfigPort = new JsonFileConfigAdapter(configPath);
 
-  const loggerPort: LoggerPort = new ConsoleLoggerAdapter(parseLogLevel(process.env.LOG_LEVEL));
+  const loggerPort: LoggerPort = new ConsoleLoggerAdapter(
+    parseLogLevel(process.env.LOG_LEVEL),
+    shouldUseColor(),
+  );
 
   const clockPort: ClockPort = {
     now: () => Date.now(),

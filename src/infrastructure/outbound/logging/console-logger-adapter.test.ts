@@ -193,6 +193,46 @@ test('ConsoleLoggerAdapter includes an ISO timestamp on every line', () => {
   assert.ok(!Number.isNaN(Date.parse(parsed.ts)), 'ts must be a parseable timestamp');
 });
 
+test('ConsoleLoggerAdapter emits uncolored JSON by default', () => {
+  const logger = new ConsoleLoggerAdapter();
+
+  const lines = captureConsole(() => {
+    logger.logStageStart('panel');
+  });
+
+  assert.equal(lines.length, 1);
+  // No ANSI escape codes; line is parseable JSON as-is.
+  assert.equal(lines[0].includes('\x1b['), false);
+  assert.doesNotThrow(() => JSON.parse(lines[0]));
+});
+
+test('ConsoleLoggerAdapter wraps each level in its ANSI color when useColor is on', () => {
+  const logger = new ConsoleLoggerAdapter('debug', true);
+
+  const lines = captureConsole(() => {
+    logger.logRequest({ stage: 'panel' }); // debug -> gray
+    logger.logStageStart('panel'); // info -> cyan
+    logger.logFailedModels([{ modelId: 'm', errorCode: 'E', errorMessage: 'boom' }]); // warn -> yellow
+    logger.logError('panel', new Error('boom')); // error -> red
+  });
+
+  const colorOf: Record<string, string> = {
+    debug: '\x1b[90m',
+    info: '\x1b[36m',
+    warn: '\x1b[33m',
+    error: '\x1b[31m',
+  };
+
+  // eslint-disable-next-line no-control-regex -- intentionally matching ANSI escapes
+  const ansi = /\x1b\[[0-9]+m/g;
+  for (const line of lines) {
+    assert.ok(line.startsWith('\x1b['), 'colored line must start with an ANSI code');
+    assert.ok(line.endsWith('\x1b[0m'), 'colored line must end with a reset code');
+    const parsed = JSON.parse(line.replace(ansi, ''));
+    assert.equal(line.startsWith(colorOf[parsed.level as string]), true);
+  }
+});
+
 test('parseLogLevel normalizes known values and falls back to info', () => {
   assert.equal(parseLogLevel('debug'), 'debug');
   assert.equal(parseLogLevel('INFO'), 'info');

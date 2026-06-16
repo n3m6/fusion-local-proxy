@@ -265,6 +265,8 @@ The default port is `3000`; override it with the `PORT` environment variable.
 | `FUSION_CONFIG_PATH` | no                                                  | Path to the config file (default: `fusion.config.json`)                 |
 | `ENABLE_DEV_UI`      | no                                                  | Set to `1` or `true` to enable the browser-based dev chat UI at `GET /` |
 | `LOG_LEVEL`          | no                                                  | Log verbosity: `debug` \| `info` \| `warn` \| `error` (default: `info`) |
+| `NO_COLOR`           | no                                                  | Set to any non-empty value to disable colored log output                |
+| `FORCE_COLOR`        | no                                                  | Set to any non-empty value to force colored log output (e.g. non-TTY)   |
 
 See [`.env.example`](./.env.example) for a template.
 
@@ -275,6 +277,11 @@ Each line carries a timestamp (`ts`), a `level`, and an `event`; `error`/`warn`
 lines go to stderr, everything else to stdout. Verbosity is controlled by
 `LOG_LEVEL` (default `info`).
 
+When stdout is an interactive terminal, each line is colored by level
+(debug=gray, info=cyan, warn=yellow, error=red) for quick scanning. Color is
+disabled automatically when output is piped/redirected so the JSON stays
+parseable; override with `NO_COLOR` (force off) or `FORCE_COLOR` (force on).
+
 At `info` you get the high-level lifecycle: `fusion_run_start` /
 `fusion_run_end` (with a `requestId` correlating every stage of a single run),
 per-stage `start`/`end` markers with token usage, inbound `http_request` lines,
@@ -283,10 +290,11 @@ a response fails JSON parsing or schema validation).
 
 Set `LOG_LEVEL=debug` to additionally see, for **every** panel/judge/synthesizer
 call, a `request` line (target model, provider, baseURL, message count, prompt
-size, response format, thinking strength) and a `response` line (latency,
-time-to-first-token, streamed delta count, content size, and token usage) — i.e.
-exactly how each model parses, sends, and processes a request. All lines for one
-client request share the same `requestId`:
+size, response format, thinking strength, and the full `prompt` messages sent to
+the model) and a `response` line (latency, time-to-first-token, streamed delta
+count, content size, token usage, and the full `content` returned by the model)
+— i.e. exactly how each model parses, sends, and processes a request. All lines
+for one client request share the same `requestId`:
 
 ```bash
 LOG_LEVEL=debug npm run dev
