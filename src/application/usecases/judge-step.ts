@@ -66,6 +66,7 @@ export class JudgeStep {
     originalMessages: Message[],
     judgeModel: ModelRef,
     timeoutMs: number,
+    requestId?: string,
   ): Promise<Analysis | null> {
     this.loggerPort.logStageStart('judge');
 
@@ -95,16 +96,32 @@ export class JudgeStep {
       model: judgeModel,
       options: {
         responseFormat,
+        requestId,
+        stage: 'judge',
         ...(controller ? { signal: controller.signal } : {}),
       },
     };
+
+    this.loggerPort.logRequest({
+      requestId,
+      stage: 'judge',
+      provider: judgeModel.provider,
+      modelId: judgeModel.model,
+      panelCount: panelResults.length,
+      responseFormat: responseFormat.type,
+      systemPromptChars: systemPrompt.length,
+      userPromptChars: userPrompt.length,
+    });
 
     let response: ChatResponse;
 
     try {
       response = await this.chatPort.complete(request);
     } catch (error) {
-      this.loggerPort.logError('judge', error instanceof Error ? error : new Error(String(error)));
+      this.loggerPort.logError('judge', error instanceof Error ? error : new Error(String(error)), {
+        requestId,
+        modelId: judgeModel.model,
+      });
       return null;
     } finally {
       clearTimeout(timeoutId);
@@ -114,18 +131,47 @@ export class JudgeStep {
     try {
       parsedJson = JSON.parse(response.content);
     } catch (jsonError) {
-      this.loggerPort.logError('judge', jsonError as Error);
+      this.loggerPort.logError('judge', jsonError as Error, {
+        requestId,
+        modelId: judgeModel.model,
+        reason: 'invalid_json',
+        contentChars: response.content.length,
+        rawContent: response.content.slice(0, 1000),
+      });
       return null;
     }
 
     const parsed = analysisSchema.safeParse(parsedJson);
     if (!parsed.success) {
-      this.loggerPort.logError('judge', parsed.error);
+      this.loggerPort.logError('judge', parsed.error, {
+        requestId,
+        modelId: judgeModel.model,
+        reason: 'schema_validation_failed',
+        contentChars: response.content.length,
+        rawContent: response.content.slice(0, 1000),
+      });
       return null;
     }
 
     const durationMs = this.clockPort.now() - startTime;
     try {
+      this.loggerPort.logResponse({
+        requestId,
+        stage: 'judge',
+        provider: judgeModel.provider,
+        modelId: judgeModel.model,
+        latencyMs: durationMs,
+        contentChars: response.content.length,
+        consensusCount: parsed.data.consensus.length,
+        contradictionCount: parsed.data.contradictions.length,
+        uniqueInsightCount: parsed.data.unique_insights.length,
+        blindSpotCount: parsed.data.blind_spots.length,
+        tokens: {
+          prompt: response.usage.promptTokens,
+          completion: response.usage.completionTokens,
+          total: response.usage.totalTokens,
+        },
+      });
       this.loggerPort.logStageEnd('judge', durationMs, response.usage);
     } catch {
       // logger failure must not discard the valid Analysis result

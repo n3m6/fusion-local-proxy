@@ -19,16 +19,14 @@
       "role": "judge",
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
-      "apiKeyEnv": "DEEPSEEK_API_KEY",
-      "thinkingStrength": "high"
+      "apiKeyEnv": "DEEPSEEK_API_KEY"
     },
     {
       "type": "openai",
       "role": "synthesizer",
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
-      "apiKeyEnv": "DEEPSEEK_API_KEY",
-      "thinkingStrength": "high"
+      "apiKeyEnv": "DEEPSEEK_API_KEY"
     }
   ],
   "timeoutMs": 30000

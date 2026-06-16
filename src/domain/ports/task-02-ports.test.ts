@@ -299,23 +299,49 @@ describe('LoggerPort contract', () => {
     );
   });
 
-  test('declares logError(stage: string, error: Error): void', () => {
+  test('declares logError(stage: string, error: Error, fields?: LogFields): void', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     assert.ok(
-      /logError\s*\(\s*stage\s*:\s*string\s*,\s*error\s*:\s*Error\s*\)\s*:\s*void/.test(source),
-      'must have logError(stage: string, error: Error): void',
+      /logError\s*\(\s*stage\s*:\s*string\s*,\s*error\s*:\s*Error\s*,\s*fields\?\s*:\s*LogFields\s*\)\s*:\s*void/.test(
+        source,
+      ),
+      'must have logError(stage: string, error: Error, fields?: LogFields): void',
     );
   });
 
-  test('all four methods return void', () => {
+  test('declares structured logRequest, logResponse, and log methods', () => {
+    const source = readFileSync(projectFile(sourceFile), 'utf-8');
+    assert.ok(
+      /logRequest\s*\(\s*fields\s*:\s*LogFields\s*\)\s*:\s*void/.test(source),
+      'must have logRequest(fields: LogFields): void',
+    );
+    assert.ok(
+      /logResponse\s*\(\s*fields\s*:\s*LogFields\s*\)\s*:\s*void/.test(source),
+      'must have logResponse(fields: LogFields): void',
+    );
+    assert.ok(
+      /log\s*\(\s*level\s*:\s*LogLevel\s*,\s*event\s*:\s*string\s*,\s*fields\?\s*:\s*LogFields\s*\)\s*:\s*void/.test(
+        source,
+      ),
+      'must have log(level: LogLevel, event: string, fields?: LogFields): void',
+    );
+  });
+
+  test('exports LogLevel and LogFields types', () => {
+    const source = readFileSync(projectFile(sourceFile), 'utf-8');
+    assert.ok(/export\s+type\s+LogLevel\b/.test(source), 'must export LogLevel');
+    assert.ok(/export\s+interface\s+LogFields\b/.test(source), 'must export LogFields');
+  });
+
+  test('all seven methods return void', () => {
     const source = readFileSync(projectFile(sourceFile), 'utf-8');
     // Count void occurrences after method signatures within the interface
     const interfaceStart = source.indexOf('export interface LoggerPort');
     const interfaceBody = source.slice(interfaceStart);
     const voidMatches = interfaceBody.match(/:\s*void/g);
     assert.ok(
-      voidMatches && voidMatches.length === 4,
-      `Expected 4 void returns, found ${voidMatches?.length ?? 0}`,
+      voidMatches && voidMatches.length === 7,
+      `Expected 7 void returns, found ${voidMatches?.length ?? 0}`,
     );
   });
 });

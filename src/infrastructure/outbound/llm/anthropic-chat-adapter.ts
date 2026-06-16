@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelPort } from '../../../domain/ports/chat-model-port.js';
+import type { LoggerPort, LogFields } from '../../../domain/ports/logger-port.js';
 import type {
   ChatRequest,
   ChatResponse,
@@ -23,8 +24,15 @@ export function createAnthropicClient(config: AdapterConfig): Anthropic {
   });
 }
 
+function promptChars(request: ChatRequest): number {
+  return request.messages.reduce((sum, m) => sum + m.content.length, 0);
+}
+
 export class AnthropicChatAdapter implements ChatModelPort {
-  constructor(private readonly client: Anthropic) {}
+  constructor(
+    private readonly client: Anthropic,
+    private readonly logger?: LoggerPort,
+  ) {}
 
   get config(): AdapterConfig {
     return {
@@ -33,7 +41,29 @@ export class AnthropicChatAdapter implements ChatModelPort {
     };
   }
 
+  private baseFields(request: ChatRequest): LogFields {
+    return {
+      provider: 'anthropic',
+      modelId: request.model.model,
+      baseURL: request.model.baseURL,
+      requestId: request.options?.requestId,
+      stage: request.options?.stage,
+    };
+  }
+
   async complete(request: ChatRequest): Promise<ChatResponse> {
+    const startTime = Date.now();
+    this.logger?.logRequest({
+      ...this.baseFields(request),
+      mode: 'complete',
+      messageCount: request.messages.length,
+      promptChars: promptChars(request),
+      temperature: request.options?.temperature,
+      maxTokens: request.options?.maxTokens,
+      responseFormat: request.options?.responseFormat?.type,
+      thinkingStrength: request.model.thinkingStrength,
+    });
+
     const params = this.buildCreateParams(request);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Record<string,unknown> bypasses SDK strict params type
     const response = await this.client.messages.create(params as any, {
@@ -42,6 +72,10 @@ export class AnthropicChatAdapter implements ChatModelPort {
 
     const textBlock = response.content.find((block) => block.type === 'text');
     if (!textBlock) {
+      this.logger?.log('warn', 'anthropic_no_text_content_block', {
+        ...this.baseFields(request),
+        blockTypes: response.content.map((b) => b.type),
+      });
       throw new Error('Anthropic response contained no text content block');
     }
     const content = textBlock.text;
@@ -52,10 +86,34 @@ export class AnthropicChatAdapter implements ChatModelPort {
       totalTokens: response.usage.input_tokens + response.usage.output_tokens,
     };
 
+    this.logger?.logResponse({
+      ...this.baseFields(request),
+      mode: 'complete',
+      latencyMs: Date.now() - startTime,
+      contentChars: content.length,
+      tokens: {
+        prompt: usage.promptTokens,
+        completion: usage.completionTokens,
+        total: usage.totalTokens,
+      },
+    });
+
     return { content, usage, model: response.model };
   }
 
   async *stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
+    const startTime = Date.now();
+    this.logger?.logRequest({
+      ...this.baseFields(request),
+      mode: 'stream',
+      messageCount: request.messages.length,
+      promptChars: promptChars(request),
+      temperature: request.options?.temperature,
+      maxTokens: request.options?.maxTokens,
+      responseFormat: request.options?.responseFormat?.type,
+      thinkingStrength: request.model.thinkingStrength,
+    });
+
     const params = this.buildCreateParams(request);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Record<string,unknown> bypasses SDK strict params type
     const messageStream = this.client.messages.stream(params as any, {
@@ -66,6 +124,9 @@ export class AnthropicChatAdapter implements ChatModelPort {
     let usageYielded = false;
     let inputTokens = 0;
     let outputTokens = 0;
+    let deltaCount = 0;
+    let contentChars = 0;
+    let ttftMs: number | undefined;
 
     for await (const event of messageStream) {
       switch (event.type) {
@@ -75,6 +136,11 @@ export class AnthropicChatAdapter implements ChatModelPort {
 
         case 'content_block_delta':
           if (event.delta.type === 'text_delta') {
+            if (ttftMs === undefined) {
+              ttftMs = Date.now() - startTime;
+            }
+            deltaCount++;
+            contentChars += event.delta.text.length;
             yield { type: 'content_delta', delta: event.delta.text };
           }
           break;
@@ -111,6 +177,20 @@ export class AnthropicChatAdapter implements ChatModelPort {
     if (!stopYielded) {
       yield { type: 'content_stop' };
     }
+
+    this.logger?.logResponse({
+      ...this.baseFields(request),
+      mode: 'stream',
+      latencyMs: Date.now() - startTime,
+      ttftMs,
+      deltaCount,
+      contentChars,
+      tokens: {
+        prompt: inputTokens,
+        completion: outputTokens,
+        total: inputTokens + outputTokens,
+      },
+    });
   }
 
   private buildCreateParams(request: ChatRequest): Record<string, unknown> {

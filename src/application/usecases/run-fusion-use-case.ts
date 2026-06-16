@@ -28,14 +28,27 @@ export class RunFusionUseCase implements FusionService {
     const judgeModel = this.configPort.getJudgeModel();
     const timeoutMs = this.configPort.getTimeoutMs();
 
+    // Correlation id ties this run's panel/judge/synthesis log lines together.
+    const requestId = crypto.randomUUID();
+    const runStart = this.clockPort.now();
+
     // 2. Build messages array (prepend system prompt if present)
     const messages: Message[] = request.systemPrompt
       ? [{ role: 'system', content: request.systemPrompt }, ...request.messages]
       : [...request.messages];
 
+    this.loggerPort.log('info', 'fusion_run_start', {
+      requestId,
+      messageCount: messages.length,
+      panelCount: panelModels.length,
+      judgeConfigured: judgeModel !== null,
+      synthesizerModel: this.configPort.getSynthesizerModel().model,
+      timeoutMs,
+    });
+
     // 3. Panel stage (periodic heartbeats keep the connection alive during long runs)
     const panelMeta: PanelMeta = yield* this.withHeartbeat(
-      this.panelRunner.run(messages, panelModels, timeoutMs),
+      this.panelRunner.run(messages, panelModels, timeoutMs, requestId),
       { type: 'progress', stage: 'panel', message: 'panel running' },
     );
 
@@ -46,9 +59,11 @@ export class RunFusionUseCase implements FusionService {
     let analysis: Analysis | null = null;
     if (judgeModel !== null) {
       analysis = yield* this.withHeartbeat(
-        this.judgeStep.analyze(panelMeta.results, messages, judgeModel, timeoutMs),
+        this.judgeStep.analyze(panelMeta.results, messages, judgeModel, timeoutMs, requestId),
         { type: 'progress', stage: 'judge', message: 'judge running' },
       );
+    } else {
+      this.loggerPort.log('debug', 'judge_skipped', { requestId });
     }
 
     // 6. Yield judge progress (always, even when judge was skipped)
@@ -62,6 +77,7 @@ export class RunFusionUseCase implements FusionService {
       panelMeta.results,
       messages,
       analysis,
+      requestId,
     )) {
       if (event.type === 'content_delta') {
         yield { type: 'content_delta', delta: event.delta };
@@ -74,6 +90,16 @@ export class RunFusionUseCase implements FusionService {
       }
       // Ignore progress, error, etc. events from synthesis
     }
+
+    this.loggerPort.log('info', 'fusion_run_end', {
+      requestId,
+      durationMs: this.clockPort.now() - runStart,
+      panelSuccessCount: panelMeta.results.length,
+      failedModelCount: panelMeta.failedModels.length,
+      analysisProduced: analysis !== null,
+      ...(synthModel ? { synthesizerModel: synthModel } : {}),
+      ...(synthUsage ? { totalTokens: synthUsage.totalTokens } : {}),
+    });
 
     // 8. Yield combined final done event
     yield {

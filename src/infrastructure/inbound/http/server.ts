@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { FusionService } from '../../../application/ports/fusion-service.js';
 import type { ConfigPort } from '../../../domain/ports/config-port.js';
+import type { LoggerPort } from '../../../domain/ports/logger-port.js';
 import { createOpenAiRoute } from './openai/route.js';
 import { createModelsRoute } from './models-route.js';
 import { createAnthropicRoute } from './anthropic/route.js';
@@ -18,6 +19,7 @@ const DEV_UI_HTML_PATH = join(
 
 export interface CreateServerOptions {
   readonly enableDevUi?: boolean;
+  readonly logger?: LoggerPort;
 }
 
 export function createServer(
@@ -27,9 +29,9 @@ export function createServer(
 ): Hono {
   const app = new Hono();
 
-  app.post('/v1/chat/completions', createOpenAiRoute(fusionService));
+  app.post('/v1/chat/completions', createOpenAiRoute(fusionService, options.logger));
   app.get('/v1/models', createModelsRoute(configPort));
-  app.post('/v1/messages', createAnthropicRoute(fusionService));
+  app.post('/v1/messages', createAnthropicRoute(fusionService, options.logger));
 
   if (options.enableDevUi) {
     app.get('/', serveStatic({ path: DEV_UI_HTML_PATH }));

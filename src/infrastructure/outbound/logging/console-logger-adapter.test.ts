@@ -1,23 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ConsoleLoggerAdapter } from './console-logger-adapter.js';
+import { ConsoleLoggerAdapter, parseLogLevel } from './console-logger-adapter.js';
 import type { TokenUsage } from '../../../domain/model/chat-types.js';
 import type { FailedModelInfo } from '../../../domain/model/stream-types.js';
 
 // ---------------------------------------------------------------------------
-// Helper to capture console.log output
+// Helper to capture console output across log/warn/error streams
 // ---------------------------------------------------------------------------
 
 function captureConsole(fn: () => void): string[] {
   const lines: string[] = [];
-  const original = console.log;
-  console.log = (...args: unknown[]) => {
-    lines.push(args.map(String).join(' '));
-  };
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  const sink = (...args: unknown[]): void => void lines.push(args.map(String).join(' '));
+  console.log = sink;
+  console.warn = sink;
+  console.error = sink;
   try {
     fn();
   } finally {
-    console.log = original;
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
   }
   return lines;
 }
@@ -109,4 +114,91 @@ test('ConsoleLoggerAdapter logError emits structured JSON with error message', (
   assert.equal(parsed.stage, 'passthrough');
   assert.equal(parsed.event, 'error');
   assert.equal(parsed.message, 'connection refused');
+  assert.equal(parsed.level, 'error');
+});
+
+test('ConsoleLoggerAdapter logError merges extra fields', () => {
+  const logger = new ConsoleLoggerAdapter();
+
+  const lines = captureConsole(() => {
+    logger.logError('judge', new SyntaxError('bad json'), {
+      requestId: 'req-1',
+      rawContent: 'not json',
+    });
+  });
+
+  const parsed = JSON.parse(lines[0]);
+  assert.equal(parsed.stage, 'judge');
+  assert.equal(parsed.requestId, 'req-1');
+  assert.equal(parsed.rawContent, 'not json');
+});
+
+test('ConsoleLoggerAdapter logRequest/logResponse are debug-level (suppressed at default info)', () => {
+  const logger = new ConsoleLoggerAdapter();
+
+  const lines = captureConsole(() => {
+    logger.logRequest({ stage: 'panel', modelId: 'gpt-4o' });
+    logger.logResponse({ stage: 'panel', modelId: 'gpt-4o' });
+  });
+
+  assert.equal(lines.length, 0, 'debug logs must be suppressed at the default info level');
+});
+
+test('ConsoleLoggerAdapter logRequest/logResponse emit at debug level', () => {
+  const logger = new ConsoleLoggerAdapter('debug');
+
+  const lines = captureConsole(() => {
+    logger.logRequest({ stage: 'panel', modelId: 'gpt-4o', promptChars: 42 });
+    logger.logResponse({ stage: 'panel', modelId: 'gpt-4o', contentChars: 100 });
+  });
+
+  assert.equal(lines.length, 2);
+  const req = JSON.parse(lines[0]);
+  assert.equal(req.event, 'request');
+  assert.equal(req.stage, 'panel');
+  assert.equal(req.modelId, 'gpt-4o');
+  assert.equal(req.promptChars, 42);
+  assert.equal(req.level, 'debug');
+
+  const res = JSON.parse(lines[1]);
+  assert.equal(res.event, 'response');
+  assert.equal(res.contentChars, 100);
+});
+
+test('ConsoleLoggerAdapter log respects the minimum level threshold', () => {
+  const warnLogger = new ConsoleLoggerAdapter('warn');
+
+  const lines = captureConsole(() => {
+    warnLogger.log('debug', 'should_be_dropped');
+    warnLogger.log('info', 'should_also_be_dropped');
+    warnLogger.log('warn', 'kept', { detail: 1 });
+    warnLogger.log('error', 'also_kept');
+  });
+
+  assert.equal(lines.length, 2);
+  assert.equal(JSON.parse(lines[0]).event, 'kept');
+  assert.equal(JSON.parse(lines[0]).detail, 1);
+  assert.equal(JSON.parse(lines[1]).event, 'also_kept');
+});
+
+test('ConsoleLoggerAdapter includes an ISO timestamp on every line', () => {
+  const logger = new ConsoleLoggerAdapter();
+
+  const lines = captureConsole(() => {
+    logger.logStageStart('panel');
+  });
+
+  const parsed = JSON.parse(lines[0]);
+  assert.equal(typeof parsed.ts, 'string');
+  assert.ok(!Number.isNaN(Date.parse(parsed.ts)), 'ts must be a parseable timestamp');
+});
+
+test('parseLogLevel normalizes known values and falls back to info', () => {
+  assert.equal(parseLogLevel('debug'), 'debug');
+  assert.equal(parseLogLevel('INFO'), 'info');
+  assert.equal(parseLogLevel(' warn '), 'warn');
+  assert.equal(parseLogLevel('error'), 'error');
+  assert.equal(parseLogLevel('verbose'), 'info');
+  assert.equal(parseLogLevel(undefined), 'info');
+  assert.equal(parseLogLevel(''), 'info');
 });

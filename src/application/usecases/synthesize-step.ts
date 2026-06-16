@@ -24,6 +24,7 @@ export class SynthesizeStep {
     panelResults: PanelResult[],
     originalMessages: Message[],
     analysis: Analysis | null,
+    requestId?: string,
   ): AsyncIterable<FusionStreamEvent> {
     const synthesizerModel = this.configPort.getSynthesizerModel();
     const timeoutMs = this.configPort.getTimeoutMs();
@@ -45,25 +46,75 @@ export class SynthesizeStep {
           { role: 'user', content: userPrompt },
         ],
         model: synthesizerModel,
-        options: { signal: controller.signal },
+        options: { signal: controller.signal, requestId, stage: 'synthesis' },
       };
 
       this.loggerPort.logStageStart('synthesis');
+      this.loggerPort.logRequest({
+        requestId,
+        stage: 'synthesis',
+        provider: synthesizerModel.provider,
+        modelId: synthesizerModel.model,
+        panelCount: panelResults.length,
+        analysisPresent: analysis !== null,
+        systemPromptChars: systemPrompt.length,
+        userPromptChars: userPrompt.length,
+      });
       const startTime = this.clockPort.now();
 
       let usage: TokenUsage | undefined;
+      let deltaCount = 0;
+      let contentChars = 0;
+      let ttftMs: number | undefined;
 
-      for await (const chunk of this.chatPort.stream(request)) {
-        if (chunk.type === 'content_delta') {
-          yield { type: 'content_delta', delta: chunk.delta };
-        } else if (chunk.type === 'content_stop') {
-          yield { type: 'content_stop' };
-        } else if (chunk.type === 'usage') {
-          usage = chunk.usage;
+      try {
+        for await (const chunk of this.chatPort.stream(request)) {
+          if (chunk.type === 'content_delta') {
+            if (ttftMs === undefined) {
+              ttftMs = this.clockPort.now() - startTime;
+            }
+            deltaCount++;
+            contentChars += chunk.delta.length;
+            yield { type: 'content_delta', delta: chunk.delta };
+          } else if (chunk.type === 'content_stop') {
+            yield { type: 'content_stop' };
+          } else if (chunk.type === 'usage') {
+            usage = chunk.usage;
+          }
         }
+      } catch (error) {
+        this.loggerPort.logError(
+          'synthesis',
+          error instanceof Error ? error : new Error(String(error)),
+          {
+            requestId,
+            modelId: synthesizerModel.model,
+            latencyMs: this.clockPort.now() - startTime,
+          },
+        );
+        throw error;
       }
 
       const durationMs = this.clockPort.now() - startTime;
+      this.loggerPort.logResponse({
+        requestId,
+        stage: 'synthesis',
+        provider: synthesizerModel.provider,
+        modelId: synthesizerModel.model,
+        latencyMs: durationMs,
+        ttftMs,
+        deltaCount,
+        contentChars,
+        ...(usage
+          ? {
+              tokens: {
+                prompt: usage.promptTokens,
+                completion: usage.completionTokens,
+                total: usage.totalTokens,
+              },
+            }
+          : {}),
+      });
       if (usage) {
         this.loggerPort.logStageEnd('synthesis', durationMs, usage);
       } else {

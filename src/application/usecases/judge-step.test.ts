@@ -93,6 +93,15 @@ function stubLoggerPort(): StubLoggerPort {
     logError(stage: string, error: Error): void {
       calls.push({ method: 'logError', args: [stage, error] });
     },
+    logRequest(fields): void {
+      calls.push({ method: 'logRequest', args: [fields] });
+    },
+    logResponse(fields): void {
+      calls.push({ method: 'logResponse', args: [fields] });
+    },
+    log(level, event, fields): void {
+      calls.push({ method: 'log', args: [level, event, fields] });
+    },
   };
 }
 

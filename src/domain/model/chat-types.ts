@@ -12,6 +12,10 @@ export interface ChatOptions {
   readonly maxTokens?: number;
   readonly responseFormat?: ResponseFormat;
   readonly signal?: AbortSignal;
+  /** Correlation id propagated to outbound adapter logs to tie a run's stages together. */
+  readonly requestId?: string;
+  /** Pipeline stage that issued this request ('panel' | 'judge' | 'synthesis'), for logging. */
+  readonly stage?: string;
 }
 
 export type ResponseFormat =

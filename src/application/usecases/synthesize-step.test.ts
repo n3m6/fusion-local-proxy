@@ -135,6 +135,15 @@ function stubLoggerPort(): StubLoggerPort {
     logError(stage: string, error: Error): void {
       calls.push({ method: 'logError', args: [stage, error] });
     },
+    logRequest(fields): void {
+      calls.push({ method: 'logRequest', args: [fields] });
+    },
+    logResponse(fields): void {
+      calls.push({ method: 'logResponse', args: [fields] });
+    },
+    log(level, event, fields): void {
+      calls.push({ method: 'log', args: [level, event, fields] });
+    },
   };
 }
 
@@ -352,11 +361,12 @@ test('logger calls: logStageStart and logStageEnd called correctly', async () =>
   assert.ok(startIdx < endIdx, 'logStageStart must be called before logStageEnd');
 });
 
-test('clock usage: clockPort.now() called exactly twice on success path', async () => {
+test('clock usage: clockPort.now() called exactly three times on success path', async () => {
   const chat = stubChatPort();
   const config = stubConfigPort();
   const logger = stubLoggerPort();
-  const clock = stubClockPort([100, 300]);
+  // startTime, time-to-first-token, and final duration are all read via clockPort.
+  const clock = stubClockPort([100, 200, 300]);
 
   const step = new SynthesizeStep(chat, config, logger, clock);
 
@@ -364,7 +374,27 @@ test('clock usage: clockPort.now() called exactly twice on success path', async 
     step.synthesize(samplePanelResults(), sampleOriginalMessages, sampleAnalysis()),
   );
 
-  assert.equal(clock._callCount, 2);
+  assert.equal(clock._callCount, 3);
+});
+
+test('logResponse: ttftMs is derived from clockPort, not wall-clock time', async () => {
+  const chat = stubChatPort();
+  const config = stubConfigPort();
+  const logger = stubLoggerPort();
+  // startTime=100, first-delta=200 -> ttftMs=100; final=300 -> latencyMs=200.
+  const clock = stubClockPort([100, 200, 300]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+
+  await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, sampleAnalysis()),
+  );
+
+  const responseCalls = logger._calls.filter((c) => c.method === 'logResponse');
+  assert.equal(responseCalls.length, 1);
+  const fields = responseCalls[0].args[0] as { ttftMs?: number; latencyMs?: number };
+  assert.equal(fields.ttftMs, 100);
+  assert.equal(fields.latencyMs, 200);
 });
 
 test('error propagation: iterator rejects with same error, logStageStart called, logStageEnd not called', async () => {

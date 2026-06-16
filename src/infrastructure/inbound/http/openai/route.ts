@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { FusionService } from '../../../../application/ports/fusion-service.js';
+import type { LoggerPort } from '../../../../domain/ports/logger-port.js';
 import { FusionError } from '../../../../domain/model/fusion-types.js';
 import {
   openAiRequestToFusion,
@@ -8,20 +9,33 @@ import {
   fusionStreamToOpenAiSSE,
 } from './translator.js';
 
-export function createOpenAiRoute(fusionService: FusionService) {
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
+}
+
+export function createOpenAiRoute(fusionService: FusionService, logger?: LoggerPort) {
   return async (c: Context) => {
     let body: Record<string, unknown>;
     try {
       body = await c.req.json<Record<string, unknown>>();
     } catch {
+      logger?.log('warn', 'http_invalid_json', { api: 'openai' });
       return c.json({ error: { message: 'Invalid JSON body' } }, 400);
     }
 
     const model = typeof body.model === 'string' ? body.model : '';
+    const streaming = Boolean(body.stream);
+
+    logger?.log('info', 'http_request', {
+      api: 'openai',
+      model,
+      stream: streaming,
+      messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
+    });
 
     const fusionRequest = openAiRequestToFusion(body);
 
-    if (body.stream) {
+    if (streaming) {
       return streamSSE(c, async (stream) => {
         try {
           const events = fusionService.runFusion(fusionRequest);
@@ -29,6 +43,7 @@ export function createOpenAiRoute(fusionService: FusionService) {
             await stream.write(sseString);
           }
         } catch (err) {
+          logger?.logError('http', toError(err), { api: 'openai', stream: true });
           const message = err instanceof FusionError ? err.message : 'Internal server error';
           const code = err instanceof FusionError ? err.code : 'internal_error';
           await stream.write(`data: ${JSON.stringify({ error: { code, message } })}\n\n`);
@@ -41,7 +56,7 @@ export function createOpenAiRoute(fusionService: FusionService) {
       const response = await fusionStreamToOpenAiResponse(events, model);
       return c.json(response);
     } catch (err) {
-      console.error('Chat completion error:', err);
+      logger?.logError('http', toError(err), { api: 'openai', stream: false });
 
       if (err instanceof FusionError) {
         return c.json(

@@ -1,5 +1,5 @@
 import { JsonFileConfigAdapter } from '../outbound/config/json-file-config-adapter.js';
-import { ConsoleLoggerAdapter } from '../outbound/logging/console-logger-adapter.js';
+import { ConsoleLoggerAdapter, parseLogLevel } from '../outbound/logging/console-logger-adapter.js';
 import { ChatAdapterFactory } from '../outbound/llm/chat-adapter-factory.js';
 import { RunFusionUseCase } from '../../application/usecases/run-fusion-use-case.js';
 import { PanelRunner } from '../../application/usecases/panel-runner.js';
@@ -42,13 +42,13 @@ export function createApp(): {
 
   const configPort: ConfigPort = new JsonFileConfigAdapter(configPath);
 
-  const loggerPort: LoggerPort = new ConsoleLoggerAdapter();
+  const loggerPort: LoggerPort = new ConsoleLoggerAdapter(parseLogLevel(process.env.LOG_LEVEL));
 
   const clockPort: ClockPort = {
     now: () => Date.now(),
   };
 
-  const factory = new ChatAdapterFactory();
+  const factory = new ChatAdapterFactory(loggerPort);
 
   // Panel ports — one ChatModelPort per configured panel ModelRef (may be empty).
   const panelModels = configPort.getPanelModels();
@@ -76,7 +76,7 @@ export function createApp(): {
   );
 
   const enableDevUi = ['1', 'true'].includes((process.env.ENABLE_DEV_UI ?? '').toLowerCase());
-  const serverOptions: CreateServerOptions = { enableDevUi };
+  const serverOptions: CreateServerOptions = { enableDevUi, logger: loggerPort };
   const app = createServer(fusionService, configPort, serverOptions);
 
   return { app, configPort, fusionService };

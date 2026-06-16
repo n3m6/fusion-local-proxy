@@ -94,6 +94,15 @@ function stubLoggerPort(): StubLoggerPort {
     logError(stage: string, error: Error): void {
       calls.push({ method: 'logError', args: [stage, error] });
     },
+    logRequest(fields): void {
+      calls.push({ method: 'logRequest', args: [fields] });
+    },
+    logResponse(fields): void {
+      calls.push({ method: 'logResponse', args: [fields] });
+    },
+    log(level, event, fields): void {
+      calls.push({ method: 'log', args: [level, event, fields] });
+    },
   };
 }
 
@@ -149,8 +158,8 @@ test('all-success: 3 panel models, all resolve', async () => {
   });
 
   const logger = stubLoggerPort();
-  // 6 clock calls: start0, start1, start2, end0, end1, end2
-  const clock = stubClockPort([100, 200, 300, 350, 480, 600]);
+  // 8 clock calls: stageStart, start0..2, end0..2, stageEnd
+  const clock = stubClockPort([50, 100, 200, 300, 350, 480, 600, 700]);
 
   const runner = new PanelRunner([port0, port1, port2], logger, clock);
 
@@ -186,14 +195,15 @@ test('all-success: 3 panel models, all resolve', async () => {
   assert.deepStrictEqual(result.results[2].usage, { promptTokens: 3, completionTokens: 7 });
   assert.ok(result.results[2].latencyMs > 0);
 
-  // loggerPort.logStageEnd called 3 times with 'panel' stage
+  // Stage lifecycle is symmetric: exactly one start paired with one end,
+  // regardless of how many panel models succeed.
+  const startCalls = logger._calls.filter((c) => c.method === 'logStageStart');
   const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
-  assert.equal(endCalls.length, 3);
-  for (const call of endCalls) {
-    assert.equal(call.args[0], 'panel');
-    assert.ok(typeof call.args[1] === 'number' && (call.args[1] as number) > 0);
-    assert.ok(call.args[2] !== undefined);
-  }
+  assert.equal(startCalls.length, 1);
+  assert.equal(endCalls.length, 1);
+  assert.equal(endCalls[0].args[0], 'panel');
+  assert.ok(typeof endCalls[0].args[1] === 'number' && (endCalls[0].args[1] as number) > 0);
+  assert.ok(endCalls[0].args[2] !== undefined);
 });
 
 test('partial-failure: 2 resolve, 1 rejects with FusionError', async () => {
@@ -243,6 +253,7 @@ test('all-failure: 2 panel models, both reject, throws all_panels_failed', async
   const port1 = stubChatPortReject(new Error('fail-1'));
 
   const logger = stubLoggerPort();
+  // 4 clock calls: stageStart, start0, start1, stageEnd (no per-model latency reads — both reject)
   const clock = stubClockPort([0, 10, 20, 30]);
 
   const runner = new PanelRunner([port0, port1], logger, clock);
@@ -268,6 +279,15 @@ test('all-failure: 2 panel models, both reject, throws all_panels_failed', async
   // logFailedModels called
   const failCalls = logger._calls.filter((c) => c.method === 'logFailedModels');
   assert.equal(failCalls.length, 1);
+
+  // Stage lifecycle stays symmetric even when every panel model fails: the
+  // single logStageStart must be paired with exactly one logStageEnd before throw.
+  const startCalls = logger._calls.filter((c) => c.method === 'logStageStart');
+  const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
+  assert.equal(startCalls.length, 1);
+  assert.equal(endCalls.length, 1);
+  assert.equal(endCalls[0].args[0], 'panel');
+  assert.equal(endCalls[0].args[1], 30); // stageEnd - stageStart = 30 - 0
 });
 
 test('empty panel models: returns empty results, no port calls', async () => {
@@ -308,7 +328,8 @@ test('latency measurement: PanelResult.latencyMs equals clock difference', async
     model: 'm0',
   });
   const logger = stubLoggerPort();
-  const clock = stubClockPort([100, 250]);
+  // 4 clock calls: stageStart, start0, end0, stageEnd
+  const clock = stubClockPort([50, 100, 250, 300]);
 
   const runner = new PanelRunner([port], logger, clock);
 
@@ -366,7 +387,7 @@ test('FailedModelInfo from generic Error: errorCode is Error, message truncated'
   );
 });
 
-test('loggerPort.logStageEnd called per successful model with correct usage', async () => {
+test('loggerPort.logStageEnd called once for the whole stage with aggregate usage', async () => {
   const port0 = stubChatPort({
     content: 'a',
     usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
@@ -379,8 +400,8 @@ test('loggerPort.logStageEnd called per successful model with correct usage', as
   });
 
   const logger = stubLoggerPort();
-  // 4 clock calls: start0, start1, end0, end1
-  const clock = stubClockPort([100, 200, 350, 500]);
+  // 6 clock calls: stageStart, start0, start1, end0, end1, stageEnd
+  const clock = stubClockPort([50, 100, 200, 350, 500, 700]);
 
   const runner = new PanelRunner([port0, port1], logger, clock);
 
@@ -390,26 +411,22 @@ test('loggerPort.logStageEnd called per successful model with correct usage', as
     30000,
   );
 
+  // The stage end pairs 1:1 with the stage start and wraps the entire panel run.
   const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
-  assert.equal(endCalls.length, 2);
-
-  // First call (for port0): latency = 350 - 100 = 250
+  assert.equal(endCalls.length, 1);
   assert.equal(endCalls[0].args[0], 'panel');
-  assert.equal(endCalls[0].args[1], 250);
+  assert.equal(endCalls[0].args[1], 650); // stageEnd - stageStart = 700 - 50
+
+  // Usage is aggregated across all successful panel models.
   assert.deepStrictEqual(endCalls[0].args[2], {
-    promptTokens: 10,
-    completionTokens: 20,
-    totalTokens: 30,
+    promptTokens: 15, // 10 + 5
+    completionTokens: 35, // 20 + 15
+    totalTokens: 50, // 30 + 20
   });
 
-  // Second call (for port1): latency = 500 - 200 = 300
-  assert.equal(endCalls[1].args[0], 'panel');
-  assert.equal(endCalls[1].args[1], 300);
-  assert.deepStrictEqual(endCalls[1].args[2], {
-    promptTokens: 5,
-    completionTokens: 15,
-    totalTokens: 20,
-  });
+  // Per-model detail is still emitted, one logResponse per successful model.
+  const responseCalls = logger._calls.filter((c) => c.method === 'logResponse');
+  assert.equal(responseCalls.length, 2);
 });
 
 test('FailedModelInfo from generic Error uses constructor.name as errorCode', async () => {

@@ -228,6 +228,15 @@ function stubLoggerPort(): StubLoggerPort {
     logError(stage: string, error: Error): void {
       calls.push({ method: 'logError', args: [stage, error] });
     },
+    logRequest(fields): void {
+      calls.push({ method: 'logRequest', args: [fields] });
+    },
+    logResponse(fields): void {
+      calls.push({ method: 'logResponse', args: [fields] });
+    },
+    log(level, event, fields): void {
+      calls.push({ method: 'log', args: [level, event, fields] });
+    },
   };
 }
 
@@ -328,13 +337,11 @@ test('full ensemble happy path yields correct event sequence', async () => {
   assert.ok(doneEvent.usage !== undefined);
   assert.ok(doneEvent.model !== undefined);
 
-  // Logging is now owned by PanelRunner and JudgeStep; the use case itself makes no log calls
+  // Per-stage logging is step-owned; the use case emits run-level start/end markers.
   const logCalls = (loggerPort as unknown as StubLoggerPort)._calls;
-  assert.equal(
-    logCalls.length,
-    0,
-    'expected 0 use-case logger calls: panel/judge logging is step-owned',
-  );
+  const loggedEvents = logCalls.filter((c) => c.method === 'log').map((c) => c.args[1] as string);
+  assert.ok(loggedEvents.includes('fusion_run_start'), 'expected a fusion_run_start log');
+  assert.ok(loggedEvents.includes('fusion_run_end'), 'expected a fusion_run_end log');
 });
 
 // 3. Panel progress event is yielded before judge progress event
