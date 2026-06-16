@@ -73,7 +73,7 @@ test('openAiRequestToFusion handles missing stream flag', () => {
   assert.equal(result.stream, false);
 });
 
-test('openAiRequestToFusion extracts temperature and max_tokens', () => {
+test('openAiRequestToFusion extracts temperature and max_tokens to top-level', () => {
   const body: Record<string, unknown> = {
     messages: [{ role: 'user', content: 'Hello' }],
     temperature: 0.7,
@@ -81,9 +81,8 @@ test('openAiRequestToFusion extracts temperature and max_tokens', () => {
   };
 
   const result = openAiRequestToFusion(body);
-  assert.ok(result.options);
-  assert.equal(result.options!.temperature, 0.7);
-  assert.equal(result.options!.maxTokens, 256);
+  assert.equal(result.temperature, 0.7);
+  assert.equal(result.maxTokens, 256);
 });
 
 test('openAiRequestToFusion handles missing messages array gracefully', () => {
@@ -151,26 +150,24 @@ test('openAiRequestToFusion handles non-string system field', () => {
   assert.equal(result.systemPrompt, undefined);
 });
 
-test('openAiRequestToFusion handles max_tokens zero', () => {
+test('openAiRequestToFusion handles max_tokens zero at top-level', () => {
   const body: Record<string, unknown> = {
     messages: [{ role: 'user', content: 'Hello' }],
     max_tokens: 0,
   };
 
   const result = openAiRequestToFusion(body);
-  assert.ok(result.options);
-  assert.equal(result.options!.maxTokens, 0);
+  assert.equal(result.maxTokens, 0);
 });
 
-test('openAiRequestToFusion handles temperature zero', () => {
+test('openAiRequestToFusion handles temperature zero at top-level', () => {
   const body: Record<string, unknown> = {
     messages: [{ role: 'user', content: 'Hello' }],
     temperature: 0,
   };
 
   const result = openAiRequestToFusion(body);
-  assert.ok(result.options);
-  assert.equal(result.options!.temperature, 0);
+  assert.equal(result.temperature, 0);
 });
 
 test('openAiRequestToFusion options undefined when no options present', () => {

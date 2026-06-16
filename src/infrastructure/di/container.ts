@@ -2,7 +2,8 @@ import { JsonFileConfigAdapter } from '../outbound/config/json-file-config-adapt
 import { ConsoleLoggerAdapter, parseLogLevel } from '../outbound/logging/console-logger-adapter.js';
 import { ChatAdapterFactory } from '../outbound/llm/chat-adapter-factory.js';
 import { RunFusionUseCase } from '../../application/usecases/run-fusion-use-case.js';
-import { PanelRunner } from '../../application/usecases/panel-runner.js';
+import { PanelRunner, type PanelPair } from '../../application/usecases/panel-runner.js';
+import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import { JudgeStep } from '../../application/usecases/judge-step.js';
 import { SynthesizeStep } from '../../application/usecases/synthesize-step.js';
 import { createServer } from '../inbound/http/server.js';
@@ -10,28 +11,7 @@ import type { CreateServerOptions } from '../inbound/http/server.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
-import type { ChatRequest, ChatResponse, ChatStreamChunk } from '../../domain/model/chat-types.js';
 import type { FusionService } from '../../application/ports/fusion-service.js';
-
-/**
- * No-op `ChatModelPort` used when no judge model is configured. Its `complete()`
- * returns `'{}'` so `JudgeStep` parses an empty object that fails
- * `analysisSchema.safeParse()`, triggering graceful degradation (analysis
- * omitted, synthesis falls back to raw panel results). It makes no network calls.
- */
-const noopChatModelPort: ChatModelPort = {
-  async complete(_request: ChatRequest): Promise<ChatResponse> {
-    return {
-      content: '{}',
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      model: 'noop',
-    };
-  },
-  async *stream(_request: ChatRequest): AsyncIterable<ChatStreamChunk> {
-    // empty — JudgeStep only calls complete(); stream() exists for interface compliance
-  },
-};
 
 /**
  * Decide whether console logs should be ANSI-colored. Follows the de-facto
@@ -69,16 +49,17 @@ export function createApp(): {
 
   const factory = new ChatAdapterFactory(loggerPort);
 
-  // Panel ports — one ChatModelPort per configured panel ModelRef (may be empty).
-  const panelModels = configPort.getPanelModels();
-  const panelChatPorts: ChatModelPort[] = panelModels.map((m) => factory.create(m));
-  const panelRunner = new PanelRunner(panelChatPorts, loggerPort, clockPort);
+  // Panel pairs — model + adapter bundled so index alignment can never drift.
+  const panelPairs: PanelPair[] = configPort
+    .getPanelModels()
+    .map((m) => ({ modelRef: m, port: factory.create(m) }));
+  const panelRunner = new PanelRunner(panelPairs, loggerPort, clockPort);
 
-  // Judge port — real adapter when configured, otherwise the no-op stub so the
-  // ensemble degrades gracefully (analysis omitted) instead of failing.
+  // Judge step — constructed only when a judge model is configured; null otherwise,
+  // which signals RunFusionUseCase to skip the judge stage gracefully.
   const judgeModel = configPort.getJudgeModel();
-  const judgeChatPort: ChatModelPort = judgeModel ? factory.create(judgeModel) : noopChatModelPort;
-  const judgeStep = new JudgeStep(judgeChatPort, loggerPort, clockPort);
+  const judgeChatPort: ChatModelPort | null = judgeModel ? factory.create(judgeModel) : null;
+  const judgeStep = judgeChatPort ? new JudgeStep(judgeChatPort, loggerPort, clockPort) : null;
 
   // Synthesizer port — guaranteed present by JsonFileConfigAdapter validation.
   const synthesizerModel = configPort.getSynthesizerModel();

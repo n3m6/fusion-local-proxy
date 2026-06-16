@@ -319,7 +319,7 @@ test('anthropicRequestToFusion extracts max_tokens', () => {
   assert.equal(result.maxTokens, 1024);
 });
 
-test('anthropicRequestToFusion preserves max_tokens in options', () => {
+test('anthropicRequestToFusion max_tokens is available at top-level', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -327,11 +327,10 @@ test('anthropicRequestToFusion preserves max_tokens in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  assert.equal(result.options!.maxTokens, 1024);
+  assert.equal(result.maxTokens, 1024);
 });
 
-test('anthropicRequestToFusion preserves max_tokens zero in options', () => {
+test('anthropicRequestToFusion preserves max_tokens zero at top-level', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 0,
@@ -339,8 +338,7 @@ test('anthropicRequestToFusion preserves max_tokens zero in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  assert.equal(result.options!.maxTokens, 0);
+  assert.equal(result.maxTokens, 0);
 });
 
 test('anthropicRequestToFusion extracts temperature', () => {
@@ -355,7 +353,7 @@ test('anthropicRequestToFusion extracts temperature', () => {
   assert.equal(result.temperature, 0.7);
 });
 
-test('anthropicRequestToFusion preserves temperature in options', () => {
+test('anthropicRequestToFusion temperature is available at top-level', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -364,11 +362,10 @@ test('anthropicRequestToFusion preserves temperature in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  assert.equal(result.options!.temperature, 0.7);
+  assert.equal(result.temperature, 0.7);
 });
 
-test('anthropicRequestToFusion preserves temperature zero in options', () => {
+test('anthropicRequestToFusion preserves temperature zero at top-level', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -377,15 +374,14 @@ test('anthropicRequestToFusion preserves temperature zero in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  assert.equal(result.options!.temperature, 0);
+  assert.equal(result.temperature, 0);
 });
 
 // ---------------------------------------------------------------------------
-// anthropicRequestToFusion — Anthropic-only fields in options
+// anthropicRequestToFusion — sampling fields wired to FusionRequest top-level
 // ---------------------------------------------------------------------------
 
-test('anthropicRequestToFusion preserves top_p in options', () => {
+test('anthropicRequestToFusion wires top_p to FusionRequest.topP', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -394,12 +390,10 @@ test('anthropicRequestToFusion preserves top_p in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  const opts = result.options! as Record<string, unknown>;
-  assert.equal(opts.top_p, 0.9);
+  assert.equal(result.topP, 0.9);
 });
 
-test('anthropicRequestToFusion preserves top_k in options', () => {
+test('anthropicRequestToFusion wires top_k to FusionRequest.topK', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -408,12 +402,10 @@ test('anthropicRequestToFusion preserves top_k in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  const opts = result.options! as Record<string, unknown>;
-  assert.equal(opts.top_k, 40);
+  assert.equal(result.topK, 40);
 });
 
-test('anthropicRequestToFusion preserves stop_sequences in options', () => {
+test('anthropicRequestToFusion wires stop_sequences to FusionRequest.stopSequences', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -422,12 +414,10 @@ test('anthropicRequestToFusion preserves stop_sequences in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  const opts = result.options! as Record<string, unknown>;
-  assert.deepEqual(opts.stop_sequences, ['\n\nHuman:', '\n\nAssistant:']);
+  assert.deepEqual(result.stopSequences, ['\n\nHuman:', '\n\nAssistant:']);
 });
 
-test('anthropicRequestToFusion preserves metadata in options', () => {
+test('anthropicRequestToFusion wires metadata.user_id to FusionRequest.metadata', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -436,12 +426,10 @@ test('anthropicRequestToFusion preserves metadata in options', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  assert.ok(result.options);
-  const opts = result.options! as Record<string, unknown>;
-  assert.deepEqual(opts.metadata, { user_id: 'u123' });
+  assert.deepEqual(result.metadata, { user_id: 'u123' });
 });
 
-test('anthropicRequestToFusion does not preserve null metadata', () => {
+test('anthropicRequestToFusion does not set metadata for null body.metadata', () => {
   const body: Record<string, unknown> = {
     model: 'claude-3-opus-20240229',
     max_tokens: 1024,
@@ -450,11 +438,7 @@ test('anthropicRequestToFusion does not preserve null metadata', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  // options should not include metadata
-  if (result.options) {
-    const opts = result.options! as Record<string, unknown>;
-    assert.equal(opts.metadata, undefined);
-  }
+  assert.equal(result.metadata, undefined);
 });
 
 test('anthropicRequestToFusion options undefined when no extra fields', () => {
@@ -468,7 +452,7 @@ test('anthropicRequestToFusion options undefined when no extra fields', () => {
 });
 
 // ---------------------------------------------------------------------------
-// anthropicRequestToFusion — non-string top_k/top_p ignored
+// anthropicRequestToFusion — non-number top_k/top_p ignored
 // ---------------------------------------------------------------------------
 
 test('anthropicRequestToFusion ignores non-number top_p', () => {
@@ -480,10 +464,7 @@ test('anthropicRequestToFusion ignores non-number top_p', () => {
   };
 
   const result = anthropicRequestToFusion(body);
-  if (result.options) {
-    const opts = result.options! as Record<string, unknown>;
-    assert.equal(opts.top_p, undefined);
-  }
+  assert.equal(result.topP, undefined);
 });
 
 // ===========================================================================

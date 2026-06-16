@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
-import { FusionError } from '../../../../domain/model/fusion-types.js';
+import { errorEventToFusionError } from '../shared.js';
 
 export function encodeAnthropicSSE(
   events: AsyncIterable<FusionStreamEvent>,
@@ -63,13 +63,7 @@ export function encodeAnthropicSSE(
           return;
 
         case 'error':
-          throw new FusionError(
-            event.code,
-            event.message,
-            typeof event.details === 'object' && event.details !== null
-              ? (event.details as Record<string, unknown>)
-              : undefined,
-          );
+          throw errorEventToFusionError(event);
       }
     }
 

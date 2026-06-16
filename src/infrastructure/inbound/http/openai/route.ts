@@ -3,15 +3,12 @@ import { streamSSE } from 'hono/streaming';
 import type { FusionService } from '../../../../application/ports/fusion-service.js';
 import type { LoggerPort } from '../../../../domain/ports/logger-port.js';
 import { FusionError } from '../../../../domain/model/fusion-types.js';
+import { toError } from '../shared.js';
 import {
   openAiRequestToFusion,
   fusionStreamToOpenAiResponse,
   fusionStreamToOpenAiSSE,
 } from './translator.js';
-
-function toError(err: unknown): Error {
-  return err instanceof Error ? err : new Error(String(err));
-}
 
 export function createOpenAiRoute(fusionService: FusionService, logger?: LoggerPort) {
   return async (c: Context) => {

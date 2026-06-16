@@ -67,13 +67,11 @@ const sampleFailedModel = {
 
 interface StubPanelRunner {
   _lastMessages: Message[] | null;
-  _lastPanelModels: ModelRef[] | null;
   _lastTimeoutMs: number;
   _lastSampling: { temperature?: number; maxTokens?: number } | undefined;
   _callCount: number;
   run(
     messages: Message[],
-    panelModels: ModelRef[],
     timeoutMs: number,
     requestId?: string,
     sampling?: { temperature?: number; maxTokens?: number },
@@ -87,14 +85,12 @@ function stubPanelRunner(result?: PanelMeta): StubPanelRunner {
   };
   const stub: StubPanelRunner = {
     _lastMessages: null,
-    _lastPanelModels: null,
     _lastTimeoutMs: -1,
     _lastSampling: undefined,
     _callCount: 0,
-    async run(messages, panelModels, timeoutMs, _requestId, sampling) {
+    async run(messages, timeoutMs, _requestId, sampling) {
       stub._callCount++;
       stub._lastMessages = messages;
-      stub._lastPanelModels = panelModels;
       stub._lastTimeoutMs = timeoutMs;
       stub._lastSampling = sampling;
       return result ?? defaultResult;
@@ -106,14 +102,12 @@ function stubPanelRunner(result?: PanelMeta): StubPanelRunner {
 function stubPanelRunnerThrowing(error: FusionError): StubPanelRunner {
   const stub: StubPanelRunner = {
     _lastMessages: null,
-    _lastPanelModels: null,
     _lastTimeoutMs: -1,
     _lastSampling: undefined,
     _callCount: 0,
-    async run(messages, panelModels, timeoutMs, _requestId, sampling) {
+    async run(messages, timeoutMs, _requestId, sampling) {
       stub._callCount++;
       stub._lastMessages = messages;
-      stub._lastPanelModels = panelModels;
       stub._lastTimeoutMs = timeoutMs;
       stub._lastSampling = sampling;
       throw error;
@@ -488,10 +482,9 @@ test('SynthesizeStep receives analysis from JudgeStep', async () => {
   assert.deepStrictEqual(calls[0].analysis, sampleAnalysis);
 });
 
-// 7. Judge null path (config returns null) skips judge and passes null analysis
+// 7. Judge null path (judgeStep = null) skips judge and passes null analysis
 test('judge null path skips JudgeStep and passes null analysis', async () => {
   const panelRunner = stubPanelRunner() as unknown as PanelRunner;
-  const judgeStep = stubJudgeStep() as unknown as JudgeStep;
   const synthesizeStep = stubSynthesizeStep() as unknown as SynthesizeStep;
   const configPort = stubConfigPort({ judgeModel: null }) as ConfigPort;
   const loggerPort = stubLoggerPort();
@@ -499,7 +492,7 @@ test('judge null path skips JudgeStep and passes null analysis', async () => {
 
   const useCase = new RunFusionUseCase(
     panelRunner,
-    judgeStep,
+    null,
     synthesizeStep,
     configPort,
     loggerPort,
@@ -510,10 +503,8 @@ test('judge null path skips JudgeStep and passes null analysis', async () => {
     useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
   );
 
-  // JudgeStep.analyze() was never called
-  assert.equal((judgeStep as unknown as StubJudgeStep)._analyzeCalls.length, 0);
-
   // Judge progress still yielded
+  // Judge progress still yielded even when skipped
   const judgeProgress = events.find((e) => e.type === 'progress' && e.stage === 'judge');
   assert.ok(judgeProgress, 'expected judge progress event even when skipped');
 
@@ -701,14 +692,12 @@ test('withHeartbeat emits panel heartbeat events before Panel stage complete', a
 
   const slowPanelRunner: StubPanelRunner = {
     _lastMessages: null,
-    _lastPanelModels: null,
     _lastTimeoutMs: -1,
     _lastSampling: undefined,
     _callCount: 0,
-    async run(messages, panelModels, timeoutMs, _requestId, sampling) {
+    async run(messages, timeoutMs, _requestId, sampling) {
       slowPanelRunner._callCount++;
       slowPanelRunner._lastMessages = messages;
-      slowPanelRunner._lastPanelModels = panelModels;
       slowPanelRunner._lastTimeoutMs = timeoutMs;
       slowPanelRunner._lastSampling = sampling;
       await delay(60);

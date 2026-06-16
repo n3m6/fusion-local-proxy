@@ -161,15 +161,17 @@ test('all-success: 3 panel models, all resolve', async () => {
   // 8 clock calls: stageStart, start0..2, end0..2, stageEnd
   const clock = stubClockPort([50, 100, 200, 300, 350, 480, 600, 700]);
 
-  const runner = new PanelRunner([port0, port1, port2], logger, clock);
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'gpt-4o', provider: 'openai' }), port: port0 },
+      { modelRef: modelRef({ model: 'claude-3', provider: 'anthropic' }), port: port1 },
+      { modelRef: modelRef({ model: 'gpt-4o-mini', provider: 'openai' }), port: port2 },
+    ],
+    logger,
+    clock,
+  );
 
-  const panelModels: ModelRef[] = [
-    modelRef({ model: 'gpt-4o', provider: 'openai' }),
-    modelRef({ model: 'claude-3', provider: 'anthropic' }),
-    modelRef({ model: 'gpt-4o-mini', provider: 'openai' }),
-  ];
-
-  const result = await runner.run([sampleMessage], panelModels, 30000);
+  const result = await runner.run([sampleMessage], 30000);
 
   assert.equal(result.results.length, 3);
   assert.equal(result.failedModels.length, 0);
@@ -222,15 +224,17 @@ test('partial-failure: 2 resolve, 1 rejects with FusionError', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([10, 20, 30, 40, 50, 60]);
 
-  const runner = new PanelRunner([port0, port1, port2], logger, clock);
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'm0' }), port: port0 },
+      { modelRef: modelRef({ model: 'm1' }), port: port1 },
+      { modelRef: modelRef({ model: 'm2', provider: 'anthropic' }), port: port2 },
+    ],
+    logger,
+    clock,
+  );
 
-  const panelModels: ModelRef[] = [
-    modelRef({ model: 'm0' }),
-    modelRef({ model: 'm1' }),
-    modelRef({ model: 'm2', provider: 'anthropic' }),
-  ];
-
-  const result = await runner.run([sampleMessage], panelModels, 30000);
+  const result = await runner.run([sampleMessage], 30000);
 
   assert.equal(result.results.length, 2);
   assert.equal(result.failedModels.length, 1);
@@ -256,15 +260,17 @@ test('all-failure: 2 panel models, both reject, throws all_panels_failed', async
   // 4 clock calls: stageStart, start0, start1, stageEnd (no per-model latency reads — both reject)
   const clock = stubClockPort([0, 10, 20, 30]);
 
-  const runner = new PanelRunner([port0, port1], logger, clock);
-
-  const panelModels: ModelRef[] = [
-    modelRef({ model: 'm0' }),
-    modelRef({ model: 'm1', provider: 'anthropic' }),
-  ];
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'm0' }), port: port0 },
+      { modelRef: modelRef({ model: 'm1', provider: 'anthropic' }), port: port1 },
+    ],
+    logger,
+    clock,
+  );
 
   await assert.rejects(
-    () => runner.run([sampleMessage], panelModels, 30000),
+    () => runner.run([sampleMessage], 30000),
     (err: unknown) => {
       assert.ok(err instanceof FusionError);
       const fe = err as FusionError;
@@ -291,16 +297,14 @@ test('all-failure: 2 panel models, both reject, throws all_panels_failed', async
 });
 
 test('empty panel models: returns empty results, no port calls', async () => {
-  const port = stubChatPort();
   const logger = stubLoggerPort();
   const clock = stubClockPort([0]);
 
-  const runner = new PanelRunner([port], logger, clock);
+  const runner = new PanelRunner([], logger, clock);
 
-  const result = await runner.run([sampleMessage], [], 30000);
+  const result = await runner.run([sampleMessage], 30000);
 
   assert.deepStrictEqual(result, { results: [], failedModels: [] });
-  assert.equal(port._calls.length, 0);
 
   // No log calls either
   assert.equal(logger._calls.length, 0);
@@ -311,9 +315,9 @@ test('AbortSignal passthrough: signal is set on ChatRequest', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 10]);
 
-  const runner = new PanelRunner([port], logger, clock);
+  const runner = new PanelRunner([{ modelRef: modelRef({ model: 'm0' }), port }], logger, clock);
 
-  await runner.run([sampleMessage], [modelRef({ model: 'm0' })], 5000);
+  await runner.run([sampleMessage], 5000);
 
   assert.ok(port._calls.length >= 1);
   const req = port._calls[0];
@@ -331,9 +335,9 @@ test('latency measurement: PanelResult.latencyMs equals clock difference', async
   // 4 clock calls: stageStart, start0, end0, stageEnd
   const clock = stubClockPort([50, 100, 250, 300]);
 
-  const runner = new PanelRunner([port], logger, clock);
+  const runner = new PanelRunner([{ modelRef: modelRef({ model: 'm0' }), port }], logger, clock);
 
-  const result = await runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000);
+  const result = await runner.run([sampleMessage], 30000);
 
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].latencyMs, 150); // 250 - 100
@@ -344,10 +348,10 @@ test('FailedModelInfo from FusionError: errorCode and errorMessage copied', asyn
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 10]);
 
-  const runner = new PanelRunner([port], logger, clock);
+  const runner = new PanelRunner([{ modelRef: modelRef({ model: 'm0' }), port }], logger, clock);
 
   await assert.rejects(
-    () => runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000),
+    () => runner.run([sampleMessage], 30000),
     (err: unknown) => {
       assert.ok(err instanceof FusionError);
       const fe = err as FusionError;
@@ -370,10 +374,10 @@ test('FailedModelInfo from generic Error: errorCode is Error, message truncated'
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 10]);
 
-  const runner = new PanelRunner([port], logger, clock);
+  const runner = new PanelRunner([{ modelRef: modelRef({ model: 'm0' }), port }], logger, clock);
 
   await assert.rejects(
-    () => runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000),
+    () => runner.run([sampleMessage], 30000),
     (err: unknown) => {
       assert.ok(err instanceof FusionError);
       const fe = err as FusionError;
@@ -403,13 +407,16 @@ test('loggerPort.logStageEnd called once for the whole stage with aggregate usag
   // 6 clock calls: stageStart, start0, start1, end0, end1, stageEnd
   const clock = stubClockPort([50, 100, 200, 350, 500, 700]);
 
-  const runner = new PanelRunner([port0, port1], logger, clock);
-
-  await runner.run(
-    [sampleMessage],
-    [modelRef({ model: 'm0' }), modelRef({ model: 'm1', provider: 'anthropic' })],
-    30000,
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'm0' }), port: port0 },
+      { modelRef: modelRef({ model: 'm1', provider: 'anthropic' }), port: port1 },
+    ],
+    logger,
+    clock,
   );
+
+  await runner.run([sampleMessage], 30000);
 
   // The stage end pairs 1:1 with the stage start and wraps the entire panel run.
   const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
@@ -441,10 +448,10 @@ test('FailedModelInfo from generic Error uses constructor.name as errorCode', as
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 10]);
 
-  const runner = new PanelRunner([port], logger, clock);
+  const runner = new PanelRunner([{ modelRef: modelRef({ model: 'm0' }), port }], logger, clock);
 
   await assert.rejects(
-    () => runner.run([sampleMessage], [modelRef({ model: 'm0' })], 30000),
+    () => runner.run([sampleMessage], 30000),
     (err: unknown) => {
       assert.ok(err instanceof FusionError);
       const fe = err as FusionError;
@@ -468,14 +475,17 @@ test('partial-failure does not throw (non-zero successes)', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 10, 20, 30]);
 
-  const runner = new PanelRunner([port0, port1], logger, clock);
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'm0' }), port: port0 },
+      { modelRef: modelRef({ model: 'm1', provider: 'anthropic' }), port: port1 },
+    ],
+    logger,
+    clock,
+  );
 
   // Should not throw
-  const result = await runner.run(
-    [sampleMessage],
-    [modelRef({ model: 'm0' }), modelRef({ model: 'm1', provider: 'anthropic' })],
-    30000,
-  );
+  const result = await runner.run([sampleMessage], 30000);
 
   assert.equal(result.results.length, 1);
   assert.equal(result.failedModels.length, 1);
@@ -497,8 +507,6 @@ test('chatRequest includes model ref and messages for each panel model', async (
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 10, 20, 30]);
 
-  const runner = new PanelRunner([port0, port1], logger, clock);
-
   const messages = [
     { role: 'system' as const, content: 'be helpful' },
     { role: 'user' as const, content: 'query' },
@@ -507,7 +515,16 @@ test('chatRequest includes model ref and messages for each panel model', async (
   const m0 = modelRef({ model: 'm0', provider: 'openai', baseURL: 'http://a', apiKey: 'k0' });
   const m1 = modelRef({ model: 'm1', provider: 'anthropic', baseURL: 'http://b', apiKey: 'k1' });
 
-  await runner.run(messages, [m0, m1], 30000);
+  const runner = new PanelRunner(
+    [
+      { modelRef: m0, port: port0 },
+      { modelRef: m1, port: port1 },
+    ],
+    logger,
+    clock,
+  );
+
+  await runner.run(messages, 30000);
 
   assert.equal(port0._calls.length, 1);
   assert.equal(port1._calls.length, 1);

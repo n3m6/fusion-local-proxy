@@ -1,22 +1,20 @@
 import OpenAI from 'openai';
 import type { ChatModelPort } from '../../../domain/ports/chat-model-port.js';
-import type { LoggerPort, LogFields } from '../../../domain/ports/logger-port.js';
+import type { LoggerPort } from '../../../domain/ports/logger-port.js';
 import type {
   ChatRequest,
   ChatResponse,
   ChatStreamChunk,
   TokenUsage,
 } from '../../../domain/model/chat-types.js';
+import {
+  type AdapterConfig,
+  buildRequestLogFields,
+  buildBaseLogFields,
+} from './adapter-support.js';
 
-export interface AdapterConfig {
-  readonly baseURL: string;
-  readonly apiKey: string;
-}
+export type { AdapterConfig };
 
-/**
- * Construct the OpenAI SDK client. Kept here (rather than in the factory) so the
- * `openai` SDK import stays confined to this adapter module (NFR-3).
- */
 export function createOpenAiClient(config: AdapterConfig): OpenAI {
   return new OpenAI({
     baseURL: config.baseURL,
@@ -24,49 +22,24 @@ export function createOpenAiClient(config: AdapterConfig): OpenAI {
   });
 }
 
-function promptChars(request: ChatRequest): number {
-  return request.messages.reduce((sum, m) => sum + m.content.length, 0);
-}
+type BaseCompletionParams = Omit<
+  OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+  'stream'
+>;
 
 export class OpenAiChatAdapter implements ChatModelPort {
   constructor(
     private readonly client: OpenAI,
+    private readonly adapterConfig: AdapterConfig,
     private readonly logger?: LoggerPort,
   ) {}
 
   get config(): AdapterConfig {
-    return {
-      baseURL: (this.client as unknown as { baseURL?: string }).baseURL ?? '',
-      apiKey: (this.client as unknown as { apiKey?: string }).apiKey ?? '',
-    };
+    return this.adapterConfig;
   }
 
-  private baseFields(request: ChatRequest): LogFields {
-    return {
-      provider: 'openai',
-      modelId: request.model.model,
-      baseURL: request.model.baseURL,
-      requestId: request.options?.requestId,
-      stage: request.options?.stage,
-    };
-  }
-
-  async complete(request: ChatRequest): Promise<ChatResponse> {
-    const startTime = Date.now();
-    this.logger?.logRequest({
-      ...this.baseFields(request),
-      mode: 'complete',
-      messageCount: request.messages.length,
-      promptChars: promptChars(request),
-      temperature: request.options?.temperature,
-      maxTokens: request.options?.maxTokens,
-      responseFormat: request.options?.responseFormat?.type,
-      thinkingStrength: request.model.thinkingStrength,
-      // Full prompt; only surfaces at debug level (logRequest is debug).
-      prompt: request.messages,
-    });
-
-    const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
+  private buildBaseParams(request: ChatRequest): BaseCompletionParams {
+    const params: BaseCompletionParams = {
       model: request.model.model,
       messages: request.messages.map((m) => ({
         role: m.role,
@@ -74,6 +47,8 @@ export class OpenAiChatAdapter implements ChatModelPort {
       })),
       temperature: request.options?.temperature,
       max_tokens: request.options?.maxTokens,
+      top_p: request.options?.topP,
+      stop: request.options?.stopSequences,
     };
 
     const ts = request.model.thinkingStrength;
@@ -97,9 +72,17 @@ export class OpenAiChatAdapter implements ChatModelPort {
       }
     }
 
-    const response = await this.client.chat.completions.create(params, {
-      signal: request.options?.signal,
-    });
+    return params;
+  }
+
+  async complete(request: ChatRequest): Promise<ChatResponse> {
+    const startTime = Date.now();
+    this.logger?.logRequest(buildRequestLogFields(request, 'openai', 'complete'));
+
+    const response = await this.client.chat.completions.create(
+      { ...this.buildBaseParams(request) },
+      { signal: request.options?.signal },
+    );
 
     const choice = response.choices[0];
     const content = choice?.message?.content ?? '';
@@ -111,7 +94,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
     };
 
     this.logger?.logResponse({
-      ...this.baseFields(request),
+      ...buildBaseLogFields(request, 'openai'),
       mode: 'complete',
       latencyMs: Date.now() - startTime,
       contentChars: content.length,
@@ -121,78 +104,33 @@ export class OpenAiChatAdapter implements ChatModelPort {
         completion: usage.completionTokens,
         total: usage.totalTokens,
       },
-      // Full response text; only surfaces at debug level (logResponse is debug).
       content,
     });
 
-    return {
-      content,
-      usage,
-      model: response.model,
-    };
+    return { content, usage, model: response.model };
   }
 
   async *stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
     const startTime = Date.now();
-    this.logger?.logRequest({
-      ...this.baseFields(request),
-      mode: 'stream',
-      messageCount: request.messages.length,
-      promptChars: promptChars(request),
-      temperature: request.options?.temperature,
-      maxTokens: request.options?.maxTokens,
-      responseFormat: request.options?.responseFormat?.type,
-      thinkingStrength: request.model.thinkingStrength,
-      // Full prompt; only surfaces at debug level (logRequest is debug).
-      prompt: request.messages,
-    });
+    this.logger?.logRequest(buildRequestLogFields(request, 'openai', 'stream'));
 
-    const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
-      model: request.model.model,
-      messages: request.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-      temperature: request.options?.temperature,
-      max_tokens: request.options?.maxTokens,
+    const params = {
+      ...this.buildBaseParams(request),
       stream: true,
       stream_options: { include_usage: true },
-    };
-
-    const ts = request.model.thinkingStrength;
-    if (ts !== undefined && ts !== 'off') {
-      params.reasoning_effort = ts;
-    }
-
-    if (request.options?.responseFormat) {
-      const rf = request.options.responseFormat;
-      if (rf.type === 'json_object') {
-        params.response_format = { type: 'json_object' };
-      } else if (rf.type === 'json_schema') {
-        params.response_format = {
-          type: 'json_schema',
-          json_schema: {
-            name: 'response',
-            strict: true,
-            schema: rf.schema,
-          },
-        };
-      }
-    }
+    } as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
 
     const requestOptions = { signal: request.options?.signal };
-    // Use the streaming-specific overload signature so `for await` resolves correctly
     let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
     try {
       stream = (await this.client.chat.completions.create(
-        params as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
+        params,
         requestOptions,
       )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
     } catch (err) {
       if ((err as { status?: number })?.status === 400) {
-        // Some backends reject stream_options; retry once without it
         this.logger?.log('warn', 'openai_stream_retry_without_stream_options', {
-          ...this.baseFields(request),
+          ...buildBaseLogFields(request, 'openai'),
         });
         const { stream_options: _dropped, ...paramsWithoutStreamOptions } = params;
         stream = (await this.client.chat.completions.create(
@@ -243,7 +181,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
     }
 
     this.logger?.logResponse({
-      ...this.baseFields(request),
+      ...buildBaseLogFields(request, 'openai'),
       mode: 'stream',
       latencyMs: Date.now() - startTime,
       ttftMs,
@@ -256,7 +194,6 @@ export class OpenAiChatAdapter implements ChatModelPort {
             total: lastUsage.totalTokens,
           }
         : undefined,
-      // Full streamed response text; only surfaces at debug level.
       content: fullContent,
     });
   }

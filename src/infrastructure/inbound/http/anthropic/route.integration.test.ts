@@ -464,11 +464,9 @@ test('POST /v1/messages handles top_p, top_k, stop_sequences', async () => {
 
   const captured = (request as unknown as { value: FusionRequest | null }).value;
   assert.ok(captured);
-  assert.ok(captured!.options);
-  const opts = captured!.options as Record<string, unknown>;
-  assert.equal(opts.top_p, 0.9);
-  assert.equal(opts.top_k, 40);
-  assert.deepEqual(opts.stop_sequences, ['END']);
+  assert.equal(captured!.topP, 0.9);
+  assert.equal(captured!.topK, 40);
+  assert.deepEqual(captured!.stopSequences, ['END']);
 });
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import type { PanelResult } from '../model/fusion-types.js';
 import type { Message } from '../model/message.js';
+import { renderConversation, renderPanelResponses } from './prompt-sections.js';
 
 /**
  * Build the system prompt for the judge model.
@@ -43,28 +44,15 @@ export function buildJudgeUserPrompt(
   panelResults: PanelResult[],
   originalMessages: Message[],
 ): string {
-  const parts: string[] = [];
-
-  parts.push('=== ORIGINAL CONVERSATION ===');
-  for (const msg of originalMessages) {
-    parts.push(`[${msg.role}]: ${msg.content}`);
-  }
-
-  parts.push('');
-  parts.push('=== PANEL MODEL RESPONSES ===');
-  for (let i = 0; i < panelResults.length; i++) {
-    const result = panelResults[i];
-    parts.push(`--- Model ${i + 1}: ${result.modelId} ---`);
-    parts.push(result.content);
-    parts.push('');
-  }
-
-  parts.push('=== INSTRUCTIONS ===');
-  parts.push('Analyze the above panel model responses against the original conversation.');
-  parts.push(
+  const parts: string[] = [
+    ...renderConversation(originalMessages),
+    '',
+    ...renderPanelResponses(panelResults),
+    '=== INSTRUCTIONS ===',
+    'Analyze the above panel model responses against the original conversation.',
     'Produce a single JSON object with the fields: agreements, discrepancies, issues, gaps, and recommendation.',
-  );
-  parts.push('Output only the JSON object — no preamble, no explanation, no markdown fences.');
+    'Output only the JSON object — no preamble, no explanation, no markdown fences.',
+  ];
 
   return parts.join('\n');
 }

@@ -52,7 +52,11 @@ export interface FusionRequest {
   readonly model?: string;
   readonly stream?: boolean;
   readonly systemPrompt?: string;
-  readonly maxTokens?: number;
   readonly temperature?: number;
+  readonly maxTokens?: number;
+  readonly topP?: number;
+  readonly topK?: number;
+  readonly stopSequences?: string[];
+  readonly metadata?: { readonly user_id?: string | null };
   readonly options?: ChatOptions;
 }

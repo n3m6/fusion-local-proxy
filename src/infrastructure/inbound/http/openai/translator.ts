@@ -1,8 +1,9 @@
-import { FusionError } from '../../../../domain/model/fusion-types.js';
+import { randomUUID } from 'node:crypto';
 import type { FusionRequest } from '../../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
-import type { ChatOptions } from '../../../../domain/model/chat-types.js';
 import type { TokenUsage } from '../../../../domain/model/chat-types.js';
+import { FusionError } from '../../../../domain/model/fusion-types.js';
+import { errorEventToFusionError, parseCommonRequestFields } from '../shared.js';
 import { encodeOpenAiSSE } from './sse-encoder.js';
 
 export function openAiRequestToFusion(body: Record<string, unknown>): FusionRequest {
@@ -13,19 +14,14 @@ export function openAiRequestToFusion(body: Record<string, unknown>): FusionRequ
       }))
     : [];
 
-  const model = typeof body.model === 'string' ? body.model : undefined;
-  const stream = typeof body.stream === 'boolean' ? body.stream : undefined;
+  const { model, stream, temperature, maxTokens, topP } = parseCommonRequestFields(body);
   const systemPrompt = typeof body.system === 'string' ? body.system : undefined;
-  const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
-  const maxTokens = typeof body.max_tokens === 'number' ? body.max_tokens : undefined;
-
-  const options: ChatOptions = {};
-  if (temperature !== undefined) {
-    (options as Record<string, unknown>).temperature = temperature;
-  }
-  if (maxTokens !== undefined) {
-    (options as Record<string, unknown>).maxTokens = maxTokens;
-  }
+  const rawStop = body.stop;
+  const stopSequences = Array.isArray(rawStop)
+    ? (rawStop as unknown[]).filter((s): s is string => typeof s === 'string')
+    : typeof rawStop === 'string'
+      ? [rawStop]
+      : undefined;
 
   return {
     messages,
@@ -34,7 +30,8 @@ export function openAiRequestToFusion(body: Record<string, unknown>): FusionRequ
     systemPrompt,
     temperature,
     maxTokens,
-    options: Object.keys(options).length > 0 ? options : undefined,
+    ...(topP !== undefined ? { topP } : {}),
+    ...(stopSequences !== undefined && stopSequences.length > 0 ? { stopSequences } : {}),
   };
 }
 
@@ -66,13 +63,7 @@ export async function fusionStreamToOpenAiResponse(
         }
         break;
       case 'error':
-        throw new FusionError(
-          event.code,
-          event.message,
-          typeof event.details === 'object' && event.details !== null
-            ? (event.details as Record<string, unknown>)
-            : undefined,
-        );
+        throw errorEventToFusionError(event);
       case 'progress':
         break;
     }
@@ -82,7 +73,7 @@ export async function fusionStreamToOpenAiResponse(
     throw new FusionError('incomplete_stream', 'Stream completed without a done event');
   }
 
-  const id = `chatcmpl-${crypto.randomUUID()}`;
+  const id = `chatcmpl-${randomUUID()}`;
   const created = Math.floor(Date.now() / 1000);
 
   return {

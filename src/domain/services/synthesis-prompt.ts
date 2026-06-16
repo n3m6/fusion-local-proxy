@@ -1,6 +1,7 @@
 import type { PanelResult } from '../model/fusion-types.js';
 import type { Message } from '../model/message.js';
 import type { Analysis } from './analysis-schema.js';
+import { renderConversation, renderPanelResponses } from './prompt-sections.js';
 
 /**
  * Build the system prompt for the synthesizer model.
@@ -40,21 +41,11 @@ export function buildSynthesisUserPrompt(
   originalMessages: Message[],
   analysis: Analysis | null,
 ): string {
-  const parts: string[] = [];
-
-  parts.push('=== ORIGINAL CONVERSATION ===');
-  for (const msg of originalMessages) {
-    parts.push(`[${msg.role}]: ${msg.content}`);
-  }
-
-  parts.push('');
-  parts.push('=== PANEL MODEL RESPONSES ===');
-  for (let i = 0; i < panelResults.length; i++) {
-    const result = panelResults[i];
-    parts.push(`--- Model ${i + 1}: ${result.modelId} ---`);
-    parts.push(result.content);
-    parts.push('');
-  }
+  const parts: string[] = [
+    ...renderConversation(originalMessages),
+    '',
+    ...renderPanelResponses(panelResults),
+  ];
 
   if (analysis !== null) {
     parts.push('=== PANEL ANALYSIS ===');

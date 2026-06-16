@@ -1,8 +1,10 @@
 import { createApp } from './infrastructure/di/container.js';
 import { startHttpServer } from './infrastructure/inbound/http/node-server.js';
 
+const DEFAULT_PORT = 3000;
+
 export function resolvePort(): number {
-  return Number(process.env.PORT) || 3000;
+  return Number(process.env.PORT) || DEFAULT_PORT;
 }
 
 export function main(): void {

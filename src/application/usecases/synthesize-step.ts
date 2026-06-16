@@ -25,7 +25,14 @@ export class SynthesizeStep {
     originalMessages: Message[],
     analysis: Analysis | null,
     requestId?: string,
-    sampling?: { temperature?: number; maxTokens?: number },
+    sampling?: {
+      temperature?: number;
+      maxTokens?: number;
+      topP?: number;
+      topK?: number;
+      stopSequences?: string[];
+      metadata?: { readonly user_id?: string | null };
+    },
   ): AsyncIterable<FusionStreamEvent> {
     const synthesizerModel = this.configPort.getSynthesizerModel();
     const timeoutMs = this.configPort.getTimeoutMs();
@@ -53,6 +60,12 @@ export class SynthesizeStep {
           stage: 'synthesis',
           ...(sampling?.temperature !== undefined ? { temperature: sampling.temperature } : {}),
           ...(sampling?.maxTokens !== undefined ? { maxTokens: sampling.maxTokens } : {}),
+          ...(sampling?.topP !== undefined ? { topP: sampling.topP } : {}),
+          ...(sampling?.topK !== undefined ? { topK: sampling.topK } : {}),
+          ...(sampling?.stopSequences !== undefined
+            ? { stopSequences: sampling.stopSequences }
+            : {}),
+          ...(sampling?.metadata !== undefined ? { metadata: sampling.metadata } : {}),
         },
       };
 

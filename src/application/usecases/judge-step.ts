@@ -11,6 +11,8 @@ import {
   buildJudgeUserPrompt,
 } from '../../domain/services/judge-prompt.js';
 
+const RAW_CONTENT_LOG_LIMIT = 1000;
+
 const ANALYSIS_JSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -145,7 +147,7 @@ export class JudgeStep {
         modelId: judgeModel.model,
         reason: 'invalid_json',
         contentChars: response.content.length,
-        rawContent: response.content.slice(0, 1000),
+        rawContent: response.content.slice(0, RAW_CONTENT_LOG_LIMIT),
       });
       return null;
     }
@@ -157,7 +159,7 @@ export class JudgeStep {
         modelId: judgeModel.model,
         reason: 'schema_validation_failed',
         contentChars: response.content.length,
-        rawContent: response.content.slice(0, 1000),
+        rawContent: response.content.slice(0, RAW_CONTENT_LOG_LIMIT),
       });
       return null;
     }

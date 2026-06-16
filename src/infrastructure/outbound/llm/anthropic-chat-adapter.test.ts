@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { AnthropicChatAdapter } from './anthropic-chat-adapter.js';
 import type { ChatRequest, ChatStreamChunk } from '../../../domain/model/chat-types.js';
 
+const STUB_CONFIG = { baseURL: '', apiKey: '' } as const;
+
 // ---------------------------------------------------------------------------
 // Stub helpers for the Anthropic SDK client used by the adapter
 // ---------------------------------------------------------------------------
@@ -77,7 +79,7 @@ test('System message extraction: system message removed from messages, placed in
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   const request = makeRequest({
     messages: [
@@ -106,7 +108,7 @@ test('Multiple system messages concatenation: two system messages joined by newl
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   const request = makeRequest({
     messages: [
@@ -135,7 +137,7 @@ test('No system messages: system param absent', async () => {
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   const request = makeRequest({
     messages: [
@@ -166,7 +168,7 @@ test('User/assistant message mapping: roles and content block format', async () 
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   const request = makeRequest({
     messages: [
@@ -189,7 +191,7 @@ test('User/assistant message mapping: roles and content block format', async () 
   assert.deepEqual(messages[1].content, [{ type: 'text', text: 'Answer.' }]);
 });
 
-test('Options mapping: max_tokens, temperature, and output_config for json_object', async () => {
+test('Options mapping: max_tokens and temperature for json_object (no output_config)', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 
   const client = stubAnthropicClient(async (params) => {
@@ -201,7 +203,7 @@ test('Options mapping: max_tokens, temperature, and output_config for json_objec
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   const request = makeRequest({
     options: {
@@ -216,9 +218,9 @@ test('Options mapping: max_tokens, temperature, and output_config for json_objec
   const params = capturedParams.value!;
   assert.equal(params.max_tokens, 1024);
   assert.equal(params.temperature, 0.7);
-  assert.deepEqual(params.output_config, {
-    format: { type: 'json_object', schema: null },
-  });
+  // Anthropic's output_config only supports json_schema; json_object mode relies
+  // on the system-prompt JSON instruction instead, so output_config is not set.
+  assert.equal(params.output_config, undefined);
 });
 
 test('Options mapping: output_config set for json_schema responseFormat', async () => {
@@ -233,7 +235,7 @@ test('Options mapping: output_config set for json_schema responseFormat', async 
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const schema = { type: 'object', properties: { answer: { type: 'string' } } };
 
   const request = makeRequest({
@@ -260,7 +262,7 @@ test('Response content extraction: first text block text returned', async () => 
     model: 'claude-3',
   }));
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const request = makeRequest();
   const response = await adapter.complete(request);
 
@@ -280,7 +282,7 @@ test('Empty response content: no text blocks throws error', async () => {
     model: 'claude-3',
   }));
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const request = makeRequest();
 
   await assert.rejects(adapter.complete(request), {
@@ -295,7 +297,7 @@ test('SDK error propagation for complete(): rejected promise propagates', async 
     throw sdkError;
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const request = makeRequest();
 
   await assert.rejects(adapter.complete(request), (err: unknown) => {
@@ -316,7 +318,7 @@ test('AbortSignal forwarding for complete(): signal passed in second argument', 
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const controller = new AbortController();
 
   const request = makeRequest({
@@ -412,7 +414,7 @@ test('Stream content delta mapping: text_delta yields content_delta', async () =
   ];
 
   const client = stubAnthropicStreamingClient(events);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
@@ -431,7 +433,7 @@ test('Stream multiple deltas: three sequential text_delta events yield three con
   ];
 
   const client = stubAnthropicStreamingClient(events);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
@@ -450,7 +452,7 @@ test('Stream content_stop before usage: message_stop yields content_stop then us
   ];
 
   const client = stubAnthropicStreamingClient(events);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   // Find the positions of content_stop and usage
@@ -481,7 +483,7 @@ test('Stream usage is final element: last chunk is always usage', async () => {
   ];
 
   const client = stubAnthropicStreamingClient(events);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   assert.ok(chunks.length > 0);
@@ -498,7 +500,7 @@ test('Non-text content ignored in stream: thinking_delta does not yield content_
   ];
 
   const client = stubAnthropicStreamingClient(events);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
@@ -510,7 +512,7 @@ test('Non-text content ignored in stream: thinking_delta does not yield content_
 test('Stream error propagation: error thrown when iteration begins', async () => {
   const sdkError = new Error('Connection failed');
   const client = stubAnthropicStreamingClientReject(sdkError);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   await assert.rejects(
     async () => {
@@ -536,7 +538,7 @@ test('AbortSignal forwarding for stream(): signal passed in second argument', as
   ];
 
   const client = stubAnthropicStreamingClient(events, capturedOptions);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   const controller = new AbortController();
   const request = makeRequest({
@@ -565,7 +567,7 @@ test('Stream yields content_stop at end when no message_stop event', async () =>
   ];
 
   const client = stubAnthropicStreamingClient(events);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   // Should have content_delta, then content_stop (fallback after loop)
@@ -577,7 +579,7 @@ test('Stream handles empty event stream gracefully', async () => {
   const events: Record<string, unknown>[] = [];
 
   const client = stubAnthropicStreamingClient(events);
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   // Should yield only content_stop (fallback)
@@ -603,7 +605,7 @@ test('Stream default max_tokens is 4096 when not specified', async () => {
     },
   } as unknown as AnthropicClientArg;
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const request = makeRequest({ options: undefined });
 
   for await (const _ of adapter.stream(request)) {
@@ -630,7 +632,7 @@ test('Thinking medium: budget_tokens=4096, max_tokens bumped, temperature omitte
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
 
   const request = makeRequest({
     model: {
@@ -676,7 +678,7 @@ test('Thinking low: budget_tokens=1024, max_tokens=5120', async () => {
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   await adapter.complete(
     makeRequest({
       model: {
@@ -707,7 +709,7 @@ test('Thinking high: budget_tokens=12000, max_tokens=16096', async () => {
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   await adapter.complete(
     makeRequest({
       model: {
@@ -738,7 +740,7 @@ test('Thinking xhigh: budget_tokens=24000, max_tokens=28096', async () => {
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   await adapter.complete(
     makeRequest({
       model: {
@@ -769,7 +771,7 @@ test('Thinking off: thinking param absent, temperature and max_tokens unaffected
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   await adapter.complete(
     makeRequest({
       model: {
@@ -801,7 +803,7 @@ test('Thinking absent: thinking param absent, temperature forwarded normally', a
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   await adapter.complete(
     makeRequest({
       options: { temperature: 0.3 },
@@ -825,7 +827,7 @@ test('Thinking respects explicit maxTokens when larger than budget+4096', async 
     };
   });
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   await adapter.complete(
     makeRequest({
       model: {
@@ -862,7 +864,7 @@ test('Stream does not expose output_config when responseFormat is not json_objec
     },
   } as unknown as AnthropicClientArg;
 
-  const adapter = new AnthropicChatAdapter(client);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
   const request = makeRequest({
     options: { responseFormat: { type: 'text' } },
   });

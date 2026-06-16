@@ -3,25 +3,21 @@ import type { ConfigPort } from '../../../domain/ports/config-port.js';
 
 export function createModelsRoute(configPort: ConfigPort) {
   return (c: Context) => {
-    const entries: Array<{ id: string; object: string }> = [];
+    const ids = new Set<string>();
 
     for (const panel of configPort.getPanelModels()) {
-      entries.push({ id: panel.model, object: 'model' });
+      ids.add(panel.model);
     }
 
     const judge = configPort.getJudgeModel();
     if (judge !== null) {
-      entries.push({ id: judge.model, object: 'model' });
+      ids.add(judge.model);
     }
 
-    const synthesizer = configPort.getSynthesizerModel();
-    if (synthesizer !== null) {
-      entries.push({ id: synthesizer.model, object: 'model' });
-    }
+    ids.add(configPort.getSynthesizerModel().model);
 
-    return c.json({
-      object: 'list',
-      data: entries,
-    });
+    const data = Array.from(ids).map((id) => ({ id, object: 'model' }));
+
+    return c.json({ object: 'list', data });
   };
 }

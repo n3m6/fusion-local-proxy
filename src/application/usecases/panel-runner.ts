@@ -1,4 +1,5 @@
 import type { Message } from '../../domain/model/message.js';
+import { promptChars } from '../../domain/model/message.js';
 import type { ModelRef, PanelMeta, PanelResult } from '../../domain/model/fusion-types.js';
 import type { ChatRequest, ChatResponse, TokenUsage } from '../../domain/model/chat-types.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
@@ -7,32 +8,42 @@ import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { FailedModelInfo } from '../../domain/model/stream-types.js';
 import { FusionError } from '../../domain/model/fusion-types.js';
 
+const ERROR_MESSAGE_LOG_LIMIT = 200;
+
+export interface PanelPair {
+  modelRef: ModelRef;
+  port: ChatModelPort;
+}
+
 export class PanelRunner {
   constructor(
-    private readonly chatPorts: ChatModelPort[],
+    private readonly pairs: PanelPair[],
     private readonly loggerPort: LoggerPort,
     private readonly clockPort: ClockPort,
   ) {}
 
   async run(
     messages: Message[],
-    panelModels: ModelRef[],
     timeoutMs: number,
     requestId?: string,
-    sampling?: { temperature?: number; maxTokens?: number },
+    sampling?: {
+      temperature?: number;
+      maxTokens?: number;
+      topP?: number;
+      topK?: number;
+      stopSequences?: string[];
+      metadata?: { readonly user_id?: string | null };
+    },
   ): Promise<PanelMeta> {
-    if (panelModels.length === 0) {
+    if (this.pairs.length === 0) {
       return { results: [], failedModels: [] };
     }
 
     this.loggerPort.logStageStart('panel');
     const stageStart = this.clockPort.now();
-    const promptChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+    const totalPromptChars = promptChars(messages);
 
-    // Start times are read synchronously in map() to preserve clock ordering.
-    // Each task resolves to { value, latencyMs } so Promise.allSettled receives
-    // settled results for both successes and failures.
-    const tasks = panelModels.map((modelRef, i) => {
+    const tasks = this.pairs.map(({ modelRef, port }) => {
       const request: ChatRequest = {
         messages,
         model: modelRef,
@@ -42,6 +53,12 @@ export class PanelRunner {
           stage: 'panel',
           ...(sampling?.temperature !== undefined ? { temperature: sampling.temperature } : {}),
           ...(sampling?.maxTokens !== undefined ? { maxTokens: sampling.maxTokens } : {}),
+          ...(sampling?.topP !== undefined ? { topP: sampling.topP } : {}),
+          ...(sampling?.topK !== undefined ? { topK: sampling.topK } : {}),
+          ...(sampling?.stopSequences !== undefined
+            ? { stopSequences: sampling.stopSequences }
+            : {}),
+          ...(sampling?.metadata !== undefined ? { metadata: sampling.metadata } : {}),
         },
       };
       this.loggerPort.logRequest({
@@ -50,10 +67,10 @@ export class PanelRunner {
         provider: modelRef.provider,
         modelId: modelRef.model,
         messageCount: messages.length,
-        promptChars,
+        promptChars: totalPromptChars,
       });
       const startTime = this.clockPort.now();
-      return this.chatPorts[i]
+      return port
         .complete(request)
         .then((value: ChatResponse): { value: ChatResponse; latencyMs: number } => ({
           value,
@@ -68,7 +85,7 @@ export class PanelRunner {
 
     for (let i = 0; i < settled.length; i++) {
       const settlement = settled[i]!;
-      const modelRef = panelModels[i]!;
+      const { modelRef } = this.pairs[i]!;
 
       if (settlement.status === 'fulfilled') {
         const { value, latencyMs } = settlement.value;
@@ -92,7 +109,7 @@ export class PanelRunner {
               : ((reason as { constructor?: { name?: string } })?.constructor?.name ?? 'UNKNOWN'),
           errorMessage: String((reason as { message?: unknown })?.message ?? reason ?? '').slice(
             0,
-            200,
+            ERROR_MESSAGE_LOG_LIMIT,
           ),
         });
       }
@@ -103,8 +120,6 @@ export class PanelRunner {
     }
 
     if (results.length === 0) {
-      // Close the stage lifecycle before throwing so logStageStart above always
-      // has a matching logStageEnd, even when every panel model fails.
       this.loggerPort.logStageEnd('panel', this.clockPort.now() - stageStart);
       throw new FusionError('all_panels_failed', 'All panel models failed', { failedModels });
     }
@@ -135,8 +150,6 @@ export class PanelRunner {
       totalTokens: promptTokens + completionTokens,
     };
 
-    // Stage end pairs symmetrically with the single logStageStart above and
-    // wraps the entire panel execution, not each individual model result.
     this.loggerPort.logStageEnd('panel', this.clockPort.now() - stageStart, aggregateUsage);
 
     return { results, failedModels };

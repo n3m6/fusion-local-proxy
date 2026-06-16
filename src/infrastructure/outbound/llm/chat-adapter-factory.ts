@@ -9,19 +9,15 @@ export class ChatAdapterFactory {
 
   create(modelRef: ModelRef): ChatModelPort {
     if (modelRef.provider === 'openai') {
-      const client = createOpenAiClient({
-        baseURL: modelRef.baseURL,
-        apiKey: modelRef.apiKey,
-      });
-      return new OpenAiChatAdapter(client, this.logger);
+      const adapterConfig = { baseURL: modelRef.baseURL, apiKey: modelRef.apiKey };
+      const client = createOpenAiClient(adapterConfig);
+      return new OpenAiChatAdapter(client, adapterConfig, this.logger);
     }
 
     if (modelRef.provider === 'anthropic') {
-      const client = createAnthropicClient({
-        baseURL: modelRef.baseURL,
-        apiKey: modelRef.apiKey,
-      });
-      return new AnthropicChatAdapter(client, this.logger);
+      const adapterConfig = { baseURL: modelRef.baseURL, apiKey: modelRef.apiKey };
+      const client = createAnthropicClient(adapterConfig);
+      return new AnthropicChatAdapter(client, adapterConfig, this.logger);
     }
 
     throw new Error(`Unknown provider type: ${modelRef.provider}`);

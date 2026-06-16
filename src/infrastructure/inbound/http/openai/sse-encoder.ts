@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
 
 export function encodeOpenAiSSE(
   events: AsyncIterable<FusionStreamEvent>,
   model: string,
 ): AsyncIterable<string> {
-  const id = `chatcmpl-${crypto.randomUUID()}`;
+  const id = `chatcmpl-${randomUUID()}`;
   const created = Math.floor(Date.now() / 1000);
 
   async function* generator(): AsyncGenerator<string> {

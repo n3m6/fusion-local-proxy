@@ -148,7 +148,7 @@ const validAnalysis = {
 function buildUseCase(opts: {
   panelPorts: ChatModelPort[];
   panelModels: ModelRef[];
-  judgePort: ChatModelPort;
+  judgePort: ChatModelPort | null;
   judgeModel: ModelRef | null;
   synthPort: ChatModelPort;
   timeoutMs?: number;
@@ -160,8 +160,12 @@ function buildUseCase(opts: {
     getSynthesizerModel: () => synthRef,
     getTimeoutMs: () => opts.timeoutMs ?? 30000,
   };
-  const panelRunner = new PanelRunner(opts.panelPorts, logger, clock);
-  const judgeStep = new JudgeStep(opts.judgePort, logger, clock);
+  const panelPairs = opts.panelModels.map((m, i) => ({ modelRef: m, port: opts.panelPorts[i]! }));
+  const panelRunner = new PanelRunner(panelPairs, logger, clock);
+  const judgeStep =
+    opts.judgePort && opts.judgeModel
+      ? new JudgeStep(opts.judgePort, logger, clock)
+      : null;
   const synthesizeStep = new SynthesizeStep(opts.synthPort, configPort, logger, clock);
   return new RunFusionUseCase(panelRunner, judgeStep, synthesizeStep, configPort, logger, clock);
 }
@@ -427,12 +431,6 @@ test('no judge configured: judge port never called; synth receives null analysis
     usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
     model: 'panel-1',
   });
-  // judgePort is constructed but must never be called since judgeModel = null
-  const judgePort = fakeCompletingPort({
-    content: JSON.stringify(validAnalysis),
-    usage: { promptTokens: 50, completionTokens: 100, totalTokens: 150 },
-    model: 'judge',
-  });
   const synthPort = fakeStreamingPort(
     'No-judge synthesis',
     { promptTokens: 80, completionTokens: 40, totalTokens: 120 },
@@ -442,7 +440,7 @@ test('no judge configured: judge port never called; synth receives null analysis
   const useCase = buildUseCase({
     panelPorts: [panelPort],
     panelModels: [panel1],
-    judgePort,
+    judgePort: null,
     judgeModel: null,
     synthPort,
   });
@@ -455,7 +453,6 @@ test('no judge configured: judge port never called; synth receives null analysis
     events.some((e) => e.type === 'done'),
     'expected done event',
   );
-  assert.equal(judgePort.completeCalls.length, 0, 'judge must never be called when not configured');
 
   // Synth receives null analysis → fallback note in user prompt
   assert.equal(synthPort.streamCalls.length, 1);

@@ -180,8 +180,11 @@ function buildApp(opts: BuildOpts = {}) {
     getTimeoutMs: () => 30000,
   };
 
-  const panelRunner = new PanelRunner(panelPorts, logger, clock);
-  const judgeStep = new JudgeStep(judgePort, logger, clock);
+  const panelPairs = panelModels.map((m, i) => ({ modelRef: m, port: panelPorts[i]! }));
+  const panelRunner = new PanelRunner(panelPairs, logger, clock);
+  // Mirror the real container: only build a JudgeStep when a judge model is
+  // configured, so the injected step and the config never disagree.
+  const judgeStep = judgeModel ? new JudgeStep(judgePort, logger, clock) : null;
   const synthesizeStep = new SynthesizeStep(synthPort, configPort, logger, clock);
   const useCase = new RunFusionUseCase(
     panelRunner,

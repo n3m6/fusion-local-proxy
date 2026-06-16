@@ -10,6 +10,10 @@ export interface ChatRequest {
 export interface ChatOptions {
   readonly temperature?: number;
   readonly maxTokens?: number;
+  readonly topP?: number;
+  readonly topK?: number;
+  readonly stopSequences?: string[];
+  readonly metadata?: { readonly user_id?: string | null };
   readonly responseFormat?: ResponseFormat;
   readonly signal?: AbortSignal;
   /** Correlation id propagated to outbound adapter logs to tie a run's stages together. */

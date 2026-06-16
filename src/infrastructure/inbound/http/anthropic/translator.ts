@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FusionRequest } from '../../../../domain/model/fusion-types.js';
-import { FusionError } from '../../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
-import type { ChatOptions } from '../../../../domain/model/chat-types.js';
+import { errorEventToFusionError, parseCommonRequestFields } from '../shared.js';
 import { encodeAnthropicSSE } from './sse-encoder.js';
 
 export function anthropicRequestToFusion(body: Record<string, unknown>): FusionRequest {
@@ -43,30 +42,23 @@ export function anthropicRequestToFusion(body: Record<string, unknown>): FusionR
       })
     : [];
 
-  const model = typeof body.model === 'string' ? body.model : undefined;
-  const stream = typeof body.stream === 'boolean' ? body.stream : undefined;
-  const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
-  const maxTokens = typeof body.max_tokens === 'number' ? body.max_tokens : undefined;
-
-  const options: ChatOptions = {};
-  if (temperature !== undefined) {
-    (options as Record<string, unknown>).temperature = temperature;
-  }
-  if (maxTokens !== undefined) {
-    (options as Record<string, unknown>).maxTokens = maxTokens;
-  }
-  if (typeof body.top_p === 'number') {
-    (options as Record<string, unknown>).top_p = body.top_p;
-  }
-  if (typeof body.top_k === 'number') {
-    (options as Record<string, unknown>).top_k = body.top_k;
-  }
-  if (Array.isArray(body.stop_sequences)) {
-    (options as Record<string, unknown>).stop_sequences = body.stop_sequences;
-  }
-  if (body.metadata !== undefined && body.metadata !== null) {
-    (options as Record<string, unknown>).metadata = body.metadata;
-  }
+  const { model, stream, temperature, maxTokens, topP } = parseCommonRequestFields(body);
+  const topK = typeof body.top_k === 'number' ? body.top_k : undefined;
+  const stopSequences =
+    Array.isArray(body.stop_sequences) &&
+    (body.stop_sequences as unknown[]).every((s) => typeof s === 'string')
+      ? (body.stop_sequences as string[])
+      : undefined;
+  const rawMeta = body.metadata;
+  const metadata =
+    rawMeta !== null &&
+    typeof rawMeta === 'object' &&
+    !Array.isArray(rawMeta) &&
+    'user_id' in rawMeta &&
+    (typeof (rawMeta as Record<string, unknown>).user_id === 'string' ||
+      (rawMeta as Record<string, unknown>).user_id === null)
+      ? { user_id: (rawMeta as { user_id: string | null }).user_id }
+      : undefined;
 
   return {
     messages,
@@ -75,7 +67,10 @@ export function anthropicRequestToFusion(body: Record<string, unknown>): FusionR
     systemPrompt,
     temperature,
     maxTokens,
-    options: Object.keys(options).length > 0 ? options : undefined,
+    ...(topP !== undefined ? { topP } : {}),
+    ...(topK !== undefined ? { topK } : {}),
+    ...(stopSequences !== undefined ? { stopSequences } : {}),
+    ...(metadata !== undefined ? { metadata } : {}),
   };
 }
 
@@ -111,13 +106,7 @@ export async function fusionStreamToAnthropicResponse(
         if (event.model) actualModel = event.model;
         break;
       case 'error':
-        throw new FusionError(
-          event.code,
-          event.message,
-          typeof event.details === 'object' && event.details !== null
-            ? (event.details as Record<string, unknown>)
-            : undefined,
-        );
+        throw errorEventToFusionError(event);
       default:
         break;
     }
