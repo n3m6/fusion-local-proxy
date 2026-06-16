@@ -51,12 +51,7 @@ export class RunFusionUseCase implements FusionService {
       timeoutMs,
     });
 
-    const panelMeta: PanelMeta = yield* this.runPanel(
-      messages,
-      timeoutMs,
-      requestId,
-      sampling,
-    );
+    const panelMeta: PanelMeta = yield* this.runPanel(messages, timeoutMs, requestId, sampling);
 
     const analysis: Analysis | null = yield* this.runJudge(
       panelMeta.results,
@@ -152,7 +147,10 @@ export class RunFusionUseCase implements FusionService {
     analysis: Analysis | null,
     requestId: string,
     sampling: Sampling,
-  ): AsyncGenerator<FusionStreamEvent, { usage: TokenUsage | undefined; model: string | undefined }> {
+  ): AsyncGenerator<
+    FusionStreamEvent,
+    { usage: TokenUsage | undefined; model: string | undefined }
+  > {
     let usage: TokenUsage | undefined;
     let model: string | undefined;
 

@@ -89,10 +89,9 @@ export class AnthropicChatAdapter implements ChatModelPort {
     this.logger?.logRequest(buildRequestLogFields(request, 'anthropic', 'stream'));
 
     const params = this.buildCreateParams(request);
-    const messageStream = this.client.messages.stream(
-      params as Anthropic.MessageStreamParams,
-      { signal: request.options?.signal },
-    );
+    const messageStream = this.client.messages.stream(params as Anthropic.MessageStreamParams, {
+      signal: request.options?.signal,
+    });
 
     let stopYielded = false;
     let usageYielded = false;
@@ -175,9 +174,7 @@ export class AnthropicChatAdapter implements ChatModelPort {
     const systemMessages = request.messages.filter((m) => m.role === 'system');
     const nonSystemMessages = request.messages.filter((m) => m.role !== 'system');
     const system =
-      systemMessages.length > 0
-        ? systemMessages.map((m) => m.content).join('\n\n')
-        : undefined;
+      systemMessages.length > 0 ? systemMessages.map((m) => m.content).join('\n\n') : undefined;
     const messages: Anthropic.MessageParam[] = nonSystemMessages.map((m) => ({
       role: m.role as 'user' | 'assistant',
       content: [{ type: 'text' as const, text: m.content }],
@@ -191,9 +188,7 @@ export class AnthropicChatAdapter implements ChatModelPort {
   } {
     const ts = request.model.thinkingStrength;
     const thinkingEnabled = ts !== undefined && ts !== 'off';
-    const budgetTokens = thinkingEnabled
-      ? (THINKING_BUDGETS[ts] ?? THINKING_BUDGET_FALLBACK)
-      : 0;
+    const budgetTokens = thinkingEnabled ? (THINKING_BUDGETS[ts] ?? THINKING_BUDGET_FALLBACK) : 0;
     const baseMaxTokens = request.options?.maxTokens ?? DEFAULT_MAX_TOKENS;
     const maxTokens = thinkingEnabled
       ? Math.max(baseMaxTokens, budgetTokens + THINKING_MAX_TOKENS_MARGIN)
