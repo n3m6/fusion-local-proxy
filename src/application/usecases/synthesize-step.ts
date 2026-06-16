@@ -8,6 +8,7 @@ import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { Analysis } from '../../domain/services/analysis-schema.js';
+import { FusionError } from '../../domain/model/fusion-types.js';
 import {
   buildSynthesisSystemPrompt,
   buildSynthesisUserPrompt,
@@ -74,18 +75,10 @@ export class SynthesizeStep {
       const startTime = this.clockPort.now();
 
       let usage: TokenUsage | undefined;
-      let deltaCount = 0;
-      let contentChars = 0;
-      let ttftMs: number | undefined;
 
       try {
         for await (const chunk of this.chatPort.stream(request)) {
           if (chunk.type === 'content_delta') {
-            if (ttftMs === undefined) {
-              ttftMs = this.clockPort.now() - startTime;
-            }
-            deltaCount++;
-            contentChars += chunk.delta.length;
             yield { type: 'content_delta', delta: chunk.delta };
           } else if (chunk.type === 'content_stop') {
             yield { type: 'content_stop' };
@@ -107,29 +100,24 @@ export class SynthesizeStep {
       }
 
       const durationMs = this.clockPort.now() - startTime;
-      this.loggerPort.logResponse({
-        requestId,
-        stage: 'synthesis',
-        provider: synthesizerModel.provider,
-        modelId: synthesizerModel.model,
-        latencyMs: durationMs,
-        ttftMs,
-        deltaCount,
-        contentChars,
-        ...(usage
-          ? {
-              tokens: {
-                prompt: usage.promptTokens,
-                completion: usage.completionTokens,
-                total: usage.totalTokens,
-              },
-            }
-          : {}),
-      });
       if (usage) {
         this.loggerPort.logStageEnd('synthesis', durationMs, usage);
       } else {
         this.loggerPort.logStageEnd('synthesis', durationMs);
+      }
+
+      if (timeoutSignal?.aborted) {
+        this.loggerPort.logError(
+          'synthesis',
+          new FusionError('synthesis_truncated', 'Synthesis stream aborted by timeout'),
+          { requestId, modelId: synthesizerModel.model },
+        );
+        yield {
+          type: 'error',
+          code: 'synthesis_truncated',
+          message: 'Synthesis stream aborted by timeout',
+        };
+        return;
       }
 
       yield {

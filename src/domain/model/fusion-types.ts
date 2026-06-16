@@ -1,5 +1,5 @@
 import type { Message } from './message.js';
-import type { ChatOptions } from './chat-types.js';
+import type { ChatOptions, TokenUsage } from './chat-types.js';
 import type { FailedModelInfo } from './stream-types.js';
 
 export type ProviderType = 'openai' | 'anthropic';
@@ -45,6 +45,7 @@ export interface PanelResult {
 export interface PanelMeta {
   readonly results: PanelResult[];
   readonly failedModels: FailedModelInfo[];
+  readonly usage: TokenUsage;
 }
 
 export interface FusionRequest {

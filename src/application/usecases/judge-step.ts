@@ -5,7 +5,12 @@ import type { Message } from '../../domain/model/message.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
-import type { ChatRequest, ChatResponse, ResponseFormat } from '../../domain/model/chat-types.js';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ResponseFormat,
+  TokenUsage,
+} from '../../domain/model/chat-types.js';
 import { createTimeoutSignal } from '../../domain/model/chat-types.js';
 import {
   buildJudgeSystemPrompt,
@@ -27,7 +32,7 @@ export class JudgeStep {
     originalMessages: Message[],
     timeoutMs: number,
     requestId?: string,
-  ): Promise<Analysis | null> {
+  ): Promise<{ analysis: Analysis | null; usage?: TokenUsage }> {
     const judgeModel = this.judgeModel;
     this.loggerPort.logStageStart('judge');
 
@@ -77,7 +82,7 @@ export class JudgeStep {
         requestId,
         modelId: judgeModel.model,
       });
-      return null;
+      return { analysis: null };
     }
 
     // Strip markdown code fences that some models emit even when instructed not to.
@@ -85,6 +90,8 @@ export class JudgeStep {
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/, '')
       .trim();
+
+    const responseUsage = response.usage;
 
     let parsedJson: unknown;
     try {
@@ -97,7 +104,7 @@ export class JudgeStep {
         contentChars: response.content.length,
         rawContent: response.content.slice(0, RAW_CONTENT_LOG_LIMIT),
       });
-      return null;
+      return { analysis: null, usage: responseUsage };
     }
 
     const parsed = analysisSchema.safeParse(parsedJson);
@@ -109,33 +116,23 @@ export class JudgeStep {
         contentChars: response.content.length,
         rawContent: response.content.slice(0, RAW_CONTENT_LOG_LIMIT),
       });
-      return null;
+      return { analysis: null, usage: responseUsage };
     }
 
     const durationMs = this.clockPort.now() - startTime;
     try {
-      this.loggerPort.logResponse({
+      this.loggerPort.log('debug', 'judge_analysis', {
         requestId,
-        stage: 'judge',
-        provider: judgeModel.provider,
-        modelId: judgeModel.model,
-        latencyMs: durationMs,
-        contentChars: response.content.length,
         agreementsCount: parsed.data.agreements.length,
         discrepancyCount: parsed.data.discrepancies.length,
         issueCount: parsed.data.issues.length,
         gapCount: parsed.data.gaps.length,
-        tokens: {
-          prompt: response.usage.promptTokens,
-          completion: response.usage.completionTokens,
-          total: response.usage.totalTokens,
-        },
       });
-      this.loggerPort.logStageEnd('judge', durationMs, response.usage);
+      this.loggerPort.logStageEnd('judge', durationMs, responseUsage);
     } catch {
       // logger failure must not discard the valid Analysis result
     }
 
-    return parsed.data;
+    return { analysis: parsed.data, usage: responseUsage };
   }
 }

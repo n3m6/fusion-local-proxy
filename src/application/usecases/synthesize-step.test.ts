@@ -366,12 +366,12 @@ test('logger calls: logStageStart and logStageEnd called correctly', async () =>
   assert.ok(startIdx < endIdx, 'logStageStart must be called before logStageEnd');
 });
 
-test('clock usage: clockPort.now() called exactly three times on success path', async () => {
+test('clock usage: clockPort.now() called exactly twice on success path (startTime + durationMs)', async () => {
   const chat = stubChatPort();
   const config = stubConfigPort();
   const logger = stubLoggerPort();
-  // startTime, time-to-first-token, and final duration are all read via clockPort.
-  const clock = stubClockPort([100, 200, 300]);
+  // startTime and final durationMs — ttftMs tracking was removed with logResponse.
+  const clock = stubClockPort([100, 300]);
 
   const step = new SynthesizeStep(chat, config, logger, clock);
 
@@ -379,27 +379,7 @@ test('clock usage: clockPort.now() called exactly three times on success path', 
     step.synthesize(samplePanelResults(), sampleOriginalMessages, sampleAnalysis()),
   );
 
-  assert.equal(clock._callCount, 3);
-});
-
-test('logResponse: ttftMs is derived from clockPort, not wall-clock time', async () => {
-  const chat = stubChatPort();
-  const config = stubConfigPort();
-  const logger = stubLoggerPort();
-  // startTime=100, first-delta=200 -> ttftMs=100; final=300 -> latencyMs=200.
-  const clock = stubClockPort([100, 200, 300]);
-
-  const step = new SynthesizeStep(chat, config, logger, clock);
-
-  await collectEvents(
-    step.synthesize(samplePanelResults(), sampleOriginalMessages, sampleAnalysis()),
-  );
-
-  const responseCalls = logger._calls.filter((c) => c.method === 'logResponse');
-  assert.equal(responseCalls.length, 1);
-  const fields = responseCalls[0].args[0] as { ttftMs?: number; latencyMs?: number };
-  assert.equal(fields.ttftMs, 100);
-  assert.equal(fields.latencyMs, 200);
+  assert.equal(clock._callCount, 2);
 });
 
 test('error propagation: iterator rejects with same error, logStageStart called, logStageEnd not called', async () => {
@@ -583,4 +563,61 @@ test('no signal timeout for zero or negative timeoutMs', async () => {
   assert.equal(events[0].type, 'content_delta');
   assert.equal(events[1].type, 'content_stop');
   assert.equal(events[2].type, 'done');
+});
+
+test('synthesis_truncated: yields error event when timeoutSignal fires before stream finishes', async () => {
+  // A streaming port that delays each chunk long enough for a short timeout to fire first.
+  // Crucially, it does NOT throw when the signal is aborted — it just completes normally
+  // after the delay. This simulates an adapter that finishes yielding without raising an error.
+  const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  const slowUsage: TokenUsage = { promptTokens: 5, completionTokens: 10, totalTokens: 15 };
+  const slowChat: StubChatModelPort = {
+    _calls: [],
+    async complete(request: ChatRequest): Promise<ChatResponse> {
+      slowChat._calls.push(request);
+      return { content: 'slow', usage: slowUsage, model: 'm' };
+    },
+    stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
+      slowChat._calls.push(request);
+      return {
+        [Symbol.asyncIterator]() {
+          let i = 0;
+          const chunks: ChatStreamChunk[] = [
+            { type: 'content_delta', delta: 'partial' },
+            { type: 'content_stop' },
+            { type: 'usage', usage: slowUsage },
+          ];
+          return {
+            async next() {
+              await delay(100); // delay longer than timeoutMs below
+              if (i < chunks.length) return { value: chunks[i++]!, done: false };
+              return { value: undefined as never, done: true };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  // timeoutMs: 10 — the 10ms AbortSignal.timeout fires before the 100ms per-chunk delay
+  const config = stubConfigPort({ timeoutMs: 10 });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0]);
+
+  const step = new SynthesizeStep(slowChat, config, logger, clock);
+
+  const events = await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
+  );
+
+  // The stream completes after timeout fires (no throw from stub), so truncation is detected
+  const errorEvent = events.find((e) => e.type === 'error') as
+    | { type: 'error'; code: string; message: string }
+    | undefined;
+  assert.ok(errorEvent, 'expected synthesis_truncated error event');
+  assert.equal(errorEvent!.code, 'synthesis_truncated');
+
+  // No done event when truncated
+  const doneEvent = events.find((e) => e.type === 'done');
+  assert.equal(doneEvent, undefined, 'expected no done event when truncated');
 });

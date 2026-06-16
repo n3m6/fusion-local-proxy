@@ -185,12 +185,15 @@ test('successful analysis parse returns Analysis with all fields populated', asy
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 0);
 
-  assert.ok(result !== null, 'expected non-null Analysis');
-  assert.equal(result!.agreements.length, 1);
-  assert.equal(result!.agreements[0], 'All models agree Paris is the capital of France');
-  assert.equal(result!.discrepancies.length, 1);
-  assert.equal(result!.issues.length, 1);
-  assert.equal(result!.gaps.length, 1);
+  assert.ok(result.analysis !== null, 'expected non-null Analysis');
+  assert.equal(result.analysis!.agreements.length, 1);
+  assert.equal(result.analysis!.agreements[0], 'All models agree Paris is the capital of France');
+  assert.equal(result.analysis!.discrepancies.length, 1);
+  assert.equal(result.analysis!.issues.length, 1);
+  assert.equal(result.analysis!.gaps.length, 1);
+
+  // usage is returned alongside the analysis
+  assert.deepStrictEqual(result.usage, responseWithUsage);
 
   // loggerPort.logStageStart('judge') called once
   const startCalls = logger._calls.filter((c) => c.method === 'logStageStart');
@@ -203,6 +206,19 @@ test('successful analysis parse returns Analysis with all fields populated', asy
   assert.equal(endCalls[0].args[0], 'judge');
   assert.equal(endCalls[0].args[1], 150); // 250 - 100
   assert.deepStrictEqual(endCalls[0].args[2], responseWithUsage);
+
+  // judge_analysis debug log emitted (replaces logResponse)
+  const analysisCalls = logger._calls.filter(
+    (c) => c.method === 'log' && c.args[1] === 'judge_analysis',
+  );
+  assert.equal(analysisCalls.length, 1);
+  const analysisFields = analysisCalls[0].args[2] as {
+    agreementsCount?: number;
+    discrepancyCount?: number;
+    issueCount?: number;
+    gapCount?: number;
+  };
+  assert.equal(analysisFields.agreementsCount, 1);
 
   // loggerPort.logError() NOT called
   const errorCalls = logger._calls.filter((c) => c.method === 'logError');
@@ -225,7 +241,7 @@ test('schema validation failure (missing agreements) returns null', async () => 
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 0);
 
-  assert.equal(result, null);
+  assert.equal(result.analysis, null);
 
   // loggerPort.logError('judge', error) called once with ZodError
   const errorCalls = logger._calls.filter((c) => c.method === 'logError');
@@ -254,7 +270,7 @@ test('judge model error (chatPort rejects) returns null', async () => {
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 0);
 
-  assert.equal(result, null);
+  assert.equal(result.analysis, null);
 
   // loggerPort.logError('judge', error) called once with the rejected error
   const errorCalls = logger._calls.filter((c) => c.method === 'logError');
@@ -281,7 +297,7 @@ test('invalid JSON response returns null and logs SyntaxError', async () => {
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 0);
 
-  assert.equal(result, null);
+  assert.equal(result.analysis, null);
 
   // loggerPort.logError('judge', error) called once with SyntaxError
   const errorCalls = logger._calls.filter((c) => c.method === 'logError');
@@ -307,8 +323,8 @@ test('markdown code fences are stripped before JSON.parse', async () => {
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 0);
 
-  assert.ok(result !== null, 'expected non-null Analysis even with code fences');
-  assert.equal(result!.agreements.length, 1);
+  assert.ok(result.analysis !== null, 'expected non-null Analysis even with code fences');
+  assert.equal(result.analysis!.agreements.length, 1);
 
   const errorCalls = logger._calls.filter((c) => c.method === 'logError');
   assert.equal(errorCalls.length, 0, 'no errors expected when fences are stripped correctly');
@@ -327,7 +343,7 @@ test('markdown code fences without language tag are stripped', async () => {
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 0);
 
-  assert.ok(result !== null, 'expected non-null Analysis even with bare code fences');
+  assert.ok(result.analysis !== null, 'expected non-null Analysis even with bare code fences');
 });
 
 // ---------------------------------------------------------------------------
@@ -347,8 +363,8 @@ test('empty panel results does not throw and proceeds with judge call', async ()
   const result = await step.analyze([], sampleMessages, 0);
 
   // Should not throw and should return an Analysis
-  assert.ok(result !== null, 'expected non-null Analysis with empty panels');
-  assert.equal(result!.agreements.length, 1);
+  assert.ok(result.analysis !== null, 'expected non-null Analysis with empty panels');
+  assert.equal(result.analysis!.agreements.length, 1);
 
   // The judge call should have proceeded normally
   assert.equal(chatPort._calls.length, 1);
@@ -370,7 +386,7 @@ test('logger called exactly once on each failure scenario', async () => {
     const logger = stubLoggerPort();
     const step = new JudgeStep(chatPort, judgeModel(), logger, stubClockPort([0, 0]));
     const result = await step.analyze([], sampleMessages, 0);
-    assert.equal(result, null);
+    assert.equal(result.analysis, null);
     const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
     assert.equal(errorCalls[0].args[0], 'judge');
@@ -382,7 +398,7 @@ test('logger called exactly once on each failure scenario', async () => {
     const logger = stubLoggerPort();
     const step = new JudgeStep(chatPort, judgeModel(), logger, stubClockPort([0, 0]));
     const result = await step.analyze([], sampleMessages, 0);
-    assert.equal(result, null);
+    assert.equal(result.analysis, null);
     const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
     assert.equal(errorCalls[0].args[0], 'judge');
@@ -398,7 +414,7 @@ test('logger called exactly once on each failure scenario', async () => {
     const logger = stubLoggerPort();
     const step = new JudgeStep(chatPort, judgeModel(), logger, stubClockPort([0, 0]));
     const result = await step.analyze([], sampleMessages, 0);
-    assert.equal(result, null);
+    assert.equal(result.analysis, null);
     const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
     assert.equal(errorCalls[0].args[0], 'judge');
@@ -476,7 +492,7 @@ test('AbortSignal from timeout does not fire before successful completion', asyn
   const result = await step.analyze([panelResult()], sampleMessages, 5000);
 
   // A non-aborted signal means the timeout did not fire prematurely.
-  assert.ok(result !== null, 'analyze should return a non-null result');
+  assert.ok(result.analysis !== null, 'analyze should return a non-null result');
   const req = chatPort._calls[0];
   assert.ok(req.options?.signal !== undefined, 'signal should be set');
   assert.equal(req.options!.signal!.aborted, false, 'signal should not be aborted on success');
@@ -494,7 +510,7 @@ test('error path with timeout returns null without throwing', async () => {
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 5000);
 
-  assert.equal(result, null);
+  assert.equal(result.analysis, null);
   const errorCalls = logger._calls.filter((c) => c.method === 'logError');
   assert.equal(errorCalls.length, 1);
 });
@@ -515,8 +531,8 @@ test('judge failure with FusionError does not throw (graceful degradation)', asy
   const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   const result = await step.analyze([panelResult()], sampleMessages, 0);
 
-  // Must not throw and must return null
-  assert.equal(result, null);
+  // Must not throw and must return null analysis
+  assert.equal(result.analysis, null);
 
   // Must log the error
   const errorCalls = logger._calls.filter((c) => c.method === 'logError');

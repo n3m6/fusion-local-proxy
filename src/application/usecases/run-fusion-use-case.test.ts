@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { RunFusionUseCase } from './run-fusion-use-case.js';
 import type { FusionService } from '../ports/fusion-service.js';
 import type { FusionError, PanelMeta, PanelResult } from '../../domain/model/fusion-types.js';
+import type { TokenUsage } from '../../domain/model/chat-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
@@ -82,6 +83,7 @@ function stubPanelRunner(result?: PanelMeta): StubPanelRunner {
   const defaultResult: PanelMeta = {
     results: [samplePanelResult],
     failedModels: [],
+    usage: { promptTokens: 5, completionTokens: 3, totalTokens: 8 },
   };
   const stub: StubPanelRunner = {
     _lastMessages: null,
@@ -126,15 +128,15 @@ interface StubJudgeStep {
     panelResults: PanelResult[],
     originalMessages: Message[],
     timeoutMs: number,
-  ): Promise<Analysis | null>;
+  ): Promise<{ analysis: Analysis | null; usage?: TokenUsage }>;
 }
 
-function stubJudgeStep(result?: Analysis | null): StubJudgeStep {
+function stubJudgeStep(result?: Analysis | null, usage?: TokenUsage): StubJudgeStep {
   const stub: StubJudgeStep = {
     _analyzeCalls: [],
     async analyze(panelResults, originalMessages, timeoutMs) {
       stub._analyzeCalls.push({ panelResults, originalMessages, timeoutMs });
-      return result !== undefined ? result : sampleAnalysis;
+      return { analysis: result !== undefined ? result : sampleAnalysis, usage };
     },
   };
   return stub;
@@ -399,6 +401,7 @@ test('SynthesizeStep receives correct panel results', async () => {
   const panelMeta: PanelMeta = {
     results: [customPanelResult],
     failedModels: [],
+    usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
   };
   const panelRunner = stubPanelRunner(panelMeta) as unknown as PanelRunner;
   const judgeStep = stubJudgeStep() as unknown as JudgeStep;
@@ -554,6 +557,7 @@ test('partial panel failure reported in done event', async () => {
   const panelMeta: PanelMeta = {
     results: [samplePanelResult],
     failedModels: [sampleFailedModel],
+    usage: { promptTokens: 5, completionTokens: 3, totalTokens: 8 },
   };
   const panelRunner = stubPanelRunner(panelMeta) as unknown as PanelRunner;
   const judgeStep = stubJudgeStep() as unknown as JudgeStep;
@@ -649,7 +653,11 @@ test('timeout value is passed through to PanelRunner and JudgeStep', async () =>
 
 // 12. Empty panel models: synthesis proceeds with no panel results
 test('empty panel models does not block synthesis', async () => {
-  const emptyPanelMeta: PanelMeta = { results: [], failedModels: [] };
+  const emptyPanelMeta: PanelMeta = {
+    results: [],
+    failedModels: [],
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+  };
   const panelRunner = stubPanelRunner(emptyPanelMeta) as unknown as PanelRunner;
   const judgeStep = stubJudgeStep() as unknown as JudgeStep;
   const synthesizeStep = stubSynthesizeStep() as unknown as SynthesizeStep;
@@ -699,7 +707,11 @@ test('withHeartbeat emits panel heartbeat events before Panel stage complete', a
       slowPanelRunner._lastTimeoutMs = timeoutMs;
       slowPanelRunner._lastSampling = sampling;
       await delay(60);
-      return { results: [samplePanelResult], failedModels: [] };
+      return {
+        results: [samplePanelResult],
+        failedModels: [],
+        usage: { promptTokens: 5, completionTokens: 3, totalTokens: 8 },
+      };
     },
   };
 
@@ -832,4 +844,166 @@ test('absent sampling params result in empty sampling object forwarded', async (
   assert.ok(pr._lastSampling !== undefined, 'sampling arg is always passed (even if empty)');
   assert.equal('temperature' in (pr._lastSampling ?? {}), false);
   assert.equal('maxTokens' in (pr._lastSampling ?? {}), false);
+});
+
+// 17. Synthesis heartbeat progress events during slow synthesis TTFT
+test('withStreamHeartbeat emits synthesis progress events during slow synthesis', async () => {
+  const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const slowSynth: StubSynthesizeStep = {
+    _synthesizeCalls: [],
+    async *synthesize(panelResults, originalMessages, analysis, _requestId, sampling) {
+      slowSynth._synthesizeCalls.push({ panelResults, originalMessages, analysis, sampling });
+      await delay(60);
+      yield { type: 'content_delta', delta: 'hello' };
+      yield { type: 'content_stop' };
+      yield {
+        type: 'done',
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'test-model',
+      };
+    },
+  };
+
+  const panelRunner = stubPanelRunner() as unknown as PanelRunner;
+  const judgeStep = stubJudgeStep() as unknown as JudgeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    panelRunner,
+    judgeStep,
+    slowSynth as unknown as SynthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+    10, // small heartbeatIntervalMs so heartbeats fire during the 60ms delay
+  );
+
+  const events = await collectEvents(
+    useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
+  );
+
+  const synthHeartbeats = events.filter(
+    (e) =>
+      e.type === 'progress' &&
+      (e as { stage?: string }).stage === 'synthesis' &&
+      (e as { message?: string }).message === 'synthesizing',
+  );
+  assert.ok(
+    synthHeartbeats.length >= 1,
+    `expected at least 1 synthesis heartbeat, got ${synthHeartbeats.length}`,
+  );
+
+  // Done event still appears at the end
+  const doneEvent = events.find((e) => e.type === 'done');
+  assert.ok(doneEvent, 'expected done event after synthesis heartbeats');
+});
+
+// 18. Synthesis truncation yields error event and still logs fusion_run_end
+test('synthesis truncation yields error event and still logs fusion_run_end', async () => {
+  const truncatedSynth: StubSynthesizeStep = {
+    _synthesizeCalls: [],
+    async *synthesize(panelResults, originalMessages, analysis, _requestId, sampling) {
+      truncatedSynth._synthesizeCalls.push({ panelResults, originalMessages, analysis, sampling });
+      yield { type: 'content_delta', delta: 'partial content' };
+      yield {
+        type: 'error',
+        code: 'synthesis_truncated',
+        message: 'Synthesis stream aborted by timeout',
+      };
+    },
+  };
+
+  const panelRunner = stubPanelRunner() as unknown as PanelRunner;
+  const judgeStep = stubJudgeStep() as unknown as JudgeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    panelRunner,
+    judgeStep,
+    truncatedSynth as unknown as SynthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+  );
+
+  const events = await collectEvents(
+    useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }),
+  );
+
+  // Partial content was forwarded
+  const deltaEvents = events.filter((e) => e.type === 'content_delta');
+  assert.ok(deltaEvents.length >= 1, 'expected content_delta events before truncation');
+
+  // Error event was emitted
+  const errorEvent = events.find((e) => e.type === 'error') as
+    | { type: 'error'; code: string }
+    | undefined;
+  assert.ok(errorEvent, 'expected error event on synthesis truncation');
+  assert.equal(errorEvent!.code, 'synthesis_truncated');
+
+  // No done event
+  const doneEvent = events.find((e) => e.type === 'done');
+  assert.equal(doneEvent, undefined, 'expected no done event when synthesis is truncated');
+
+  // fusion_run_end is still logged even on truncation
+  const logCalls = (loggerPort as unknown as StubLoggerPort)._calls;
+  const loggedEvents = logCalls.filter((c) => c.method === 'log').map((c) => c.args[1] as string);
+  assert.ok(loggedEvents.includes('fusion_run_end'), 'fusion_run_end must be logged on truncation');
+
+  // outcome field reflects truncation
+  const endLog = logCalls.find((c) => c.method === 'log' && c.args[1] === 'fusion_run_end');
+  const endFields = endLog!.args[2] as { outcome?: string };
+  assert.equal(endFields.outcome, 'synthesis_truncated');
+});
+
+// 19. fusion_run_end includes aggregated tokensByStage
+test('fusion_run_end log includes totalTokens and tokensByStage from all stages', async () => {
+  const panelMeta: PanelMeta = {
+    results: [samplePanelResult],
+    failedModels: [],
+    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+  };
+  const panelRunner = stubPanelRunner(panelMeta) as unknown as PanelRunner;
+  const judgeUsage: TokenUsage = { promptTokens: 5, completionTokens: 10, totalTokens: 15 };
+  const judgeStep = stubJudgeStep(sampleAnalysis, judgeUsage) as unknown as JudgeStep;
+  const synthEvents: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'result' },
+    { type: 'content_stop' },
+    {
+      type: 'done',
+      usage: { promptTokens: 50, completionTokens: 100, totalTokens: 150 },
+      model: 'synth-model',
+    },
+  ];
+  const synthesizeStep = stubSynthesizeStep(synthEvents) as unknown as SynthesizeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+  );
+
+  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+
+  const logCalls = (loggerPort as unknown as StubLoggerPort)._calls;
+  const endLog = logCalls.find((c) => c.method === 'log' && c.args[1] === 'fusion_run_end');
+  assert.ok(endLog, 'expected fusion_run_end log');
+
+  const fields = endLog!.args[2] as {
+    totalTokens?: number;
+    tokensByStage?: { panel: number; judge: number; synthesis: number };
+  };
+  assert.equal(fields.totalTokens, 195); // 30 + 15 + 150
+  assert.deepStrictEqual(fields.tokensByStage, { panel: 30, judge: 15, synthesis: 150 });
 });

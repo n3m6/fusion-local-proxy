@@ -35,7 +35,11 @@ export class PanelRunner {
     sampling?: Sampling,
   ): Promise<PanelMeta> {
     if (this.pairs.length === 0) {
-      return { results: [], failedModels: [] };
+      return {
+        results: [],
+        failedModels: [],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      };
     }
 
     this.loggerPort.logStageStart('panel');
@@ -120,19 +124,6 @@ export class PanelRunner {
     let promptTokens = 0;
     let completionTokens = 0;
     for (const result of results) {
-      this.loggerPort.logResponse({
-        requestId,
-        stage: 'panel',
-        provider: result.provider,
-        modelId: result.modelId,
-        latencyMs: result.latencyMs,
-        contentChars: result.content.length,
-        tokens: {
-          prompt: result.usage.promptTokens,
-          completion: result.usage.completionTokens,
-          total: result.usage.promptTokens + result.usage.completionTokens,
-        },
-      });
       promptTokens += result.usage.promptTokens;
       completionTokens += result.usage.completionTokens;
     }
@@ -145,6 +136,6 @@ export class PanelRunner {
 
     this.loggerPort.logStageEnd('panel', this.clockPort.now() - stageStart, aggregateUsage);
 
-    return { results, failedModels };
+    return { results, failedModels, usage: aggregateUsage };
   }
 }

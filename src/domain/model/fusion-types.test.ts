@@ -107,6 +107,7 @@ test('PanelMeta holds results and failedModels arrays with conforming shapes', (
       },
     ],
     failedModels: [failed],
+    usage: { promptTokens: 3, completionTokens: 4, totalTokens: 7 },
   };
 
   assert.ok(Array.isArray(meta.results));
@@ -121,7 +122,11 @@ test('PanelMeta holds results and failedModels arrays with conforming shapes', (
 });
 
 test('PanelMeta supports empty results and failedModels arrays', () => {
-  const meta: PanelMeta = { results: [], failedModels: [] };
+  const meta: PanelMeta = {
+    results: [],
+    failedModels: [],
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+  };
   assert.deepEqual(meta.results, []);
   assert.deepEqual(meta.failedModels, []);
 });

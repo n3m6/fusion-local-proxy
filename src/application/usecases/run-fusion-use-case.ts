@@ -44,20 +44,22 @@ export class RunFusionUseCase implements FusionService {
 
     const panelMeta: PanelMeta = yield* this.runPanel(messages, timeoutMs, requestId, sampling);
 
-    const analysis: Analysis | null = yield* this.runJudge(
+    const { analysis, judgeUsage } = yield* this.runJudge(
       panelMeta.results,
       messages,
       timeoutMs,
       requestId,
     );
 
-    const { usage: synthUsage, model: synthModel } = yield* this.runSynthesis(
-      panelMeta.results,
-      messages,
-      analysis,
-      requestId,
-      sampling,
-    );
+    const {
+      usage: synthUsage,
+      model: synthModel,
+      synthError,
+    } = yield* this.runSynthesis(panelMeta.results, messages, analysis, requestId, sampling);
+
+    const panelTokens = panelMeta.usage.totalTokens;
+    const judgeTokens = judgeUsage?.totalTokens ?? 0;
+    const synthTokens = synthUsage?.totalTokens ?? 0;
 
     this.loggerPort.log('info', 'fusion_run_end', {
       requestId,
@@ -65,9 +67,16 @@ export class RunFusionUseCase implements FusionService {
       panelSuccessCount: panelMeta.results.length,
       failedModelCount: panelMeta.failedModels.length,
       analysisProduced: analysis !== null,
+      outcome: synthError ? synthError.code : 'success',
       ...(synthModel ? { synthesizerModel: synthModel } : {}),
-      ...(synthUsage ? { totalTokens: synthUsage.totalTokens } : {}),
+      totalTokens: panelTokens + judgeTokens + synthTokens,
+      tokensByStage: { panel: panelTokens, judge: judgeTokens, synthesis: synthTokens },
     });
+
+    if (synthError) {
+      yield synthError;
+      return;
+    }
 
     yield {
       type: 'done',
@@ -113,18 +122,24 @@ export class RunFusionUseCase implements FusionService {
     messages: Message[],
     timeoutMs: number,
     requestId: string,
-  ): AsyncGenerator<FusionStreamEvent, Analysis | null> {
+  ): AsyncGenerator<
+    FusionStreamEvent,
+    { analysis: Analysis | null; judgeUsage: TokenUsage | undefined }
+  > {
     let analysis: Analysis | null = null;
+    let judgeUsage: TokenUsage | undefined;
     if (this.judgeStep !== null) {
-      analysis = yield* this.withHeartbeat(
+      const judgeResult = yield* this.withHeartbeat(
         this.judgeStep.analyze(panelResults, messages, timeoutMs, requestId),
         { type: 'progress', stage: 'judge', message: 'judge running' },
       );
+      analysis = judgeResult.analysis;
+      judgeUsage = judgeResult.usage;
     } else {
       this.loggerPort.log('debug', 'judge_skipped', { requestId });
     }
     yield { type: 'progress', stage: 'judge', message: 'Judge stage complete' };
-    return analysis;
+    return { analysis, judgeUsage };
   }
 
   private async *runSynthesis(
@@ -135,29 +150,36 @@ export class RunFusionUseCase implements FusionService {
     sampling: Sampling,
   ): AsyncGenerator<
     FusionStreamEvent,
-    { usage: TokenUsage | undefined; model: string | undefined }
+    {
+      usage: TokenUsage | undefined;
+      model: string | undefined;
+      synthError: (FusionStreamEvent & { type: 'error' }) | undefined;
+    }
   > {
     let usage: TokenUsage | undefined;
     let model: string | undefined;
+    let synthError: (FusionStreamEvent & { type: 'error' }) | undefined;
 
-    for await (const event of this.synthesizeStep.synthesize(
-      panelResults,
-      messages,
-      analysis,
-      requestId,
-      sampling,
+    for await (const event of this.withStreamHeartbeat(
+      this.synthesizeStep.synthesize(panelResults, messages, analysis, requestId, sampling),
+      { type: 'progress', stage: 'synthesis', message: 'synthesizing' },
     )) {
       if (event.type === 'content_delta') {
         yield { type: 'content_delta', delta: event.delta };
       } else if (event.type === 'content_stop') {
         yield { type: 'content_stop' };
+      } else if (event.type === 'progress') {
+        yield event;
       } else if (event.type === 'done') {
         usage = event.usage;
         model = event.model;
+      } else if (event.type === 'error') {
+        synthError = event;
+        break;
       }
     }
 
-    return { usage, model };
+    return { usage, model, synthError };
   }
 
   private async *withHeartbeat<T>(
@@ -178,5 +200,38 @@ export class RunFusionUseCase implements FusionService {
       if (!done) yield ev;
     }
     return await tracked;
+  }
+
+  private async *withStreamHeartbeat(
+    iterable: AsyncIterable<FusionStreamEvent>,
+    ev: FusionStreamEvent,
+  ): AsyncGenerator<FusionStreamEvent> {
+    const it = iterable[Symbol.asyncIterator]();
+    let pending: Promise<IteratorResult<FusionStreamEvent>> = it.next();
+    try {
+      while (true) {
+        let t: ReturnType<typeof setTimeout>;
+        const tick = new Promise<void>((resolve) => {
+          t = setTimeout(resolve, this.heartbeatIntervalMs);
+        });
+        const won = await Promise.race([
+          pending.then((r): { tag: 'iter'; result: IteratorResult<FusionStreamEvent> } => ({
+            tag: 'iter',
+            result: r,
+          })),
+          tick.then((): { tag: 'tick' } => ({ tag: 'tick' })),
+        ]);
+        clearTimeout(t!);
+        if (won.tag === 'tick') {
+          yield ev;
+        } else {
+          if (won.result.done) break;
+          yield won.result.value;
+          pending = it.next();
+        }
+      }
+    } finally {
+      await it.return?.();
+    }
   }
 }

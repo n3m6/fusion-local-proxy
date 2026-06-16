@@ -304,7 +304,9 @@ test('empty panel models: returns empty results, no port calls', async () => {
 
   const result = await runner.run([sampleMessage], 30000);
 
-  assert.deepStrictEqual(result, { results: [], failedModels: [] });
+  assert.deepStrictEqual(result.results, []);
+  assert.deepStrictEqual(result.failedModels, []);
+  assert.deepStrictEqual(result.usage, { promptTokens: 0, completionTokens: 0, totalTokens: 0 });
 
   // No log calls either
   assert.equal(logger._calls.length, 0);
@@ -416,7 +418,7 @@ test('loggerPort.logStageEnd called once for the whole stage with aggregate usag
     clock,
   );
 
-  await runner.run([sampleMessage], 30000);
+  const result = await runner.run([sampleMessage], 30000);
 
   // The stage end pairs 1:1 with the stage start and wraps the entire panel run.
   const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
@@ -431,9 +433,12 @@ test('loggerPort.logStageEnd called once for the whole stage with aggregate usag
     totalTokens: 50, // 30 + 20
   });
 
-  // Per-model detail is still emitted, one logResponse per successful model.
-  const responseCalls = logger._calls.filter((c) => c.method === 'logResponse');
-  assert.equal(responseCalls.length, 2);
+  // Aggregate usage is also surfaced in the returned PanelMeta.
+  assert.deepStrictEqual(result.usage, {
+    promptTokens: 15,
+    completionTokens: 35,
+    totalTokens: 50,
+  });
 });
 
 test('FailedModelInfo from generic Error uses constructor.name as errorCode', async () => {
