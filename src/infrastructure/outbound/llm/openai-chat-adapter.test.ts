@@ -1018,6 +1018,39 @@ test('OpenAiChatAdapter.complete() sets reasoning_effort high', async () => {
   assert.equal(capturedParams.value!.reasoning_effort, 'high');
 });
 
+test('OpenAiChatAdapter.complete() passes reasoning_effort xhigh through to the SDK', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-5.5',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-5.5',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      thinkingStrength: 'xhigh',
+    },
+  };
+
+  await adapter.complete(request);
+
+  assert.equal(capturedParams.value!.reasoning_effort, 'xhigh');
+});
+
 test('OpenAiChatAdapter.complete() omits reasoning_effort when thinkingStrength is off', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 

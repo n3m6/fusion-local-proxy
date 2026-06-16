@@ -6,7 +6,7 @@ export type ProviderType = 'openai' | 'anthropic';
 
 export type JsonMode = 'json_object' | 'json_schema';
 
-export type ThinkingStrength = 'off' | 'low' | 'medium' | 'high';
+export type ThinkingStrength = 'off' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export interface ModelRef {
   readonly provider: ProviderType;

@@ -10,7 +10,7 @@ const providerSchema = z.object({
   baseURL: z.string().min(1),
   apiKeyEnv: z.string().min(1),
   jsonMode: z.enum(['json_object', 'json_schema']).optional(),
-  thinkingStrength: z.enum(['off', 'low', 'medium', 'high']).optional(),
+  thinkingStrength: z.enum(['off', 'low', 'medium', 'high', 'xhigh']).optional(),
 });
 
 const configSchema = z.object({

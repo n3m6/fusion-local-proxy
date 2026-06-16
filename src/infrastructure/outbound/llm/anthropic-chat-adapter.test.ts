@@ -726,6 +726,37 @@ test('Thinking high: budget_tokens=12000, max_tokens=16096', async () => {
   assert.equal(params.max_tokens, 16096); // Math.max(4096, 12000+4096)
 });
 
+test('Thinking xhigh: budget_tokens=24000, max_tokens=28096', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'OK' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-sonnet',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+  await adapter.complete(
+    makeRequest({
+      model: {
+        provider: 'anthropic',
+        model: 'claude-sonnet',
+        baseURL: 'https://api.anthropic.com',
+        apiKey: 'sk-test',
+        thinkingStrength: 'xhigh',
+      },
+    }),
+  );
+
+  const params = capturedParams.value!;
+  const thinking = params.thinking as Record<string, unknown>;
+  assert.equal(thinking.budget_tokens, 24000);
+  assert.equal(params.max_tokens, 28096); // Math.max(4096, 24000+4096)
+});
+
 test('Thinking off: thinking param absent, temperature and max_tokens unaffected', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 

@@ -756,7 +756,7 @@ test('JsonFileConfigAdapter surfaces thinkingStrength on ModelRef when present',
 });
 
 test('JsonFileConfigAdapter accepts all valid thinkingStrength values', () => {
-  for (const value of ['off', 'low', 'high'] as const) {
+  for (const value of ['off', 'low', 'medium', 'high', 'xhigh'] as const) {
     withTempDir((dir) => {
       const path = writeConfig(dir, {
         providers: [

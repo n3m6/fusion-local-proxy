@@ -126,7 +126,12 @@ export class AnthropicChatAdapter implements ChatModelPort {
     const thinkingEnabled = ts !== undefined && ts !== 'off';
 
     // budget_tokens must be >=1024 and strictly less than max_tokens (SDK constraint).
-    const THINKING_BUDGETS: Record<string, number> = { low: 1024, medium: 4096, high: 12000 };
+    const THINKING_BUDGETS: Record<string, number> = {
+      low: 1024,
+      medium: 4096,
+      high: 12000,
+      xhigh: 24000,
+    };
     const budgetTokens = thinkingEnabled ? (THINKING_BUDGETS[ts] ?? 1024) : 0;
 
     // When thinking is enabled, ensure max_tokens exceeds budget_tokens.
