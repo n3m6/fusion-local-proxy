@@ -202,3 +202,46 @@ test('POST /v1/chat/completions with invalid JSON returns 400', async () => {
   assert.ok(error, 'must contain an error object');
   assert.equal(error.message, 'Invalid JSON body');
 });
+
+// ---------------------------------------------------------------------------
+// Missing unit scenarios
+// ---------------------------------------------------------------------------
+
+test('POST /v1/chat/completions non-streaming where stream yields content but no done event → 500 incomplete_stream', async () => {
+  // fusionStreamToOpenAiResponse throws FusionError('incomplete_stream') when the
+  // stream ends without a done event; the route must surface this as a 500.
+  const app = createApp(
+    stubFusionService([
+      { type: 'content_delta', delta: 'Hello' },
+      { type: 'content_stop' },
+      // deliberately omit the 'done' event
+    ]),
+  );
+
+  const res = await postJson(app, {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+  });
+
+  assert.equal(res.status, 500);
+  const json = (await res.json()) as Record<string, unknown>;
+  const error = json.error as Record<string, unknown>;
+  assert.ok(error, 'must contain an error object');
+  assert.equal(error.code, 'incomplete_stream');
+});
+
+test('POST /v1/chat/completions streaming with generic (non-FusionError) thrown → SSE body contains internal_error, no [DONE]', async () => {
+  // When a non-FusionError is thrown the route catches it and writes
+  // data: {"error":{"code":"internal_error",...}} to the SSE stream.
+  const app = createApp(stubFusionServiceThatThrows(new Error('unexpected crash')));
+
+  const res = await postJson(app, {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+    stream: true,
+  });
+
+  const body = await res.text();
+  assert.ok(body.includes('internal_error'), 'SSE body must contain internal_error code');
+  assert.ok(!body.includes('[DONE]'), 'SSE stream must not contain [DONE] after a generic error');
+});

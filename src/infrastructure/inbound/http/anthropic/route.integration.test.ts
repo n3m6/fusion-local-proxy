@@ -553,6 +553,35 @@ test('POST /v1/messages passes model to SSE encoder', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Missing unit scenario: stream:false with mid-stream error event
+// ---------------------------------------------------------------------------
+
+test('POST /v1/messages with stream:false and mid-stream error event → 500 JSON error', async () => {
+  // fusionStreamToAnthropicResponse converts a yielded error event into a thrown
+  // FusionError; the non-streaming route must catch this and return 500 JSON.
+  const fusionService = stubFusionServiceWithErrorEvent('upstream_timeout', 'Model timed out');
+  const app = createApp(fusionService);
+
+  const res = await app.request('/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-3-opus-20240229',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: false,
+    }),
+  });
+
+  assert.equal(res.status, 500);
+  const body = (await res.json()) as Record<string, unknown>;
+  const error = body.error as Record<string, unknown>;
+  assert.ok(error, 'response must contain an error object');
+  assert.equal(error.type, 'upstream_timeout');
+  assert.equal(error.message, 'Model timed out');
+});
+
+// ---------------------------------------------------------------------------
 // Non-streaming (stream: false)
 // ---------------------------------------------------------------------------
 
