@@ -72,6 +72,37 @@ test('encodeOpenAiSSE emits keep-alive comment for generic progress', async () =
   assert.ok(strings[0].endsWith('\n\n'));
 });
 
+test('encodeOpenAiSSE emits just the message (no stage prefix) for synthesis progress', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'progress', stage: 'synthesis', message: 'evaluating candidates' },
+    { type: 'done' },
+  ];
+
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
+
+  assert.equal(strings[0], ': evaluating candidates\n\n');
+});
+
+test('encodeOpenAiSSE synthesis progress is an SSE comment, not a data chunk', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'progress', stage: 'synthesis', message: 'evaluating candidates' },
+    { type: 'content_delta', delta: 'Answer' },
+    { type: 'done' },
+  ];
+
+  const strings = await collectStrings(encodeOpenAiSSE(await asyncIterableFrom(events), 'gpt-4o'));
+
+  // First string must be the SSE comment, not a data line
+  assert.ok(strings[0].startsWith(':'), 'synthesis progress must be an SSE comment');
+  assert.ok(!strings[0].startsWith('data:'), 'synthesis progress must not be a data line');
+
+  // Content delta must still appear separately as a data line
+  const dataLines = strings.filter((s) => s.startsWith('data: ') && !s.includes('[DONE]'));
+  assert.equal(dataLines.length, 1);
+  const obj = JSON.parse(dataLines[0].slice('data: '.length).trim());
+  assert.equal(obj.choices[0].delta.content, 'Answer');
+});
+
 // ---------------------------------------------------------------------------
 // content_delta
 // ---------------------------------------------------------------------------

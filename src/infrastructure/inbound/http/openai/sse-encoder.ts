@@ -16,6 +16,8 @@ export function encodeOpenAiSSE(
             yield ': panel running\n\n';
           } else if (event.stage === 'judge') {
             yield ': judging\n\n';
+          } else if (event.stage === 'synthesis') {
+            yield `: ${event.message}\n\n`;
           } else {
             yield `: ${event.stage} ${event.message}\n\n`;
           }

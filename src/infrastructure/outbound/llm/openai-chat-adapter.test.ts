@@ -422,7 +422,7 @@ type MockStreamChunk = {
   model?: string;
   choices?: Array<{
     index?: number;
-    delta?: { role?: string; content?: string | null };
+    delta?: { role?: string; content?: string | null; reasoning_content?: string | null };
     finish_reason?: string | null;
   }>;
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -1293,4 +1293,193 @@ test('OpenAiChatAdapter.stream() passes responseFormat json_schema in params', a
   assert.equal(js.name, 'response');
   assert.equal(js.strict, true);
   assert.deepEqual(js.schema, schema);
+});
+
+// ---------------------------------------------------------------------------
+// reasoning_progress detection (DeepSeek-compatible reasoning_content)
+// ---------------------------------------------------------------------------
+
+test('OpenAiChatAdapter.stream() yields reasoning_progress for non-empty reasoning_content delta', async () => {
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-rp1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [
+        { index: 0, delta: { reasoning_content: 'Thinking step 1...' }, finish_reason: null },
+      ],
+    },
+    {
+      id: 'chatcmpl-rp1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [{ index: 0, delta: { content: 'Answer' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'deepseek-v4-pro',
+      baseURL: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  // reasoning_progress must appear before the first content_delta
+  const rpIdx = chunks.findIndex((c) => c.type === 'reasoning_progress');
+  const cdIdx = chunks.findIndex((c) => c.type === 'content_delta');
+  assert.ok(rpIdx >= 0, 'expected at least one reasoning_progress chunk');
+  assert.ok(cdIdx >= 0, 'expected at least one content_delta chunk');
+  assert.ok(rpIdx < cdIdx, 'reasoning_progress must precede the first content_delta');
+
+  // reasoning_progress must never be a content_delta
+  const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
+  assert.equal(contentDeltas.length, 1);
+  assert.equal((contentDeltas[0] as { type: 'content_delta'; delta: string }).delta, 'Answer');
+});
+
+test('OpenAiChatAdapter.stream() does not yield reasoning_progress for null reasoning_content', async () => {
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-rp2',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: { reasoning_content: null }, finish_reason: null }],
+    },
+    {
+      id: 'chatcmpl-rp2',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: { content: 'Hi' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  const rpChunks = chunks.filter((c) => c.type === 'reasoning_progress');
+  assert.equal(rpChunks.length, 0, 'null reasoning_content must not yield reasoning_progress');
+});
+
+test('OpenAiChatAdapter.stream() does not yield reasoning_progress for empty-string reasoning_content', async () => {
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-rp3',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: { reasoning_content: '' }, finish_reason: null }],
+    },
+    {
+      id: 'chatcmpl-rp3',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: { content: 'Hi' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  const rpChunks = chunks.filter((c) => c.type === 'reasoning_progress');
+  assert.equal(rpChunks.length, 0, 'empty reasoning_content must not yield reasoning_progress');
+});
+
+test('OpenAiChatAdapter.stream() yields reasoning_progress before content_delta when a single chunk carries both fields', async () => {
+  // vLLM-served DeepSeek can populate reasoning_content and content in one chunk.
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-rp4',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [
+        {
+          index: 0,
+          delta: { reasoning_content: 'Thinking...', content: 'Answer' },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'deepseek-v4-pro',
+      baseURL: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  const rpIdx = chunks.findIndex((c) => c.type === 'reasoning_progress');
+  const cdIdx = chunks.findIndex((c) => c.type === 'content_delta');
+  assert.ok(rpIdx >= 0, 'expected at least one reasoning_progress chunk');
+  assert.ok(cdIdx >= 0, 'expected at least one content_delta chunk');
+  assert.ok(
+    rpIdx < cdIdx,
+    'reasoning_progress must precede content_delta even within a mixed chunk',
+  );
+
+  const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
+  assert.equal(contentDeltas.length, 1);
+  assert.equal((contentDeltas[0] as { type: 'content_delta'; delta: string }).delta, 'Answer');
 });

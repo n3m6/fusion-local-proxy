@@ -150,6 +150,19 @@ export class OpenAiChatAdapter implements ChatModelPort {
     for await (const chunk of stream) {
       const choice = chunk.choices[0];
 
+      // Detect reasoning_content (DeepSeek-compatible extended reasoning field).
+      // The OpenAI SDK type does not include this field; access it via a cast.
+      // This must be checked BEFORE content: some backends (e.g. vLLM-served
+      // DeepSeek) populate both fields in a single chunk, and reasoning_progress
+      // must precede the first content_delta.
+      const deltaExt = choice?.delta as Record<string, unknown> | undefined;
+      if (
+        typeof deltaExt?.reasoning_content === 'string' &&
+        deltaExt.reasoning_content.length > 0
+      ) {
+        yield { type: 'reasoning_progress' };
+      }
+
       if (choice?.delta?.content) {
         onContentDelta(metrics, choice.delta.content, startTime);
         yield { type: 'content_delta', delta: choice.delta.content };

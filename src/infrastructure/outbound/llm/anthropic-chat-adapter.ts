@@ -107,6 +107,8 @@ export class AnthropicChatAdapter implements ChatModelPort {
           if (event.delta.type === 'text_delta') {
             onContentDelta(metrics, event.delta.text, startTime);
             yield { type: 'content_delta', delta: event.delta.text };
+          } else if (event.delta.type === 'thinking_delta') {
+            yield { type: 'reasoning_progress' };
           }
           break;
 

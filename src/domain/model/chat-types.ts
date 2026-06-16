@@ -69,4 +69,5 @@ export interface TokenUsage {
 export type ChatStreamChunk =
   | { readonly type: 'content_delta'; readonly delta: string }
   | { readonly type: 'content_stop' }
-  | { readonly type: 'usage'; readonly usage: TokenUsage };
+  | { readonly type: 'usage'; readonly usage: TokenUsage }
+  | { readonly type: 'reasoning_progress' };

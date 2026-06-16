@@ -504,7 +504,49 @@ test('Non-text content ignored in stream: thinking_delta does not yield content_
   const chunks = await collectStreamChunks(adapter, makeRequest());
 
   const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
-  // Only the text_delta event should produce a content_delta; thinking_delta is ignored
+  // Only the text_delta event should produce a content_delta; thinking_delta is not content
+  assert.equal(contentDeltas.length, 1);
+  assert.equal((contentDeltas[0] as { type: 'content_delta'; delta: string }).delta, 'Result');
+});
+
+test('thinking_delta yields reasoning_progress before the first content_delta', async () => {
+  const events = [
+    { type: 'message_start', message: { usage: { input_tokens: 10 } } },
+    { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Evaluating...' } },
+    { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' } },
+    { type: 'message_delta', usage: { output_tokens: 5 } },
+    { type: 'message_stop' },
+  ];
+
+  const client = stubAnthropicStreamingClient(events);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
+  const chunks = await collectStreamChunks(adapter, makeRequest());
+
+  const rpIdx = chunks.findIndex((c) => c.type === 'reasoning_progress');
+  const cdIdx = chunks.findIndex((c) => c.type === 'content_delta');
+  assert.ok(rpIdx >= 0, 'expected at least one reasoning_progress chunk');
+  assert.ok(cdIdx >= 0, 'expected at least one content_delta chunk');
+  assert.ok(rpIdx < cdIdx, 'reasoning_progress must precede the first content_delta');
+});
+
+test('multiple thinking_deltas each yield a reasoning_progress chunk', async () => {
+  const events = [
+    { type: 'message_start', message: { usage: { input_tokens: 10 } } },
+    { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Step 1' } },
+    { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Step 2' } },
+    { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Result' } },
+    { type: 'message_delta', usage: { output_tokens: 5 } },
+    { type: 'message_stop' },
+  ];
+
+  const client = stubAnthropicStreamingClient(events);
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
+  const chunks = await collectStreamChunks(adapter, makeRequest());
+
+  const rpChunks = chunks.filter((c) => c.type === 'reasoning_progress');
+  assert.equal(rpChunks.length, 2, 'each thinking_delta should produce one reasoning_progress');
+
+  const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
   assert.equal(contentDeltas.length, 1);
   assert.equal((contentDeltas[0] as { type: 'content_delta'; delta: string }).delta, 'Result');
 });

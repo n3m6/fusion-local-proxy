@@ -83,6 +83,7 @@ export class SynthesizeStep {
       const startTime = this.clockPort.now();
 
       let usage: TokenUsage | undefined;
+      let lastReasoningProgressMs: number | undefined;
 
       try {
         for await (const chunk of this.chatPort.stream(request)) {
@@ -92,6 +93,12 @@ export class SynthesizeStep {
             yield { type: 'content_stop' };
           } else if (chunk.type === 'usage') {
             usage = chunk.usage;
+          } else if (chunk.type === 'reasoning_progress') {
+            const now = this.clockPort.now();
+            if (lastReasoningProgressMs === undefined || now - lastReasoningProgressMs >= 1000) {
+              lastReasoningProgressMs = now;
+              yield { type: 'progress', stage: 'synthesis', message: 'evaluating candidates' };
+            }
           }
         }
       } catch (error) {

@@ -61,6 +61,56 @@ function stubChatPort(response?: ChatResponse): StubChatModelPort {
   };
 }
 
+/**
+ * A chat port stub that emits `reasoningCount` reasoning_progress chunks
+ * (with configurable inter-chunk clock offsets) before the normal content.
+ */
+function stubChatPortWithReasoning(
+  reasoningCount: number,
+  response?: ChatResponse,
+): StubChatModelPort {
+  const calls: ChatRequest[] = [];
+  const resp = response ?? {
+    content: 'answer after reasoning',
+    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    model: 'synth-model',
+  };
+  return {
+    _calls: calls,
+    async complete(request: ChatRequest): Promise<ChatResponse> {
+      calls.push(request);
+      return resp;
+    },
+    stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
+      calls.push(request);
+      const chunks: ChatStreamChunk[] = [
+        ...Array.from(
+          { length: reasoningCount },
+          (): ChatStreamChunk => ({
+            type: 'reasoning_progress',
+          }),
+        ),
+        { type: 'content_delta', delta: resp.content },
+        { type: 'content_stop' },
+        { type: 'usage', usage: resp.usage },
+      ];
+      return {
+        [Symbol.asyncIterator]() {
+          let i = 0;
+          return {
+            async next() {
+              if (i < chunks.length) {
+                return { value: chunks[i++]!, done: false };
+              }
+              return { value: undefined as never, done: true };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
 function stubChatPortReject(error: Error): StubChatModelPort {
   const calls: ChatRequest[] = [];
   return {
@@ -713,5 +763,118 @@ test('non-selfJudge mode (judge configured): null analysis still uses minimal fa
   assert.ok(
     !userContent.includes('SELF-EVALUATION DIRECTIVE'),
     'when judge is configured but failed, user prompt must not include SELF-EVALUATION DIRECTIVE',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// reasoning_progress → synthesis progress event
+// ---------------------------------------------------------------------------
+
+test('reasoning_progress: first chunk emits a synthesis progress event immediately', async () => {
+  const chat = stubChatPortWithReasoning(1);
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  // startTime=0, reasoning_progress check=0, durationMs=10
+  const clock = stubClockPort([0, 0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+  const events = await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
+  );
+
+  const progressEvents = events.filter((e) => e.type === 'progress');
+  assert.equal(progressEvents.length, 1);
+  const prog = progressEvents[0] as { type: 'progress'; stage: string; message: string };
+  assert.equal(prog.stage, 'synthesis');
+  assert.equal(prog.message, 'evaluating candidates');
+});
+
+test('reasoning_progress: progress event appears before the first content_delta', async () => {
+  const chat = stubChatPortWithReasoning(1);
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+  const events = await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
+  );
+
+  const progIdx = events.findIndex((e) => e.type === 'progress');
+  const cdIdx = events.findIndex((e) => e.type === 'content_delta');
+  assert.ok(progIdx >= 0, 'expected a progress event');
+  assert.ok(cdIdx >= 0, 'expected a content_delta event');
+  assert.ok(progIdx < cdIdx, 'progress must precede content_delta');
+});
+
+test('reasoning_progress: reasoning chunks never leak into content_delta output', async () => {
+  const chat = stubChatPortWithReasoning(3);
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  // startTime=0, three throttle checks (0, 0, 0), durationMs=10
+  const clock = stubClockPort([0, 0, 0, 0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+  const events = await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
+  );
+
+  // content_delta events must only carry actual answer text, not reasoning content
+  const contentDeltas = events.filter((e) => e.type === 'content_delta');
+  assert.equal(contentDeltas.length, 1);
+  assert.equal(
+    (contentDeltas[0] as { type: 'content_delta'; delta: string }).delta,
+    'answer after reasoning',
+  );
+
+  // progress events must have the synthesis stage, not be answer content
+  const progressEvents = events.filter((e) => e.type === 'progress');
+  for (const e of progressEvents) {
+    assert.equal(e.type, 'progress');
+    assert.equal((e as { type: 'progress'; stage: string }).stage, 'synthesis');
+  }
+});
+
+test('reasoning_progress: throttled to at most one progress per 1000ms', async () => {
+  // 3 reasoning_progress chunks; clock values for the throttle checks:
+  //   first check:  t=0   (undefined prev → emit, lastMs=0)
+  //   second check: t=500 (500 - 0 = 500 < 1000 → skip)
+  //   third check:  t=1100 (1100 - 0 = 1100 >= 1000 → emit, lastMs=1100)
+  const chat = stubChatPortWithReasoning(3);
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  // [startTime=0, check1=0, check2=500, check3=1100, durationMs=1200]
+  const clock = stubClockPort([0, 0, 500, 1100, 1200]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+  const events = await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
+  );
+
+  const progressEvents = events.filter((e) => e.type === 'progress');
+  assert.equal(
+    progressEvents.length,
+    2,
+    'only 2 of 3 reasoning_progress chunks should emit (one throttled)',
+  );
+});
+
+test('reasoning_progress: no progress events when model emits no reasoning chunks', async () => {
+  // Standard stub emits no reasoning_progress chunks
+  const chat = stubChatPort();
+  const config = stubConfigPort({ judgeModel: null });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10]);
+
+  const step = new SynthesizeStep(chat, config, logger, clock);
+  const events = await collectEvents(
+    step.synthesize(samplePanelResults(), sampleOriginalMessages, null),
+  );
+
+  const progressEvents = events.filter((e) => e.type === 'progress');
+  assert.equal(
+    progressEvents.length,
+    0,
+    'no reasoning_progress chunks means no synthesis progress events',
   );
 });
