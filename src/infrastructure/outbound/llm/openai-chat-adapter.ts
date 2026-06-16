@@ -11,6 +11,10 @@ import {
   type AdapterConfig,
   buildRequestLogFields,
   buildBaseLogFields,
+  createStreamMetrics,
+  onContentDelta,
+  buildStreamResponseLogFields,
+  buildCompleteResponseLogFields,
 } from './adapter-support.js';
 
 export type { AdapterConfig };
@@ -33,10 +37,6 @@ export class OpenAiChatAdapter implements ChatModelPort {
     private readonly adapterConfig: AdapterConfig,
     private readonly logger?: LoggerPort,
   ) {}
-
-  get config(): AdapterConfig {
-    return this.adapterConfig;
-  }
 
   private buildBaseParams(request: ChatRequest): BaseCompletionParams {
     const params: BaseCompletionParams = {
@@ -93,19 +93,20 @@ export class OpenAiChatAdapter implements ChatModelPort {
       totalTokens: response.usage?.total_tokens ?? 0,
     };
 
-    this.logger?.logResponse({
-      ...buildBaseLogFields(request, 'openai'),
-      mode: 'complete',
-      latencyMs: Date.now() - startTime,
-      contentChars: content.length,
-      finishReason: choice?.finish_reason,
-      tokens: {
-        prompt: usage.promptTokens,
-        completion: usage.completionTokens,
-        total: usage.totalTokens,
-      },
-      content,
-    });
+    this.logger?.logResponse(
+      buildCompleteResponseLogFields(
+        request,
+        'openai',
+        startTime,
+        content,
+        {
+          prompt: usage.promptTokens,
+          completion: usage.completionTokens,
+          total: usage.totalTokens,
+        },
+        { finishReason: choice?.finish_reason },
+      ),
+    );
 
     return { content, usage, model: response.model };
   }
@@ -142,22 +143,15 @@ export class OpenAiChatAdapter implements ChatModelPort {
       }
     }
 
+    const metrics = createStreamMetrics();
     let stopYielded = false;
-    let deltaCount = 0;
-    let contentChars = 0;
-    let ttftMs: number | undefined;
     let lastUsage: TokenUsage | undefined;
-    let fullContent = '';
+
     for await (const chunk of stream) {
       const choice = chunk.choices[0];
 
       if (choice?.delta?.content) {
-        if (ttftMs === undefined) {
-          ttftMs = Date.now() - startTime;
-        }
-        deltaCount++;
-        contentChars += choice.delta.content.length;
-        fullContent += choice.delta.content;
+        onContentDelta(metrics, choice.delta.content, startTime);
         yield { type: 'content_delta', delta: choice.delta.content };
       }
 
@@ -180,21 +174,20 @@ export class OpenAiChatAdapter implements ChatModelPort {
       yield { type: 'content_stop' };
     }
 
-    this.logger?.logResponse({
-      ...buildBaseLogFields(request, 'openai'),
-      mode: 'stream',
-      latencyMs: Date.now() - startTime,
-      ttftMs,
-      deltaCount,
-      contentChars,
-      tokens: lastUsage
-        ? {
-            prompt: lastUsage.promptTokens,
-            completion: lastUsage.completionTokens,
-            total: lastUsage.totalTokens,
-          }
-        : undefined,
-      content: fullContent,
-    });
+    this.logger?.logResponse(
+      buildStreamResponseLogFields(
+        request,
+        'openai',
+        metrics,
+        startTime,
+        lastUsage
+          ? {
+              prompt: lastUsage.promptTokens,
+              completion: lastUsage.completionTokens,
+              total: lastUsage.totalTokens,
+            }
+          : undefined,
+      ),
+    );
   }
 }

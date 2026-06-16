@@ -4,6 +4,16 @@ import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js
 import { errorEventToFusionError, parseCommonRequestFields } from '../shared.js';
 import { encodeAnthropicSSE } from './sse-encoder.js';
 
+function parseAnthropicMetadata(raw: unknown): { user_id: string | null } | undefined {
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw) && 'user_id' in raw) {
+    const userId = (raw as Record<string, unknown>).user_id;
+    if (typeof userId === 'string' || userId === null) {
+      return { user_id: userId };
+    }
+  }
+  return undefined;
+}
+
 export function anthropicRequestToFusion(body: Record<string, unknown>): FusionRequest {
   let systemPrompt: string | undefined;
   if (typeof body.system === 'string') {
@@ -49,16 +59,7 @@ export function anthropicRequestToFusion(body: Record<string, unknown>): FusionR
     (body.stop_sequences as unknown[]).every((s) => typeof s === 'string')
       ? (body.stop_sequences as string[])
       : undefined;
-  const rawMeta = body.metadata;
-  const metadata =
-    rawMeta !== null &&
-    typeof rawMeta === 'object' &&
-    !Array.isArray(rawMeta) &&
-    'user_id' in rawMeta &&
-    (typeof (rawMeta as Record<string, unknown>).user_id === 'string' ||
-      (rawMeta as Record<string, unknown>).user_id === null)
-      ? { user_id: (rawMeta as { user_id: string | null }).user_id }
-      : undefined;
+  const metadata = parseAnthropicMetadata(body.metadata);
 
   return {
     messages,
@@ -74,11 +75,11 @@ export function anthropicRequestToFusion(body: Record<string, unknown>): FusionR
   };
 }
 
-export async function* fusionStreamToAnthropicSSE(
+export function fusionStreamToAnthropicSSE(
   events: AsyncIterable<FusionStreamEvent>,
   model: string,
 ): AsyncIterable<string> {
-  yield* encodeAnthropicSSE(events, model);
+  return encodeAnthropicSSE(events, model);
 }
 
 /**

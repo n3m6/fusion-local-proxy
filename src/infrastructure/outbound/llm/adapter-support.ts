@@ -38,3 +38,73 @@ export function buildBaseLogFields(request: ChatRequest, provider: string): LogF
     stage: request.options?.stage,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Stream accumulation helpers (SDK-agnostic)
+// ---------------------------------------------------------------------------
+
+/** Mutable accumulator for streaming metrics tracked across chunk events. */
+export interface StreamMetrics {
+  ttftMs: number | undefined;
+  deltaCount: number;
+  contentChars: number;
+  fullContent: string;
+}
+
+export function createStreamMetrics(): StreamMetrics {
+  return { ttftMs: undefined, deltaCount: 0, contentChars: 0, fullContent: '' };
+}
+
+/** Update `metrics` with one content delta chunk and record TTFT on first call. */
+export function onContentDelta(metrics: StreamMetrics, delta: string, startTime: number): void {
+  if (metrics.ttftMs === undefined) {
+    metrics.ttftMs = Date.now() - startTime;
+  }
+  metrics.deltaCount++;
+  metrics.contentChars += delta.length;
+  metrics.fullContent += delta;
+}
+
+// ---------------------------------------------------------------------------
+// Response log-field builders
+// ---------------------------------------------------------------------------
+
+type TokenFields = { prompt: number; completion: number; total: number };
+
+export function buildStreamResponseLogFields(
+  request: ChatRequest,
+  provider: string,
+  metrics: StreamMetrics,
+  startTime: number,
+  tokens?: TokenFields,
+): LogFields {
+  return {
+    ...buildBaseLogFields(request, provider),
+    mode: 'stream',
+    latencyMs: Date.now() - startTime,
+    ttftMs: metrics.ttftMs,
+    deltaCount: metrics.deltaCount,
+    contentChars: metrics.contentChars,
+    ...(tokens !== undefined ? { tokens } : {}),
+    content: metrics.fullContent,
+  };
+}
+
+export function buildCompleteResponseLogFields(
+  request: ChatRequest,
+  provider: string,
+  startTime: number,
+  content: string,
+  tokens: TokenFields,
+  extra?: Record<string, unknown>,
+): LogFields {
+  return {
+    ...buildBaseLogFields(request, provider),
+    mode: 'complete',
+    latencyMs: Date.now() - startTime,
+    contentChars: content.length,
+    tokens,
+    content,
+    ...extra,
+  };
+}

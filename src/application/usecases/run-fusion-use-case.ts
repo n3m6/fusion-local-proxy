@@ -5,7 +5,7 @@ import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { FusionRequest, PanelMeta, PanelResult } from '../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
-import type { TokenUsage } from '../../domain/model/chat-types.js';
+import type { TokenUsage, Sampling } from '../../domain/model/chat-types.js';
 import type { Message } from '../../domain/model/message.js';
 import type { Analysis } from '../../domain/services/analysis-schema.js';
 import { PanelRunner } from './panel-runner.js';
@@ -13,15 +13,6 @@ import { JudgeStep } from './judge-step.js';
 import { SynthesizeStep } from './synthesize-step.js';
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
-
-type Sampling = {
-  temperature?: number;
-  maxTokens?: number;
-  topP?: number;
-  topK?: number;
-  stopSequences?: string[];
-  metadata?: { readonly user_id?: string | null };
-};
 
 export class RunFusionUseCase implements FusionService {
   constructor(
@@ -124,14 +115,9 @@ export class RunFusionUseCase implements FusionService {
     requestId: string,
   ): AsyncGenerator<FusionStreamEvent, Analysis | null> {
     let analysis: Analysis | null = null;
-    // Gate on a single runtime read of the judge model so the decision and the
-    // value share one source of truth. Both the injected step and a configured
-    // model must be present; if they ever disagree the judge is skipped rather
-    // than crashing on a null model ref passed into analyze().
-    const judgeModel = this.configPort.getJudgeModel();
-    if (this.judgeStep !== null && judgeModel !== null) {
+    if (this.judgeStep !== null) {
       analysis = yield* this.withHeartbeat(
-        this.judgeStep.analyze(panelResults, messages, judgeModel, timeoutMs, requestId),
+        this.judgeStep.analyze(panelResults, messages, timeoutMs, requestId),
         { type: 'progress', stage: 'judge', message: 'judge running' },
       );
     } else {

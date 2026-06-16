@@ -14,6 +14,18 @@ export function encodeAnthropicSSE(
     let contentBlockStopped = false;
     let outputTokens = 0;
 
+    /** Emit the message_start and content_block_start preamble on first content. */
+    function* ensureOpened(): Generator<string> {
+      if (!started) {
+        yield* emitMessageStart(messageId, model);
+        started = true;
+      }
+      if (!contentBlockStarted) {
+        yield* emitContentBlockStart();
+        contentBlockStarted = true;
+      }
+    }
+
     for await (const event of events) {
       switch (event.type) {
         case 'progress':
@@ -21,26 +33,12 @@ export function encodeAnthropicSSE(
           break;
 
         case 'content_delta':
-          if (!started) {
-            yield* emitMessageStart(messageId, model);
-            started = true;
-          }
-          if (!contentBlockStarted) {
-            yield* emitContentBlockStart();
-            contentBlockStarted = true;
-          }
+          yield* ensureOpened();
           yield* emitContentBlockDelta(event.delta);
           break;
 
         case 'content_stop':
-          if (!started) {
-            yield* emitMessageStart(messageId, model);
-            started = true;
-          }
-          if (!contentBlockStarted) {
-            yield* emitContentBlockStart();
-            contentBlockStarted = true;
-          }
+          yield* ensureOpened();
           if (!contentBlockStopped) {
             yield* emitContentBlockStop();
             contentBlockStopped = true;
@@ -48,12 +46,7 @@ export function encodeAnthropicSSE(
           break;
 
         case 'done':
-          if (!started) {
-            yield* emitMessageStart(messageId, model);
-          }
-          if (!contentBlockStarted) {
-            yield* emitContentBlockStart();
-          }
+          yield* ensureOpened();
           if (!contentBlockStopped) {
             yield* emitContentBlockStop();
           }
@@ -68,12 +61,7 @@ export function encodeAnthropicSSE(
     }
 
     // Stream ended without done — emit terminal sequence
-    if (!started) {
-      yield* emitMessageStart(messageId, model);
-    }
-    if (!contentBlockStarted) {
-      yield* emitContentBlockStart();
-    }
+    yield* ensureOpened();
     if (!contentBlockStopped) {
       yield* emitContentBlockStop();
     }

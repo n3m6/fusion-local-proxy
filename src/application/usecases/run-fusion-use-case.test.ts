@@ -120,13 +120,11 @@ interface StubJudgeStep {
   _analyzeCalls: Array<{
     panelResults: PanelResult[];
     originalMessages: Message[];
-    judgeModel: ModelRef;
     timeoutMs: number;
   }>;
   analyze(
     panelResults: PanelResult[],
     originalMessages: Message[],
-    judgeModel: ModelRef,
     timeoutMs: number,
   ): Promise<Analysis | null>;
 }
@@ -134,8 +132,8 @@ interface StubJudgeStep {
 function stubJudgeStep(result?: Analysis | null): StubJudgeStep {
   const stub: StubJudgeStep = {
     _analyzeCalls: [],
-    async analyze(panelResults, originalMessages, judgeModel, timeoutMs) {
-      stub._analyzeCalls.push({ panelResults, originalMessages, judgeModel, timeoutMs });
+    async analyze(panelResults, originalMessages, timeoutMs) {
+      stub._analyzeCalls.push({ panelResults, originalMessages, timeoutMs });
       return result !== undefined ? result : sampleAnalysis;
     },
   };

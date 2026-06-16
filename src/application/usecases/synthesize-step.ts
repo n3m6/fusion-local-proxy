@@ -1,6 +1,7 @@
 import type { Message } from '../../domain/model/message.js';
 import type { PanelResult } from '../../domain/model/fusion-types.js';
-import type { ChatRequest, TokenUsage } from '../../domain/model/chat-types.js';
+import type { ChatRequest, TokenUsage, Sampling } from '../../domain/model/chat-types.js';
+import { samplingToOptions, createTimeoutSignal } from '../../domain/model/chat-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { ConfigPort } from '../../domain/ports/config-port.js';
@@ -25,26 +26,23 @@ export class SynthesizeStep {
     originalMessages: Message[],
     analysis: Analysis | null,
     requestId?: string,
-    sampling?: {
-      temperature?: number;
-      maxTokens?: number;
-      topP?: number;
-      topK?: number;
-      stopSequences?: string[];
-      metadata?: { readonly user_id?: string | null };
-    },
+    sampling?: Sampling,
   ): AsyncIterable<FusionStreamEvent> {
     const synthesizerModel = this.configPort.getSynthesizerModel();
     const timeoutMs = this.configPort.getTimeoutMs();
 
+    // The controller provides cleanup-abort (fired in finally when the generator
+    // is abandoned mid-stream). The timeout signal is wired in via an event
+    // listener so both reasons abort the same controller signal.
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutSignal = createTimeoutSignal(timeoutMs);
+    if (timeoutSignal !== undefined) {
+      timeoutSignal.addEventListener('abort', () => controller.abort(timeoutSignal.reason), {
+        once: true,
+      });
+    }
 
     try {
-      if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
-        timer = setTimeout(() => controller.abort(), timeoutMs);
-      }
-
       const systemPrompt = buildSynthesisSystemPrompt();
       const userPrompt = buildSynthesisUserPrompt(panelResults, originalMessages, analysis);
 
@@ -58,14 +56,7 @@ export class SynthesizeStep {
           signal: controller.signal,
           requestId,
           stage: 'synthesis',
-          ...(sampling?.temperature !== undefined ? { temperature: sampling.temperature } : {}),
-          ...(sampling?.maxTokens !== undefined ? { maxTokens: sampling.maxTokens } : {}),
-          ...(sampling?.topP !== undefined ? { topP: sampling.topP } : {}),
-          ...(sampling?.topK !== undefined ? { topK: sampling.topK } : {}),
-          ...(sampling?.stopSequences !== undefined
-            ? { stopSequences: sampling.stopSequences }
-            : {}),
-          ...(sampling?.metadata !== undefined ? { metadata: sampling.metadata } : {}),
+          ...samplingToOptions(sampling),
         },
       };
 
@@ -141,20 +132,12 @@ export class SynthesizeStep {
         this.loggerPort.logStageEnd('synthesis', durationMs);
       }
 
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-
       yield {
         type: 'done',
         ...(usage ? { usage } : {}),
         model: synthesizerModel.model,
       };
     } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
       controller.abort();
     }
   }

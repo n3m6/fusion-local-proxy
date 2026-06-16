@@ -10,7 +10,10 @@ import type {
 import {
   type AdapterConfig,
   buildRequestLogFields,
-  buildBaseLogFields,
+  createStreamMetrics,
+  onContentDelta,
+  buildStreamResponseLogFields,
+  buildCompleteResponseLogFields,
 } from './adapter-support.js';
 
 export type { AdapterConfig };
@@ -39,10 +42,6 @@ export class AnthropicChatAdapter implements ChatModelPort {
     private readonly logger?: LoggerPort,
   ) {}
 
-  get config(): AdapterConfig {
-    return this.adapterConfig;
-  }
-
   async complete(request: ChatRequest): Promise<ChatResponse> {
     const startTime = Date.now();
     this.logger?.logRequest(buildRequestLogFields(request, 'anthropic', 'complete'));
@@ -55,7 +54,11 @@ export class AnthropicChatAdapter implements ChatModelPort {
     const textBlock = response.content.find((block) => block.type === 'text');
     if (!textBlock) {
       this.logger?.log('warn', 'anthropic_no_text_content_block', {
-        ...buildBaseLogFields(request, 'anthropic'),
+        provider: 'anthropic',
+        modelId: request.model.model,
+        baseURL: request.model.baseURL,
+        requestId: request.options?.requestId,
+        stage: request.options?.stage,
         blockTypes: response.content.map((b) => b.type),
       });
       throw new Error('Anthropic response contained no text content block');
@@ -68,18 +71,13 @@ export class AnthropicChatAdapter implements ChatModelPort {
       totalTokens: response.usage.input_tokens + response.usage.output_tokens,
     };
 
-    this.logger?.logResponse({
-      ...buildBaseLogFields(request, 'anthropic'),
-      mode: 'complete',
-      latencyMs: Date.now() - startTime,
-      contentChars: content.length,
-      tokens: {
+    this.logger?.logResponse(
+      buildCompleteResponseLogFields(request, 'anthropic', startTime, content, {
         prompt: usage.promptTokens,
         completion: usage.completionTokens,
         total: usage.totalTokens,
-      },
-      content,
-    });
+      }),
+    );
 
     return { content, usage, model: response.model };
   }
@@ -93,14 +91,11 @@ export class AnthropicChatAdapter implements ChatModelPort {
       signal: request.options?.signal,
     });
 
+    const metrics = createStreamMetrics();
     let stopYielded = false;
     let usageYielded = false;
     let inputTokens = 0;
     let outputTokens = 0;
-    let deltaCount = 0;
-    let contentChars = 0;
-    let ttftMs: number | undefined;
-    let fullContent = '';
 
     for await (const event of messageStream) {
       switch (event.type) {
@@ -110,12 +105,7 @@ export class AnthropicChatAdapter implements ChatModelPort {
 
         case 'content_block_delta':
           if (event.delta.type === 'text_delta') {
-            if (ttftMs === undefined) {
-              ttftMs = Date.now() - startTime;
-            }
-            deltaCount++;
-            contentChars += event.delta.text.length;
-            fullContent += event.delta.text;
+            onContentDelta(metrics, event.delta.text, startTime);
             yield { type: 'content_delta', delta: event.delta.text };
           }
           break;
@@ -151,20 +141,13 @@ export class AnthropicChatAdapter implements ChatModelPort {
       yield { type: 'content_stop' };
     }
 
-    this.logger?.logResponse({
-      ...buildBaseLogFields(request, 'anthropic'),
-      mode: 'stream',
-      latencyMs: Date.now() - startTime,
-      ttftMs,
-      deltaCount,
-      contentChars,
-      tokens: {
+    this.logger?.logResponse(
+      buildStreamResponseLogFields(request, 'anthropic', metrics, startTime, {
         prompt: inputTokens,
         completion: outputTokens,
         total: inputTokens + outputTokens,
-      },
-      content: fullContent,
-    });
+      }),
+    );
   }
 
   private buildMessages(request: ChatRequest): {

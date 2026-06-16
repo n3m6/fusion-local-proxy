@@ -184,7 +184,7 @@ function buildApp(opts: BuildOpts = {}) {
   const panelRunner = new PanelRunner(panelPairs, logger, clock);
   // Mirror the real container: only build a JudgeStep when a judge model is
   // configured, so the injected step and the config never disagree.
-  const judgeStep = judgeModel ? new JudgeStep(judgePort, logger, clock) : null;
+  const judgeStep = judgeModel ? new JudgeStep(judgePort, judgeModel, logger, clock) : null;
   const synthesizeStep = new SynthesizeStep(synthPort, configPort, logger, clock);
   const useCase = new RunFusionUseCase(
     panelRunner,

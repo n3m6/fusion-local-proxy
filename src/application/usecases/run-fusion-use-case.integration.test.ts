@@ -163,7 +163,9 @@ function buildUseCase(opts: {
   const panelPairs = opts.panelModels.map((m, i) => ({ modelRef: m, port: opts.panelPorts[i]! }));
   const panelRunner = new PanelRunner(panelPairs, logger, clock);
   const judgeStep =
-    opts.judgePort && opts.judgeModel ? new JudgeStep(opts.judgePort, logger, clock) : null;
+    opts.judgePort && opts.judgeModel
+      ? new JudgeStep(opts.judgePort, opts.judgeModel, logger, clock)
+      : null;
   const synthesizeStep = new SynthesizeStep(opts.synthPort, configPort, logger, clock);
   return new RunFusionUseCase(panelRunner, judgeStep, synthesizeStep, configPort, logger, clock);
 }

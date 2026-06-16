@@ -182,8 +182,8 @@ test('successful analysis parse returns Analysis with all fields populated', asy
   const logger = stubLoggerPort();
   const clock = stubClockPort([100, 250]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.ok(result !== null, 'expected non-null Analysis');
   assert.equal(result!.agreements.length, 1);
@@ -222,8 +222,8 @@ test('schema validation failure (missing agreements) returns null', async () => 
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.equal(result, null);
 
@@ -251,8 +251,8 @@ test('judge model error (chatPort rejects) returns null', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.equal(result, null);
 
@@ -278,8 +278,8 @@ test('invalid JSON response returns null and logs SyntaxError', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.equal(result, null);
 
@@ -304,8 +304,8 @@ test('markdown code fences are stripped before JSON.parse', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([100, 200]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.ok(result !== null, 'expected non-null Analysis even with code fences');
   assert.equal(result!.agreements.length, 1);
@@ -324,8 +324,8 @@ test('markdown code fences without language tag are stripped', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([100, 200]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.ok(result !== null, 'expected non-null Analysis even with bare code fences');
 });
@@ -343,8 +343,8 @@ test('empty panel results does not throw and proceeds with judge call', async ()
   const logger = stubLoggerPort();
   const clock = stubClockPort([100, 200]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([], sampleMessages, 0);
 
   // Should not throw and should return an Analysis
   assert.ok(result !== null, 'expected non-null Analysis with empty panels');
@@ -368,8 +368,8 @@ test('logger called exactly once on each failure scenario', async () => {
   {
     const chatPort = stubChatPortReject(new Error('fail'));
     const logger = stubLoggerPort();
-    const step = new JudgeStep(chatPort, logger, stubClockPort([0, 0]));
-    const result = await step.analyze([], sampleMessages, judgeModel(), 0);
+    const step = new JudgeStep(chatPort, judgeModel(), logger, stubClockPort([0, 0]));
+    const result = await step.analyze([], sampleMessages, 0);
     assert.equal(result, null);
     const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
@@ -380,8 +380,8 @@ test('logger called exactly once on each failure scenario', async () => {
   {
     const chatPort = stubChatPort({ content: 'bad json', usage: responseWithUsage, model: 'm' });
     const logger = stubLoggerPort();
-    const step = new JudgeStep(chatPort, logger, stubClockPort([0, 0]));
-    const result = await step.analyze([], sampleMessages, judgeModel(), 0);
+    const step = new JudgeStep(chatPort, judgeModel(), logger, stubClockPort([0, 0]));
+    const result = await step.analyze([], sampleMessages, 0);
     assert.equal(result, null);
     const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
@@ -396,8 +396,8 @@ test('logger called exactly once on each failure scenario', async () => {
       model: 'm',
     });
     const logger = stubLoggerPort();
-    const step = new JudgeStep(chatPort, logger, stubClockPort([0, 0]));
-    const result = await step.analyze([], sampleMessages, judgeModel(), 0);
+    const step = new JudgeStep(chatPort, judgeModel(), logger, stubClockPort([0, 0]));
+    const result = await step.analyze([], sampleMessages, 0);
     assert.equal(result, null);
     const errorCalls = logger._calls.filter((c) => c.method === 'logError');
     assert.equal(errorCalls.length, 1);
@@ -418,11 +418,10 @@ test('timeout signal attached when timeoutMs > 0', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([100, 200]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   await step.analyze(
     [panelResult()],
     sampleMessages,
-    judgeModel(),
     5000, // timeoutMs > 0
   );
 
@@ -447,11 +446,10 @@ test('no timeout signal when timeoutMs is 0', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([100, 200]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
   await step.analyze(
     [panelResult()],
     sampleMessages,
-    judgeModel(),
     0, // timeoutMs === 0
   );
 
@@ -462,15 +460,10 @@ test('no timeout signal when timeoutMs is 0', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test: Cleanup on success — clearTimeout prevents dangling timer
+// Test: Timeout signal does not abort before the call completes
 // ---------------------------------------------------------------------------
 
-test('cleanup on success clears timeout', async () => {
-  // Use a spy-like approach: override global setTimeout/clearTimeout to track calls
-  // Actually, we can test that clearTimeout is called by observing the signal state
-  // The real test is that the finally block clears the timeout.
-  // We verify that the AbortSignal does not fire after a delay.
-
+test('AbortSignal from timeout does not fire before successful completion', async () => {
   const chatPort = stubChatPort({
     content: validAnalysisJson,
     usage: responseWithUsage,
@@ -479,64 +472,31 @@ test('cleanup on success clears timeout', async () => {
   const logger = stubLoggerPort();
   const clock = stubClockPort([100, 200]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 5000);
 
-  // Track setTimeout and clearTimeout calls
-  let setTimeoutCallCount = 0;
-  let clearTimeoutCallCount = 0;
-  const originalSetTimeout = globalThis.setTimeout;
-  const originalClearTimeout = globalThis.clearTimeout;
-
-  try {
-    globalThis.setTimeout = ((fn: (...args: unknown[]) => void, ms?: number) => {
-      setTimeoutCallCount++;
-      return originalSetTimeout(fn, ms);
-    }) as typeof setTimeout;
-
-    globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
-      clearTimeoutCallCount++;
-      return originalClearTimeout(id);
-    }) as typeof clearTimeout;
-
-    await step.analyze([panelResult()], sampleMessages, judgeModel(), 5000);
-
-    // setTimeout should have been called (to create the timeout)
-    assert.ok(setTimeoutCallCount >= 1, 'setTimeout should have been called');
-    // clearTimeout should have been called in the finally block
-    assert.ok(clearTimeoutCallCount >= 1, 'clearTimeout should have been called for cleanup');
-  } finally {
-    globalThis.setTimeout = originalSetTimeout;
-    globalThis.clearTimeout = originalClearTimeout;
-  }
+  // A non-aborted signal means the timeout did not fire prematurely.
+  assert.ok(result !== null, 'analyze should return a non-null result');
+  const req = chatPort._calls[0];
+  assert.ok(req.options?.signal !== undefined, 'signal should be set');
+  assert.equal(req.options!.signal!.aborted, false, 'signal should not be aborted on success');
 });
 
 // ---------------------------------------------------------------------------
-// Test: Cleanup on error also clears timeout
+// Test: Error path still returns null (no dangling state)
 // ---------------------------------------------------------------------------
 
-test('cleanup on error also clears timeout', async () => {
+test('error path with timeout returns null without throwing', async () => {
   const chatPort = stubChatPortReject(new Error('crash'));
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 5000);
 
-  let clearTimeoutCallCount = 0;
-  const originalClearTimeout = globalThis.clearTimeout;
-
-  try {
-    globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
-      clearTimeoutCallCount++;
-      return originalClearTimeout(id);
-    }) as typeof clearTimeout;
-
-    await step.analyze([panelResult()], sampleMessages, judgeModel(), 5000);
-
-    // clearTimeout should have been called in the finally block
-    assert.ok(clearTimeoutCallCount >= 1, 'clearTimeout should be called even on error');
-  } finally {
-    globalThis.clearTimeout = originalClearTimeout;
-  }
+  assert.equal(result, null);
+  const errorCalls = logger._calls.filter((c) => c.method === 'logError');
+  assert.equal(errorCalls.length, 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -552,8 +512,8 @@ test('judge failure with FusionError does not throw (graceful degradation)', asy
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  const result = await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
 
   // Must not throw and must return null
   assert.equal(result, null);
@@ -582,8 +542,8 @@ test('judge uses json_schema responseFormat by default (jsonMode absent)', async
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.equal(chatPort._calls.length, 1);
   const req = chatPort._calls[0];
@@ -600,8 +560,8 @@ test('judge uses json_schema responseFormat when jsonMode is explicitly json_sch
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  await step.analyze([panelResult()], sampleMessages, judgeModel({ jsonMode: 'json_schema' }), 0);
+  const step = new JudgeStep(chatPort, judgeModel({ jsonMode: 'json_schema' }), logger, clock);
+  await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.equal(chatPort._calls.length, 1);
   const req = chatPort._calls[0];
@@ -617,8 +577,8 @@ test('judge uses json_object responseFormat when judgeModel.jsonMode is json_obj
   const logger = stubLoggerPort();
   const clock = stubClockPort([0, 0]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  await step.analyze([panelResult()], sampleMessages, judgeModel({ jsonMode: 'json_object' }), 0);
+  const step = new JudgeStep(chatPort, judgeModel({ jsonMode: 'json_object' }), logger, clock);
+  await step.analyze([panelResult()], sampleMessages, 0);
 
   assert.equal(chatPort._calls.length, 1);
   const req = chatPort._calls[0];
@@ -637,8 +597,8 @@ test('logStageEnd receives correct duration and usage', async () => {
   // clock: first call at 500 (startTime), second at 700 → duration 200
   const clock = stubClockPort([500, 700]);
 
-  const step = new JudgeStep(chatPort, logger, clock);
-  await step.analyze([panelResult()], sampleMessages, judgeModel(), 0);
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  await step.analyze([panelResult()], sampleMessages, 0);
 
   const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
   assert.equal(endCalls.length, 1);

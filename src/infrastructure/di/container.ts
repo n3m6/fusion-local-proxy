@@ -59,7 +59,10 @@ export function createApp(): {
   // which signals RunFusionUseCase to skip the judge stage gracefully.
   const judgeModel = configPort.getJudgeModel();
   const judgeChatPort: ChatModelPort | null = judgeModel ? factory.create(judgeModel) : null;
-  const judgeStep = judgeChatPort ? new JudgeStep(judgeChatPort, loggerPort, clockPort) : null;
+  const judgeStep =
+    judgeChatPort && judgeModel
+      ? new JudgeStep(judgeChatPort, judgeModel, loggerPort, clockPort)
+      : null;
 
   // Synthesizer port — guaranteed present by JsonFileConfigAdapter validation.
   const synthesizerModel = configPort.getSynthesizerModel();

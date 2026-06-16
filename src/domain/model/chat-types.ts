@@ -22,6 +22,33 @@ export interface ChatOptions {
   readonly stage?: string;
 }
 
+/** The subset of ChatOptions that callers may override per-request via sampling parameters. */
+export type Sampling = Pick<
+  ChatOptions,
+  'temperature' | 'maxTokens' | 'topP' | 'topK' | 'stopSequences' | 'metadata'
+>;
+
+/** Converts a Sampling object into the corresponding partial ChatOptions, omitting undefined fields. */
+export function samplingToOptions(sampling: Sampling | undefined): Partial<ChatOptions> {
+  if (sampling === undefined) return {};
+  return {
+    ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
+    ...(sampling.maxTokens !== undefined ? { maxTokens: sampling.maxTokens } : {}),
+    ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
+    ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
+    ...(sampling.stopSequences !== undefined ? { stopSequences: sampling.stopSequences } : {}),
+    ...(sampling.metadata !== undefined ? { metadata: sampling.metadata } : {}),
+  };
+}
+
+/**
+ * Returns an AbortSignal that fires after `timeoutMs` milliseconds, or
+ * `undefined` when `timeoutMs` is not positive (meaning no timeout applies).
+ */
+export function createTimeoutSignal(timeoutMs: number): AbortSignal | undefined {
+  return timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
+}
+
 export type ResponseFormat =
   | { readonly type: 'text' }
   | { readonly type: 'json_object' }

@@ -1,6 +1,58 @@
 import { z } from 'zod';
 
 /**
+ * JSON Schema representation of Analysis — used by adapters that accept a
+ * structured-output schema (e.g. OpenAI json_schema mode, Anthropic output_config).
+ * Must stay in sync with `analysisSchema` below; the drift-guard test in
+ * analysis-schema.test.ts asserts that the required keys match.
+ */
+export const ANALYSIS_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    agreements: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    discrepancies: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          topic: { type: 'string' },
+          positions: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          assessment: { type: 'string' },
+        },
+        required: ['topic', 'positions', 'assessment'],
+        additionalProperties: false,
+      },
+    },
+    issues: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+          candidate: { type: 'string' },
+          description: { type: 'string' },
+        },
+        required: ['severity', 'candidate', 'description'],
+        additionalProperties: false,
+      },
+    },
+    gaps: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    recommendation: { type: 'string' },
+  },
+  required: ['agreements', 'discrepancies', 'issues', 'gaps', 'recommendation'],
+  additionalProperties: false,
+};
+
+/**
  * Structured analysis produced by the judge model after comparing
  * all panel model responses.
  */

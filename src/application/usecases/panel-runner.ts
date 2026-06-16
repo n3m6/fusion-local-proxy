@@ -1,7 +1,13 @@
 import type { Message } from '../../domain/model/message.js';
 import { promptChars } from '../../domain/model/message.js';
 import type { ModelRef, PanelMeta, PanelResult } from '../../domain/model/fusion-types.js';
-import type { ChatRequest, ChatResponse, TokenUsage } from '../../domain/model/chat-types.js';
+import type {
+  ChatRequest,
+  ChatResponse,
+  TokenUsage,
+  Sampling,
+} from '../../domain/model/chat-types.js';
+import { samplingToOptions, createTimeoutSignal } from '../../domain/model/chat-types.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
@@ -26,14 +32,7 @@ export class PanelRunner {
     messages: Message[],
     timeoutMs: number,
     requestId?: string,
-    sampling?: {
-      temperature?: number;
-      maxTokens?: number;
-      topP?: number;
-      topK?: number;
-      stopSequences?: string[];
-      metadata?: { readonly user_id?: string | null };
-    },
+    sampling?: Sampling,
   ): Promise<PanelMeta> {
     if (this.pairs.length === 0) {
       return { results: [], failedModels: [] };
@@ -43,22 +42,16 @@ export class PanelRunner {
     const stageStart = this.clockPort.now();
     const totalPromptChars = promptChars(messages);
 
+    const signal = createTimeoutSignal(timeoutMs);
     const tasks = this.pairs.map(({ modelRef, port }) => {
       const request: ChatRequest = {
         messages,
         model: modelRef,
         options: {
-          signal: AbortSignal.timeout(timeoutMs),
+          ...(signal !== undefined ? { signal } : {}),
           requestId,
           stage: 'panel',
-          ...(sampling?.temperature !== undefined ? { temperature: sampling.temperature } : {}),
-          ...(sampling?.maxTokens !== undefined ? { maxTokens: sampling.maxTokens } : {}),
-          ...(sampling?.topP !== undefined ? { topP: sampling.topP } : {}),
-          ...(sampling?.topK !== undefined ? { topK: sampling.topK } : {}),
-          ...(sampling?.stopSequences !== undefined
-            ? { stopSequences: sampling.stopSequences }
-            : {}),
-          ...(sampling?.metadata !== undefined ? { metadata: sampling.metadata } : {}),
+          ...samplingToOptions(sampling),
         },
       };
       this.loggerPort.logRequest({
