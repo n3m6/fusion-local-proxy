@@ -30,5 +30,5 @@
       "apiKeyEnv": "DEEPSEEK_API_KEY"
     }
   ],
-  "timeoutMs": 30000
+  "timeoutMs": 300000
 }
