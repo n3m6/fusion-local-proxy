@@ -614,6 +614,205 @@ test('Stream default max_tokens is 4096 when not specified', async () => {
   assert.equal(capturedParams.value!.max_tokens, 4096);
 });
 
+// ===========================================================================
+// thinkingStrength / extended thinking
+// ===========================================================================
+
+test('Thinking medium: budget_tokens=4096, max_tokens bumped, temperature omitted', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'OK' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-sonnet',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+
+  const request = makeRequest({
+    model: {
+      provider: 'anthropic',
+      model: 'claude-sonnet',
+      baseURL: 'https://api.anthropic.com',
+      apiKey: 'sk-test',
+      thinkingStrength: 'medium',
+    },
+    options: { temperature: 0.7 },
+  });
+
+  await adapter.complete(request);
+
+  const params = capturedParams.value!;
+  assert.ok(params);
+
+  const thinking = params.thinking as Record<string, unknown> | undefined;
+  assert.ok(thinking, 'thinking param should be set');
+  assert.equal(thinking.type, 'enabled');
+  assert.equal(thinking.budget_tokens, 4096);
+
+  // max_tokens must be > budget_tokens: Math.max(4096, 4096+4096) = 8192
+  assert.ok(
+    (params.max_tokens as number) > (thinking.budget_tokens as number),
+    `max_tokens (${params.max_tokens}) must exceed budget_tokens (${thinking.budget_tokens})`,
+  );
+  assert.equal(params.max_tokens, 8192);
+
+  // temperature must be absent when thinking is enabled
+  assert.equal('temperature' in params, false);
+});
+
+test('Thinking low: budget_tokens=1024, max_tokens=5120', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'OK' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-sonnet',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+  await adapter.complete(
+    makeRequest({
+      model: {
+        provider: 'anthropic',
+        model: 'claude-sonnet',
+        baseURL: 'https://api.anthropic.com',
+        apiKey: 'sk-test',
+        thinkingStrength: 'low',
+      },
+    }),
+  );
+
+  const params = capturedParams.value!;
+  const thinking = params.thinking as Record<string, unknown>;
+  assert.equal(thinking.budget_tokens, 1024);
+  assert.equal(params.max_tokens, 5120); // Math.max(4096, 1024+4096)
+});
+
+test('Thinking high: budget_tokens=12000, max_tokens=16096', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'OK' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-sonnet',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+  await adapter.complete(
+    makeRequest({
+      model: {
+        provider: 'anthropic',
+        model: 'claude-sonnet',
+        baseURL: 'https://api.anthropic.com',
+        apiKey: 'sk-test',
+        thinkingStrength: 'high',
+      },
+    }),
+  );
+
+  const params = capturedParams.value!;
+  const thinking = params.thinking as Record<string, unknown>;
+  assert.equal(thinking.budget_tokens, 12000);
+  assert.equal(params.max_tokens, 16096); // Math.max(4096, 12000+4096)
+});
+
+test('Thinking off: thinking param absent, temperature and max_tokens unaffected', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'OK' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-sonnet',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+  await adapter.complete(
+    makeRequest({
+      model: {
+        provider: 'anthropic',
+        model: 'claude-sonnet',
+        baseURL: 'https://api.anthropic.com',
+        apiKey: 'sk-test',
+        thinkingStrength: 'off',
+      },
+      options: { temperature: 0.5, maxTokens: 1024 },
+    }),
+  );
+
+  const params = capturedParams.value!;
+  assert.equal('thinking' in params, false);
+  assert.equal(params.temperature, 0.5);
+  assert.equal(params.max_tokens, 1024);
+});
+
+test('Thinking absent: thinking param absent, temperature forwarded normally', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'OK' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-sonnet',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+  await adapter.complete(
+    makeRequest({
+      options: { temperature: 0.3 },
+    }),
+  );
+
+  const params = capturedParams.value!;
+  assert.equal('thinking' in params, false);
+  assert.equal(params.temperature, 0.3);
+});
+
+test('Thinking respects explicit maxTokens when larger than budget+4096', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'OK' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-sonnet',
+    };
+  });
+
+  const adapter = new AnthropicChatAdapter(client);
+  await adapter.complete(
+    makeRequest({
+      model: {
+        provider: 'anthropic',
+        model: 'claude-sonnet',
+        baseURL: 'https://api.anthropic.com',
+        apiKey: 'sk-test',
+        thinkingStrength: 'low',
+      },
+      options: { maxTokens: 32000 },
+    }),
+  );
+
+  const params = capturedParams.value!;
+  // Math.max(32000, 1024+4096) = 32000 — explicit large value wins
+  assert.equal(params.max_tokens, 32000);
+});
+
 test('Stream does not expose output_config when responseFormat is not json_object', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
 

@@ -33,7 +33,8 @@
       "role": "synthesizer",
       "model": "claude-sonnet-4-20250514",
       "baseURL": "https://api.anthropic.com/v1",
-      "apiKeyEnv": "ANTHROPIC_API_KEY"
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "thinkingStrength": "medium"
     }
   ],
   "timeoutMs": 30000

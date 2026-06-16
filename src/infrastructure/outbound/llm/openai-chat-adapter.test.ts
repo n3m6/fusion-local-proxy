@@ -946,6 +946,252 @@ test('OpenAiChatAdapter.stream() retries without stream_options on 400 error', a
   );
 });
 
+// ---------------------------------------------------------------------------
+// thinkingStrength / reasoning_effort
+// ---------------------------------------------------------------------------
+
+test('OpenAiChatAdapter.complete() sets reasoning_effort when thinkingStrength is low', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'o3',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'o3',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      thinkingStrength: 'low',
+    },
+  };
+
+  await adapter.complete(request);
+
+  const params = capturedParams.value!;
+  assert.ok(params);
+  assert.equal(params.reasoning_effort, 'low');
+});
+
+test('OpenAiChatAdapter.complete() sets reasoning_effort high', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'o3',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'o3',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      thinkingStrength: 'high',
+    },
+  };
+
+  await adapter.complete(request);
+
+  assert.equal(capturedParams.value!.reasoning_effort, 'high');
+});
+
+test('OpenAiChatAdapter.complete() omits reasoning_effort when thinkingStrength is off', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      thinkingStrength: 'off',
+    },
+  };
+
+  await adapter.complete(request);
+
+  assert.equal('reasoning_effort' in capturedParams.value!, false);
+});
+
+test('OpenAiChatAdapter.complete() omits reasoning_effort when thinkingStrength is absent', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  await adapter.complete(request);
+
+  assert.equal('reasoning_effort' in capturedParams.value!, false);
+});
+
+test('OpenAiChatAdapter.stream() sets reasoning_effort when thinkingStrength is medium', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-re1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'o3',
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    },
+  ];
+
+  const client = {
+    chat: {
+      completions: {
+        async create(params: Record<string, unknown>): Promise<AsyncIterable<MockStreamChunk>> {
+          capturedParams.value = params;
+          return {
+            [Symbol.asyncIterator]() {
+              let i = 0;
+              return {
+                async next() {
+                  if (i < sdkChunks.length) return { value: sdkChunks[i++]!, done: false };
+                  return { value: undefined as never, done: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    },
+  } as unknown as OpenAiClientArg;
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'o3',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      thinkingStrength: 'medium',
+    },
+  };
+
+  for await (const _ of adapter.stream(request)) {
+    // consume
+  }
+
+  assert.ok(capturedParams.value);
+  assert.equal(capturedParams.value!.reasoning_effort, 'medium');
+});
+
+test('OpenAiChatAdapter.stream() omits reasoning_effort when thinkingStrength is off', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-re2',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+    },
+  ];
+
+  const client = {
+    chat: {
+      completions: {
+        async create(params: Record<string, unknown>): Promise<AsyncIterable<MockStreamChunk>> {
+          capturedParams.value = params;
+          return {
+            [Symbol.asyncIterator]() {
+              let i = 0;
+              return {
+                async next() {
+                  if (i < sdkChunks.length) return { value: sdkChunks[i++]!, done: false };
+                  return { value: undefined as never, done: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    },
+  } as unknown as OpenAiClientArg;
+
+  const adapter = new OpenAiChatAdapter(client);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      thinkingStrength: 'off',
+    },
+  };
+
+  for await (const _ of adapter.stream(request)) {
+    // consume
+  }
+
+  assert.ok(capturedParams.value);
+  assert.equal('reasoning_effort' in capturedParams.value!, false);
+});
+
 test('OpenAiChatAdapter.stream() passes responseFormat json_schema in params', async () => {
   const capturedParams: { value: Record<string, unknown> | null } = { value: null };
   const sdkChunks: MockStreamChunk[] = [

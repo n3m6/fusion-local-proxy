@@ -725,6 +725,119 @@ test('JsonFileConfigAdapter throws on invalid jsonMode value', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// thinkingStrength field
+// ---------------------------------------------------------------------------
+
+test('JsonFileConfigAdapter surfaces thinkingStrength on ModelRef when present', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'anthropic',
+          role: 'synthesizer',
+          model: 'claude-sonnet-4-20250514',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+          thinkingStrength: 'medium',
+        },
+      ],
+    });
+
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      const synth = adapter.getSynthesizerModel();
+      assert.equal(synth.thinkingStrength, 'medium');
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter accepts all valid thinkingStrength values', () => {
+  for (const value of ['off', 'low', 'high'] as const) {
+    withTempDir((dir) => {
+      const path = writeConfig(dir, {
+        providers: [
+          {
+            type: 'openai',
+            role: 'synthesizer',
+            model: 'o3',
+            baseURL: 'https://api.openai.com/v1',
+            apiKeyEnv: 'OPENAI_API_KEY',
+            thinkingStrength: value,
+          },
+        ],
+      });
+
+      process.env.OPENAI_API_KEY = 'sk-test';
+      try {
+        const adapter = new JsonFileConfigAdapter(path);
+        const synth = adapter.getSynthesizerModel();
+        assert.equal(synth.thinkingStrength, value);
+      } finally {
+        delete process.env.OPENAI_API_KEY;
+      }
+    });
+  }
+});
+
+test('JsonFileConfigAdapter omits thinkingStrength from ModelRef when not specified', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-openai';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      const synth = adapter.getSynthesizerModel();
+      assert.equal(synth.thinkingStrength, undefined);
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('JsonFileConfigAdapter throws on invalid thinkingStrength value', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'anthropic',
+          role: 'synthesizer',
+          model: 'claude-sonnet',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+          thinkingStrength: 'extreme',
+        },
+      ],
+    });
+
+    assert.throws(
+      () => new JsonFileConfigAdapter(path),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        const msg = (err as Error).message;
+        assert.ok(
+          msg.includes('thinkingStrength') || msg.includes('Invalid') || msg.includes('enum'),
+          `expected message about invalid thinkingStrength, got: ${msg}`,
+        );
+        return true;
+      },
+    );
+  });
+});
+
 test('JsonFileConfigAdapter throws on empty env var value', () => {
   withTempDir((dir) => {
     const path = writeConfig(dir, {

@@ -10,6 +10,7 @@ const providerSchema = z.object({
   baseURL: z.string().min(1),
   apiKeyEnv: z.string().min(1),
   jsonMode: z.enum(['json_object', 'json_schema']).optional(),
+  thinkingStrength: z.enum(['off', 'low', 'medium', 'high']).optional(),
 });
 
 const configSchema = z.object({
@@ -92,6 +93,7 @@ export class JsonFileConfigAdapter implements ConfigPort {
       baseURL: entry.baseURL,
       apiKey,
       ...(entry.jsonMode !== undefined ? { jsonMode: entry.jsonMode } : {}),
+      ...(entry.thinkingStrength !== undefined ? { thinkingStrength: entry.thinkingStrength } : {}),
     };
   }
 }

@@ -122,18 +122,36 @@ export class AnthropicChatAdapter implements ChatModelPort {
       content: [{ type: 'text' as const, text: m.content }],
     }));
 
+    const ts = request.model.thinkingStrength;
+    const thinkingEnabled = ts !== undefined && ts !== 'off';
+
+    // budget_tokens must be >=1024 and strictly less than max_tokens (SDK constraint).
+    const THINKING_BUDGETS: Record<string, number> = { low: 1024, medium: 4096, high: 12000 };
+    const budgetTokens = thinkingEnabled ? (THINKING_BUDGETS[ts] ?? 1024) : 0;
+
+    // When thinking is enabled, ensure max_tokens exceeds budget_tokens.
+    const baseMaxTokens = request.options?.maxTokens ?? 4096;
+    const maxTokens = thinkingEnabled
+      ? Math.max(baseMaxTokens, budgetTokens + 4096)
+      : baseMaxTokens;
+
     const params: Record<string, unknown> = {
       model: request.model.model,
       messages,
-      max_tokens: request.options?.maxTokens ?? 4096,
+      max_tokens: maxTokens,
     };
 
     if (systemMessages.length > 0) {
       params['system'] = systemMessages.map((m) => m.content).join('\n\n');
     }
 
-    if (request.options?.temperature !== undefined) {
+    // Anthropic requires temperature to be unset (or 1) when extended thinking is enabled.
+    if (!thinkingEnabled && request.options?.temperature !== undefined) {
       params['temperature'] = request.options.temperature;
+    }
+
+    if (thinkingEnabled) {
+      params['thinking'] = { type: 'enabled', budget_tokens: budgetTokens };
     }
 
     if (request.options?.responseFormat?.type === 'json_object') {

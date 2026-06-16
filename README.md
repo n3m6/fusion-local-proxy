@@ -117,16 +117,17 @@ The server reads `fusion.config.json` (or the path in `FUSION_CONFIG_PATH`) at
 startup. Each entry in `providers` is a model backend assigned a role in the
 ensemble.
 
-| Field                   | Type                                  | Required | Description                                                                                                                                                                                            |
-| ----------------------- | ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `providers`             | array                                 | yes      | Array of provider objects. Each provider is a model backend with an assigned role.                                                                                                                     |
-| `providers[].type`      | `"openai" \| "anthropic"`             | yes      | Protocol/API type of the provider. Determines which outbound adapter is used.                                                                                                                          |
-| `providers[].role`      | `"panel" \| "judge" \| "synthesizer"` | yes      | Role in the ensemble pipeline. At least one `"synthesizer"` is required. `judge` is optional (analysis is skipped when absent), and a `panel` role should be present for meaningful ensemble behavior. |
-| `providers[].model`     | string                                | yes      | Model name passed to the upstream API (e.g. `"llama3:8b"`, `"gpt-4o"`, `"claude-sonnet-4-20250514"`).                                                                                                  |
-| `providers[].baseURL`   | string                                | yes      | Base URL of the API endpoint, including the path prefix (e.g. `"http://localhost:11434/v1"` for local Ollama, `"https://api.openai.com/v1"` for OpenAI).                                               |
-| `providers[].apiKeyEnv` | string                                | yes      | Name of the environment variable holding the API key. The adapter reads `process.env[apiKeyEnv]` at startup and fails fast if it is unset.                                                             |
-| `providers[].jsonMode`  | `"json_object" \| "json_schema"`      | no       | Structured-output mode used when this provider is the judge. Defaults to `"json_schema"` (OpenAI strict mode). Set to `"json_object"` for backends that support only basic JSON mode (e.g. DeepSeek).  |
-| `timeoutMs`             | number                                | no       | Per-call timeout in milliseconds (default: `30000`). Applies to each outbound LLM call.                                                                                                                |
+| Field                          | Type                                   | Required | Description                                                                                                                                                                                                                                                                 |
+| ------------------------------ | -------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `providers`                    | array                                  | yes      | Array of provider objects. Each provider is a model backend with an assigned role.                                                                                                                                                                                          |
+| `providers[].type`             | `"openai" \| "anthropic"`              | yes      | Protocol/API type of the provider. Determines which outbound adapter is used.                                                                                                                                                                                               |
+| `providers[].role`             | `"panel" \| "judge" \| "synthesizer"`  | yes      | Role in the ensemble pipeline. At least one `"synthesizer"` is required. `judge` is optional (analysis is skipped when absent), and a `panel` role should be present for meaningful ensemble behavior.                                                                      |
+| `providers[].model`            | string                                 | yes      | Model name passed to the upstream API (e.g. `"llama3:8b"`, `"gpt-4o"`, `"claude-sonnet-4-20250514"`).                                                                                                                                                                       |
+| `providers[].baseURL`          | string                                 | yes      | Base URL of the API endpoint, including the path prefix (e.g. `"http://localhost:11434/v1"` for local Ollama, `"https://api.openai.com/v1"` for OpenAI).                                                                                                                    |
+| `providers[].apiKeyEnv`        | string                                 | yes      | Name of the environment variable holding the API key. The adapter reads `process.env[apiKeyEnv]` at startup and fails fast if it is unset.                                                                                                                                  |
+| `providers[].jsonMode`         | `"json_object" \| "json_schema"`       | no       | Structured-output mode used when this provider is the judge. Defaults to `"json_schema"` (OpenAI strict mode). Set to `"json_object"` for backends that support only basic JSON mode (e.g. DeepSeek).                                                                       |
+| `providers[].thinkingStrength` | `"off" \| "low" \| "medium" \| "high"` | no       | Reasoning/thinking effort level. When set (and not `"off"`), enables extended reasoning: OpenAI models receive `reasoning_effort`; Anthropic models receive `thinking.budget_tokens` (1024 / 4096 / 12 000 tokens respectively). Only set this on reasoning-capable models. |
+| `timeoutMs`                    | number                                 | no       | Per-call timeout in milliseconds (default: `30000`). Applies to each outbound LLM call.                                                                                                                                                                                     |
 
 Multiple providers can share the same `role` (e.g. several `panel` members). The
 `type` must match the actual API protocol of the backend — note that
@@ -173,7 +174,8 @@ judge, and an Anthropic synthesizer:
       "role": "synthesizer",
       "model": "claude-sonnet-4-20250514",
       "baseURL": "https://api.anthropic.com/v1",
-      "apiKeyEnv": "ANTHROPIC_API_KEY"
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "thinkingStrength": "medium"
     }
   ],
   "timeoutMs": 30000

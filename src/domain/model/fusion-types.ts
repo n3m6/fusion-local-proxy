@@ -6,6 +6,8 @@ export type ProviderType = 'openai' | 'anthropic';
 
 export type JsonMode = 'json_object' | 'json_schema';
 
+export type ThinkingStrength = 'off' | 'low' | 'medium' | 'high';
+
 export interface ModelRef {
   readonly provider: ProviderType;
   readonly model: string;
@@ -13,6 +15,8 @@ export interface ModelRef {
   readonly apiKey: string;
   /** Structured-output mode used by the judge. Defaults to 'json_schema' when absent. */
   readonly jsonMode?: JsonMode;
+  /** Reasoning/thinking effort level. When set and not 'off', each adapter translates this to its provider-specific parameter. */
+  readonly thinkingStrength?: ThinkingStrength;
 }
 
 /**

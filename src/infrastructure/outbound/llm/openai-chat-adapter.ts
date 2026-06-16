@@ -44,6 +44,11 @@ export class OpenAiChatAdapter implements ChatModelPort {
       max_tokens: request.options?.maxTokens,
     };
 
+    const ts = request.model.thinkingStrength;
+    if (ts !== undefined && ts !== 'off') {
+      params.reasoning_effort = ts;
+    }
+
     if (request.options?.responseFormat) {
       const rf = request.options.responseFormat;
       if (rf.type === 'json_object') {
@@ -92,6 +97,11 @@ export class OpenAiChatAdapter implements ChatModelPort {
       stream: true,
       stream_options: { include_usage: true },
     };
+
+    const ts = request.model.thinkingStrength;
+    if (ts !== undefined && ts !== 'off') {
+      params.reasoning_effort = ts;
+    }
 
     if (request.options?.responseFormat) {
       const rf = request.options.responseFormat;
