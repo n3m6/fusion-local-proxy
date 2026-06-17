@@ -425,7 +425,12 @@ type MockStreamChunk = {
     delta?: { role?: string; content?: string | null; reasoning_content?: string | null };
     finish_reason?: string | null;
   }>;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
 };
 
 function mockOpenAiStreamingClient(
@@ -1431,6 +1436,228 @@ test('OpenAiChatAdapter.stream() does not yield reasoning_progress for empty-str
 
   const rpChunks = chunks.filter((c) => c.type === 'reasoning_progress');
   assert.equal(rpChunks.length, 0, 'empty reasoning_content must not yield reasoning_progress');
+});
+
+// ---------------------------------------------------------------------------
+// Reasoning token / reasoning char accounting
+// ---------------------------------------------------------------------------
+
+type CapturedLog = { event: string; fields: Record<string, unknown> };
+
+function capturingLogger(sink: CapturedLog[]) {
+  return {
+    logStageStart() {},
+    logStageEnd() {},
+    logFailedModels() {},
+    logError() {},
+    logRequest(fields: Record<string, unknown>) {
+      sink.push({ event: 'request', fields });
+    },
+    logResponse(fields: Record<string, unknown>) {
+      sink.push({ event: 'response', fields });
+    },
+    log() {},
+  };
+}
+
+test('OpenAiChatAdapter.complete() extracts reasoning_tokens into usage', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'deepseek-v4-pro',
+    choices: [
+      { index: 0, message: { role: 'assistant', content: 'Answer' }, finish_reason: 'stop' },
+    ],
+    usage: {
+      prompt_tokens: 10,
+      completion_tokens: 50,
+      total_tokens: 60,
+      completion_tokens_details: { reasoning_tokens: 40 },
+    },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'deepseek-v4-pro',
+      baseURL: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const response = await adapter.complete(request);
+
+  assert.deepEqual(response.usage, {
+    promptTokens: 10,
+    completionTokens: 50,
+    totalTokens: 60,
+    reasoningTokens: 40,
+  });
+});
+
+test('OpenAiChatAdapter.complete() omits reasoningTokens when details absent', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'gpt-4o',
+    choices: [
+      { index: 0, message: { role: 'assistant', content: 'Answer' }, finish_reason: 'stop' },
+    ],
+    usage: { prompt_tokens: 10, completion_tokens: 50, total_tokens: 60 },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const response = await adapter.complete(request);
+
+  assert.equal('reasoningTokens' in response.usage, false);
+});
+
+test('OpenAiChatAdapter.complete() logs reasoningChars from reasoning_content', async () => {
+  const logs: CapturedLog[] = [];
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'deepseek-v4-pro',
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content: 'Answer', reasoning_content: 'thinking hard' },
+        finish_reason: 'stop',
+      },
+    ],
+    usage: { prompt_tokens: 10, completion_tokens: 50, total_tokens: 60 },
+  }));
+
+  const adapter = new OpenAiChatAdapter(
+    client,
+    STUB_CONFIG,
+    capturingLogger(logs) as unknown as ConstructorParameters<typeof OpenAiChatAdapter>[2],
+  );
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'deepseek-v4-pro',
+      baseURL: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+    },
+  };
+
+  await adapter.complete(request);
+
+  const responseLog = logs.find((l) => l.event === 'response');
+  assert.ok(responseLog);
+  assert.equal(responseLog!.fields.reasoningChars, 'thinking hard'.length);
+});
+
+test('OpenAiChatAdapter.stream() includes reasoning_tokens in the usage chunk', async () => {
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-rt1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [{ index: 0, delta: { content: 'Answer' }, finish_reason: 'stop' }],
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 50,
+        total_tokens: 60,
+        completion_tokens_details: { reasoning_tokens: 40 },
+      },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'deepseek-v4-pro',
+      baseURL: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  const usageChunk = chunks.find((c) => c.type === 'usage') as {
+    type: 'usage';
+    usage: { reasoningTokens?: number };
+  };
+  assert.ok(usageChunk);
+  assert.equal(usageChunk.usage.reasoningTokens, 40);
+});
+
+test('OpenAiChatAdapter.stream() accumulates reasoningChars from reasoning_content deltas', async () => {
+  const logs: CapturedLog[] = [];
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-rc1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [{ index: 0, delta: { reasoning_content: 'step1' }, finish_reason: null }],
+    },
+    {
+      id: 'chatcmpl-rc1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [{ index: 0, delta: { reasoning_content: 'step2!' }, finish_reason: null }],
+    },
+    {
+      id: 'chatcmpl-rc1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [{ index: 0, delta: { content: 'Answer' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 10, completion_tokens: 50, total_tokens: 60 },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(
+    client,
+    STUB_CONFIG,
+    capturingLogger(logs) as unknown as ConstructorParameters<typeof OpenAiChatAdapter>[2],
+  );
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'deepseek-v4-pro',
+      baseURL: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+    },
+  };
+
+  for await (const _ of adapter.stream(request)) {
+    // consume
+  }
+
+  const responseLog = logs.find((l) => l.event === 'response');
+  assert.ok(responseLog);
+  // 'step1' (5) + 'step2!' (6) = 11
+  assert.equal(responseLog!.fields.reasoningChars, 11);
 });
 
 test('OpenAiChatAdapter.stream() yields reasoning_progress before content_delta when a single chunk carries both fields', async () => {

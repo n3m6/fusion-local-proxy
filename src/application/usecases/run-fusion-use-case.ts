@@ -61,6 +61,22 @@ export class RunFusionUseCase implements FusionService {
     const judgeTokens = judgeUsage?.totalTokens ?? 0;
     const synthTokens = synthUsage?.totalTokens ?? 0;
 
+    const panelReasoning = panelMeta.usage.reasoningTokens ?? 0;
+    const judgeReasoning = judgeUsage?.reasoningTokens ?? 0;
+    const synthReasoning = synthUsage?.reasoningTokens ?? 0;
+
+    // Cost-honest breakdown: reasoning tokens are a billed-but-invisible subset
+    // of output, and the panel's output is re-encoded as synthesis input (panel
+    // responses are embedded in the synthesizer prompt), so it is paid for twice.
+    const inputTokens =
+      panelMeta.usage.promptTokens +
+      (judgeUsage?.promptTokens ?? 0) +
+      (synthUsage?.promptTokens ?? 0);
+    const outputTokens =
+      panelMeta.usage.completionTokens +
+      (judgeUsage?.completionTokens ?? 0) +
+      (synthUsage?.completionTokens ?? 0);
+
     this.loggerPort.log('info', 'fusion_run_end', {
       requestId,
       durationMs: this.clockPort.now() - runStart,
@@ -70,7 +86,17 @@ export class RunFusionUseCase implements FusionService {
       outcome: synthError ? synthError.code : 'success',
       ...(synthModel ? { synthesizerModel: synthModel } : {}),
       totalTokens: panelTokens + judgeTokens + synthTokens,
-      tokensByStage: { panel: panelTokens, judge: judgeTokens, synthesis: synthTokens },
+      tokensByStage: {
+        panel: { total: panelTokens, reasoning: panelReasoning },
+        judge: { total: judgeTokens, reasoning: judgeReasoning },
+        synthesis: { total: synthTokens, reasoning: synthReasoning },
+      },
+      cost: {
+        inputTokens,
+        outputTokens,
+        reasoningTokens: panelReasoning + judgeReasoning + synthReasoning,
+        reEncodedPanelTokens: panelMeta.usage.completionTokens,
+      },
     });
 
     if (synthError) {

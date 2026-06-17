@@ -13,6 +13,7 @@ import {
   buildBaseLogFields,
   createStreamMetrics,
   onContentDelta,
+  onReasoningDelta,
   buildStreamResponseLogFields,
   buildCompleteResponseLogFields,
 } from './adapter-support.js';
@@ -87,10 +88,23 @@ export class OpenAiChatAdapter implements ChatModelPort {
     const choice = response.choices[0];
     const content = choice?.message?.content ?? '';
 
+    // The OpenAI SDK type omits reasoning fields; access them via casts. Providers
+    // that expose reasoning report a token count under
+    // `usage.completion_tokens_details.reasoning_tokens`, and DeepSeek-compatible
+    // backends also echo the reasoning text on `message.reasoning_content`.
+    const usageDetails = response.usage?.completion_tokens_details as
+      | { reasoning_tokens?: number }
+      | undefined;
+    const reasoningTokens = usageDetails?.reasoning_tokens;
+    const reasoningContent = (choice?.message as unknown as Record<string, unknown> | undefined)
+      ?.reasoning_content;
+    const reasoningChars = typeof reasoningContent === 'string' ? reasoningContent.length : 0;
+
     const usage: TokenUsage = {
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
       totalTokens: response.usage?.total_tokens ?? 0,
+      ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
     };
 
     this.logger?.logResponse(
@@ -103,8 +117,12 @@ export class OpenAiChatAdapter implements ChatModelPort {
           prompt: usage.promptTokens,
           completion: usage.completionTokens,
           total: usage.totalTokens,
+          ...(reasoningTokens !== undefined ? { reasoning: reasoningTokens } : {}),
         },
-        { finishReason: choice?.finish_reason },
+        {
+          finishReason: choice?.finish_reason,
+          ...(reasoningChars > 0 ? { reasoningChars } : {}),
+        },
       ),
     );
 
@@ -160,6 +178,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
         typeof deltaExt?.reasoning_content === 'string' &&
         deltaExt.reasoning_content.length > 0
       ) {
+        onReasoningDelta(metrics, deltaExt.reasoning_content);
         yield { type: 'reasoning_progress' };
       }
 
@@ -174,10 +193,15 @@ export class OpenAiChatAdapter implements ChatModelPort {
       }
 
       if (chunk.usage) {
+        const usageDetails = chunk.usage.completion_tokens_details as
+          | { reasoning_tokens?: number }
+          | undefined;
+        const reasoningTokens = usageDetails?.reasoning_tokens;
         lastUsage = {
           promptTokens: chunk.usage.prompt_tokens,
           completionTokens: chunk.usage.completion_tokens,
           totalTokens: chunk.usage.total_tokens,
+          ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
         };
         yield { type: 'usage', usage: lastUsage };
       }
@@ -198,6 +222,9 @@ export class OpenAiChatAdapter implements ChatModelPort {
               prompt: lastUsage.promptTokens,
               completion: lastUsage.completionTokens,
               total: lastUsage.totalTokens,
+              ...(lastUsage.reasoningTokens !== undefined
+                ? { reasoning: lastUsage.reasoningTokens }
+                : {}),
             }
           : undefined,
       ),

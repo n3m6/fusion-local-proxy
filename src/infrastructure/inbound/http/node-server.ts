@@ -4,6 +4,8 @@ import type { Hono } from 'hono';
 export interface HttpServerOptions {
   readonly port: number;
   readonly hostname?: string;
+  /** Called once the OS has confirmed the port is bound (i.e. the server is actually listening). */
+  readonly onListening?: () => void;
 }
 
 /**
@@ -13,9 +15,12 @@ export interface HttpServerOptions {
  * importing the Hono framework directly.
  */
 export function startHttpServer(app: Hono, options: HttpServerOptions): void {
-  serve({
-    fetch: app.fetch,
-    port: options.port,
-    hostname: options.hostname ?? '127.0.0.1',
-  });
+  serve(
+    {
+      fetch: app.fetch,
+      port: options.port,
+      hostname: options.hostname ?? '127.0.0.1',
+    },
+    options.onListening !== undefined ? () => options.onListening!() : undefined,
+  );
 }

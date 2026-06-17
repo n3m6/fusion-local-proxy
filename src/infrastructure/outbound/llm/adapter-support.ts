@@ -18,6 +18,7 @@ export function buildRequestLogFields(
     baseURL: request.model.baseURL,
     requestId: request.options?.requestId,
     stage: request.options?.stage,
+    label: request.options?.label,
     mode,
     messageCount: request.messages.length,
     promptChars: promptChars(request.messages),
@@ -25,6 +26,7 @@ export function buildRequestLogFields(
     maxTokens: request.options?.maxTokens,
     responseFormat: request.options?.responseFormat?.type,
     thinkingStrength: request.model.thinkingStrength,
+    thinkingMode: request.model.thinkingMode,
     prompt: request.messages,
   };
 }
@@ -36,6 +38,8 @@ export function buildBaseLogFields(request: ChatRequest, provider: string): LogF
     baseURL: request.model.baseURL,
     requestId: request.options?.requestId,
     stage: request.options?.stage,
+    label: request.options?.label,
+    thinkingMode: request.model.thinkingMode,
   };
 }
 
@@ -49,10 +53,12 @@ export interface StreamMetrics {
   deltaCount: number;
   contentChars: number;
   fullContent: string;
+  /** Total characters of hidden reasoning/thinking seen on the stream (not part of `contentChars`). */
+  reasoningChars: number;
 }
 
 export function createStreamMetrics(): StreamMetrics {
-  return { ttftMs: undefined, deltaCount: 0, contentChars: 0, fullContent: '' };
+  return { ttftMs: undefined, deltaCount: 0, contentChars: 0, fullContent: '', reasoningChars: 0 };
 }
 
 /** Update `metrics` with one content delta chunk and record TTFT on first call. */
@@ -65,11 +71,16 @@ export function onContentDelta(metrics: StreamMetrics, delta: string, startTime:
   metrics.fullContent += delta;
 }
 
+/** Accumulate one reasoning/thinking delta's character count (reasoning text is never retained). */
+export function onReasoningDelta(metrics: StreamMetrics, text: string): void {
+  metrics.reasoningChars += text.length;
+}
+
 // ---------------------------------------------------------------------------
 // Response log-field builders
 // ---------------------------------------------------------------------------
 
-type TokenFields = { prompt: number; completion: number; total: number };
+type TokenFields = { prompt: number; completion: number; total: number; reasoning?: number };
 
 export function buildStreamResponseLogFields(
   request: ChatRequest,
@@ -85,6 +96,7 @@ export function buildStreamResponseLogFields(
     ttftMs: metrics.ttftMs,
     deltaCount: metrics.deltaCount,
     contentChars: metrics.contentChars,
+    ...(metrics.reasoningChars > 0 ? { reasoningChars: metrics.reasoningChars } : {}),
     ...(tokens !== undefined ? { tokens } : {}),
     content: metrics.fullContent,
   };

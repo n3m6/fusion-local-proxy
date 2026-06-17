@@ -590,6 +590,119 @@ test('thinkingMode: panelist without mode receives original messages unchanged',
   assert.deepStrictEqual(port._calls[0].messages, messages);
 });
 
+test('panelist label: each request carries a stable panel-N label in options and the request log', async () => {
+  const port0 = stubChatPort({
+    content: 'r0',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'shared-model',
+  });
+  const port1 = stubChatPort({
+    content: 'r1',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'shared-model',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30, 40, 50]);
+
+  // Both panelists share the same modelId — label is what disambiguates them.
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'shared-model', thinkingMode: 'lateral' }), port: port0 },
+      { modelRef: modelRef({ model: 'shared-model', thinkingMode: 'vertical' }), port: port1 },
+    ],
+    logger,
+    clock,
+  );
+
+  await runner.run([sampleMessage], 30000);
+
+  // options.label is set on each outbound ChatRequest
+  assert.equal(port0._calls[0].options?.label, 'panel-0');
+  assert.equal(port1._calls[0].options?.label, 'panel-1');
+
+  // The request log lines carry label + thinkingMode
+  const requestLogs = logger._calls
+    .filter((c) => c.method === 'logRequest')
+    .map((c) => c.args[0] as { label?: string; thinkingMode?: string });
+  assert.equal(requestLogs.length, 2);
+  assert.equal(requestLogs[0].label, 'panel-0');
+  assert.equal(requestLogs[0].thinkingMode, 'lateral');
+  assert.equal(requestLogs[1].label, 'panel-1');
+  assert.equal(requestLogs[1].thinkingMode, 'vertical');
+});
+
+test('reasoningTokens: per-result reasoning is preserved and summed into aggregate usage', async () => {
+  const port0 = stubChatPort({
+    content: 'a',
+    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30, reasoningTokens: 6 },
+    model: 'm0',
+  });
+  const port1 = stubChatPort({
+    content: 'b',
+    usage: { promptTokens: 5, completionTokens: 15, totalTokens: 20, reasoningTokens: 9 },
+    model: 'm1',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([50, 100, 200, 350, 500, 700]);
+
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'm0' }), port: port0 },
+      { modelRef: modelRef({ model: 'm1', provider: 'anthropic' }), port: port1 },
+    ],
+    logger,
+    clock,
+  );
+
+  const result = await runner.run([sampleMessage], 30000);
+
+  // Per-result reasoning tokens preserved
+  assert.equal(result.results[0].usage.reasoningTokens, 6);
+  assert.equal(result.results[1].usage.reasoningTokens, 9);
+
+  // Aggregate usage sums reasoning across panelists
+  assert.deepStrictEqual(result.usage, {
+    promptTokens: 15,
+    completionTokens: 35,
+    totalTokens: 50,
+    reasoningTokens: 15, // 6 + 9
+  });
+
+  // logStageEnd receives the aggregate (with reasoning) too
+  const endCalls = logger._calls.filter((c) => c.method === 'logStageEnd');
+  assert.equal(endCalls.length, 1);
+  assert.deepStrictEqual(endCalls[0].args[2], {
+    promptTokens: 15,
+    completionTokens: 35,
+    totalTokens: 50,
+    reasoningTokens: 15,
+  });
+});
+
+test('reasoningTokens: omitted from aggregate when no panelist reports it', async () => {
+  const port0 = stubChatPort({
+    content: 'a',
+    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    model: 'm0',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30]);
+
+  const runner = new PanelRunner(
+    [{ modelRef: modelRef({ model: 'm0' }), port: port0 }],
+    logger,
+    clock,
+  );
+
+  const result = await runner.run([sampleMessage], 30000);
+
+  assert.equal('reasoningTokens' in result.usage, false);
+  assert.equal('reasoningTokens' in result.results[0].usage, false);
+});
+
 test('thinkingMode: two panelists receive independent mode-prefixed message arrays', async () => {
   const port0 = stubChatPort({
     content: 'r0',

@@ -529,6 +529,47 @@ test('thinking_delta yields reasoning_progress before the first content_delta', 
   assert.ok(rpIdx < cdIdx, 'reasoning_progress must precede the first content_delta');
 });
 
+test('thinking_delta accumulates reasoningChars into the response log', async () => {
+  type CapturedLog = { event: string; fields: Record<string, unknown> };
+  const logs: CapturedLog[] = [];
+  const logger = {
+    logStageStart() {},
+    logStageEnd() {},
+    logFailedModels() {},
+    logError() {},
+    logRequest(fields: Record<string, unknown>) {
+      logs.push({ event: 'request', fields });
+    },
+    logResponse(fields: Record<string, unknown>) {
+      logs.push({ event: 'response', fields });
+    },
+    log() {},
+  };
+
+  const events = [
+    { type: 'message_start', message: { usage: { input_tokens: 10 } } },
+    { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'abcd' } },
+    { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'efghij' } },
+    { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' } },
+    { type: 'message_delta', usage: { output_tokens: 5 } },
+    { type: 'message_stop' },
+  ];
+
+  const client = stubAnthropicStreamingClient(events);
+  const adapter = new AnthropicChatAdapter(
+    client,
+    STUB_CONFIG,
+    logger as unknown as ConstructorParameters<typeof AnthropicChatAdapter>[2],
+  );
+
+  await collectStreamChunks(adapter, makeRequest());
+
+  const responseLog = logs.find((l) => l.event === 'response');
+  assert.ok(responseLog);
+  // 'abcd' (4) + 'efghij' (6) = 10
+  assert.equal(responseLog!.fields.reasoningChars, 10);
+});
+
 test('multiple thinking_deltas each yield a reasoning_progress chunk', async () => {
   const events = [
     { type: 'message_start', message: { usage: { input_tokens: 10 } } },

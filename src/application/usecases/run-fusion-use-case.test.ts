@@ -1002,8 +1002,83 @@ test('fusion_run_end log includes totalTokens and tokensByStage from all stages'
 
   const fields = endLog!.args[2] as {
     totalTokens?: number;
-    tokensByStage?: { panel: number; judge: number; synthesis: number };
+    tokensByStage?: {
+      panel: { total: number; reasoning: number };
+      judge: { total: number; reasoning: number };
+      synthesis: { total: number; reasoning: number };
+    };
+    cost?: {
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens: number;
+      reEncodedPanelTokens: number;
+    };
   };
   assert.equal(fields.totalTokens, 195); // 30 + 15 + 150
-  assert.deepStrictEqual(fields.tokensByStage, { panel: 30, judge: 15, synthesis: 150 });
+  assert.deepStrictEqual(fields.tokensByStage, {
+    panel: { total: 30, reasoning: 0 },
+    judge: { total: 15, reasoning: 0 },
+    synthesis: { total: 150, reasoning: 0 },
+  });
+  assert.deepStrictEqual(fields.cost, {
+    inputTokens: 65, // 10 + 5 + 50
+    outputTokens: 130, // 20 + 10 + 100
+    reasoningTokens: 0,
+    reEncodedPanelTokens: 20, // panel completion tokens re-billed as synthesis input
+  });
+});
+
+// 20. fusion_run_end surfaces per-stage and aggregate reasoning tokens
+test('fusion_run_end log surfaces reasoning tokens per stage and in the cost block', async () => {
+  const panelMeta: PanelMeta = {
+    results: [samplePanelResult],
+    failedModels: [],
+    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30, reasoningTokens: 8 },
+  };
+  const panelRunner = stubPanelRunner(panelMeta) as unknown as PanelRunner;
+  const judgeUsage: TokenUsage = { promptTokens: 5, completionTokens: 10, totalTokens: 15 };
+  const judgeStep = stubJudgeStep(sampleAnalysis, judgeUsage) as unknown as JudgeStep;
+  const synthEvents: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'result' },
+    { type: 'content_stop' },
+    {
+      type: 'done',
+      usage: { promptTokens: 50, completionTokens: 100, totalTokens: 150, reasoningTokens: 40 },
+      model: 'synth-model',
+    },
+  ];
+  const synthesizeStep = stubSynthesizeStep(synthEvents) as unknown as SynthesizeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    panelRunner,
+    judgeStep,
+    synthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+  );
+
+  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+
+  const logCalls = (loggerPort as unknown as StubLoggerPort)._calls;
+  const endLog = logCalls.find((c) => c.method === 'log' && c.args[1] === 'fusion_run_end');
+  assert.ok(endLog, 'expected fusion_run_end log');
+
+  const fields = endLog!.args[2] as {
+    tokensByStage?: {
+      panel: { total: number; reasoning: number };
+      judge: { total: number; reasoning: number };
+      synthesis: { total: number; reasoning: number };
+    };
+    cost?: { reasoningTokens: number };
+  };
+  assert.deepStrictEqual(fields.tokensByStage, {
+    panel: { total: 30, reasoning: 8 },
+    judge: { total: 15, reasoning: 0 },
+    synthesis: { total: 150, reasoning: 40 },
+  });
+  assert.equal(fields.cost?.reasoningTokens, 48); // 8 + 0 + 40
 });

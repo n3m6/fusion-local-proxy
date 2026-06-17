@@ -28,7 +28,7 @@ export function createAnthropicRoute(fusionService: FusionService, logger?: Logg
 
     logger?.log('info', 'http_request', {
       api: 'anthropic',
-      model,
+      requestedModel: model,
       stream: body.stream !== false,
       messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
     });

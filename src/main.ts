@@ -9,13 +9,16 @@ export function resolvePort(): number {
 
 export function main(): void {
   const port = resolvePort();
-  const { app } = createApp();
+  const { app, loggerPort } = createApp();
 
-  console.log(JSON.stringify({ event: 'starting', port }));
+  loggerPort.log('info', 'server_starting', { port });
 
-  startHttpServer(app, { port });
-
-  console.log(`Server listening on http://localhost:${port}`);
+  startHttpServer(app, {
+    port,
+    onListening: () => {
+      loggerPort.log('info', 'server_listening', { port, url: `http://localhost:${port}` });
+    },
+  });
 }
 
 import { fileURLToPath } from 'node:url';

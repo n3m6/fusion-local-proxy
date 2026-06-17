@@ -60,6 +60,35 @@ test('ConsoleLoggerAdapter logStageEnd emits structured JSON with usage', () => 
   assert.deepEqual(parsed.tokens, { prompt: 100, completion: 50, total: 150 });
 });
 
+test('ConsoleLoggerAdapter logStageEnd includes tokens.reasoning when present', () => {
+  const logger = new ConsoleLoggerAdapter();
+  const usage: TokenUsage = {
+    promptTokens: 100,
+    completionTokens: 50,
+    totalTokens: 150,
+    reasoningTokens: 30,
+  };
+
+  const lines = captureConsole(() => {
+    logger.logStageEnd('synthesis', 200, usage);
+  });
+
+  const parsed = JSON.parse(lines[0]);
+  assert.deepEqual(parsed.tokens, { prompt: 100, completion: 50, total: 150, reasoning: 30 });
+});
+
+test('ConsoleLoggerAdapter logStageEnd omits tokens.reasoning when not present', () => {
+  const logger = new ConsoleLoggerAdapter();
+  const usage: TokenUsage = { promptTokens: 100, completionTokens: 50, totalTokens: 150 };
+
+  const lines = captureConsole(() => {
+    logger.logStageEnd('panel', 150, usage);
+  });
+
+  const parsed = JSON.parse(lines[0]);
+  assert.equal('reasoning' in parsed.tokens, false);
+});
+
 test('ConsoleLoggerAdapter logStageEnd without usage omits tokens field', () => {
   const logger = new ConsoleLoggerAdapter();
 

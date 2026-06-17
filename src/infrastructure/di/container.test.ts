@@ -130,6 +130,43 @@ test('createApp returns configPort and fusionService', () => {
   });
 });
 
+test('createApp returns a loggerPort for bootstrap logging', () => {
+  withTempDir((dir) => {
+    const configPath = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    });
+
+    setEnv('OPENAI_API_KEY', 'sk-test');
+    try {
+      const oldConfigPath = process.env.FUSION_CONFIG_PATH;
+      process.env.FUSION_CONFIG_PATH = configPath;
+
+      try {
+        const { loggerPort } = createApp();
+        assert.ok(loggerPort, 'loggerPort must exist');
+        assert.ok(typeof loggerPort.log === 'function');
+      } finally {
+        if (oldConfigPath !== undefined) {
+          process.env.FUSION_CONFIG_PATH = oldConfigPath;
+        } else {
+          delete process.env.FUSION_CONFIG_PATH;
+        }
+      }
+    } finally {
+      clearEnv('OPENAI_API_KEY');
+    }
+  });
+});
+
 test('createApp throws on missing config file', () => {
   const oldConfigPath = process.env.FUSION_CONFIG_PATH;
   process.env.FUSION_CONFIG_PATH = '/nonexistent/path/fusion.config.json';

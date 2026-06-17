@@ -12,6 +12,7 @@ import {
   buildRequestLogFields,
   createStreamMetrics,
   onContentDelta,
+  onReasoningDelta,
   buildStreamResponseLogFields,
   buildCompleteResponseLogFields,
 } from './adapter-support.js';
@@ -108,6 +109,10 @@ export class AnthropicChatAdapter implements ChatModelPort {
             onContentDelta(metrics, event.delta.text, startTime);
             yield { type: 'content_delta', delta: event.delta.text };
           } else if (event.delta.type === 'thinking_delta') {
+            // Anthropic folds extended-thinking tokens into `output_tokens` and
+            // does not report them separately, so we track only the character
+            // count here and leave TokenUsage.reasoningTokens unset.
+            onReasoningDelta(metrics, event.delta.thinking);
             yield { type: 'reasoning_progress' };
           }
           break;

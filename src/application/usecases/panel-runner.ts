@@ -47,7 +47,10 @@ export class PanelRunner {
     const stageStart = this.clockPort.now();
 
     const signal = createTimeoutSignal(timeoutMs);
-    const tasks = this.pairs.map(({ modelRef, port }) => {
+    const tasks = this.pairs.map(({ modelRef, port }, i) => {
+      // Stable per-panelist label keeps completion-order logs attributable even
+      // when several panelists share the same modelId.
+      const label = `panel-${i}`;
       const pairMessages = applyThinkingMode(messages, modelRef.thinkingMode);
       const request: ChatRequest = {
         messages: pairMessages,
@@ -56,12 +59,14 @@ export class PanelRunner {
           ...(signal !== undefined ? { signal } : {}),
           requestId,
           stage: 'panel',
+          label,
           ...samplingToOptions(sampling),
         },
       };
       this.loggerPort.logRequest({
         requestId,
         stage: 'panel',
+        label,
         provider: modelRef.provider,
         modelId: modelRef.model,
         messageCount: pairMessages.length,
@@ -95,6 +100,9 @@ export class PanelRunner {
           usage: {
             promptTokens: value.usage.promptTokens,
             completionTokens: value.usage.completionTokens,
+            ...(value.usage.reasoningTokens !== undefined
+              ? { reasoningTokens: value.usage.reasoningTokens }
+              : {}),
           },
           latencyMs,
         });
@@ -125,15 +133,22 @@ export class PanelRunner {
 
     let promptTokens = 0;
     let completionTokens = 0;
+    let reasoningTokens = 0;
+    let anyReasoning = false;
     for (const result of results) {
       promptTokens += result.usage.promptTokens;
       completionTokens += result.usage.completionTokens;
+      if (result.usage.reasoningTokens !== undefined) {
+        anyReasoning = true;
+        reasoningTokens += result.usage.reasoningTokens;
+      }
     }
 
     const aggregateUsage: TokenUsage = {
       promptTokens,
       completionTokens,
       totalTokens: promptTokens + completionTokens,
+      ...(anyReasoning ? { reasoningTokens } : {}),
     };
 
     this.loggerPort.logStageEnd('panel', this.clockPort.now() - stageStart, aggregateUsage);

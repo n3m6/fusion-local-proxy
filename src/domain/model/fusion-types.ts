@@ -43,7 +43,7 @@ export interface PanelResult {
   readonly modelId: string;
   readonly provider: ProviderType;
   readonly content: string;
-  readonly usage: { promptTokens: number; completionTokens: number };
+  readonly usage: { promptTokens: number; completionTokens: number; reasoningTokens?: number };
   readonly latencyMs: number;
 }
 

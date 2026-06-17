@@ -84,6 +84,7 @@ export class ConsoleLoggerAdapter implements LoggerPort {
         prompt: usage.promptTokens,
         completion: usage.completionTokens,
         total: usage.totalTokens,
+        ...(usage.reasoningTokens !== undefined ? { reasoning: usage.reasoningTokens } : {}),
       };
     }
     this.emit('info', payload);

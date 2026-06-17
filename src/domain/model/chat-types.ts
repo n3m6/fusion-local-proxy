@@ -20,6 +20,8 @@ export interface ChatOptions {
   readonly requestId?: string;
   /** Pipeline stage that issued this request ('panel' | 'judge' | 'synthesis'), for logging. */
   readonly stage?: string;
+  /** Stable per-call label (e.g. 'panel-0') so completion-order logs with identical modelIds stay attributable. */
+  readonly label?: string;
 }
 
 /** The subset of ChatOptions that callers may override per-request via sampling parameters. */
@@ -64,6 +66,13 @@ export interface TokenUsage {
   readonly promptTokens: number;
   readonly completionTokens: number;
   readonly totalTokens: number;
+  /**
+   * Tokens spent on hidden reasoning, when the provider reports them separately
+   * (e.g. OpenAI `completion_tokens_details.reasoning_tokens`). Already included
+   * in `completionTokens`/`totalTokens`; surfaced so billed-but-invisible cost is
+   * auditable. Omitted when the provider does not report it.
+   */
+  readonly reasoningTokens?: number;
 }
 
 export type ChatStreamChunk =

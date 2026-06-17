@@ -25,7 +25,7 @@ export function createOpenAiRoute(fusionService: FusionService, logger?: LoggerP
 
     logger?.log('info', 'http_request', {
       api: 'openai',
-      model,
+      requestedModel: model,
       stream: streaming,
       messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
     });

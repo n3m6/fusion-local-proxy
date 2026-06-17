@@ -33,6 +33,7 @@ export function createApp(): {
   app: ReturnType<typeof createServer>;
   configPort: ConfigPort;
   fusionService: FusionService;
+  loggerPort: LoggerPort;
 } {
   const configPath = process.env.FUSION_CONFIG_PATH ?? 'fusion.config.json';
 
@@ -82,5 +83,5 @@ export function createApp(): {
   const serverOptions: CreateServerOptions = { enableDevUi, logger: loggerPort };
   const app = createServer(fusionService, configPort, serverOptions);
 
-  return { app, configPort, fusionService };
+  return { app, configPort, fusionService, loggerPort };
 }

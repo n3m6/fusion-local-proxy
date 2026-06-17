@@ -299,19 +299,37 @@ scanning. Color is disabled automatically when output is piped/redirected so the
 JSON stays parseable; override with `NO_COLOR` (force off) or `FORCE_COLOR`
 (force on).
 
+Server bootstrap is logged through the same structured logger: `server_starting`
+and `server_listening` (each carrying the `port`) replace the previous plain-text
+startup lines, so the output stays parseable end to end.
+
 At `info` you get the high-level lifecycle: `fusion_run_start` /
 `fusion_run_end` (with a `requestId` correlating every stage of a single run),
 per-stage `start`/`end` markers with token usage, inbound `http_request` lines,
 `failed_model` warnings, and errors (including the judge's raw model output when
 a response fails JSON parsing or schema validation).
 
+The inbound `http_request` line reports the client-requested model under
+`requestedModel` (renamed from `model`) as a reminder that the ensemble selects
+backends from `fusion.config.json` and ignores the requested model name.
+
+`fusion_run_end` also carries a cost-honest token breakdown. `tokensByStage`
+reports `{ total, reasoning }` per stage, and a `cost` block surfaces
+`inputTokens`, `outputTokens`, `reasoningTokens` (the billed-but-invisible subset
+of output), and `reEncodedPanelTokens` (panel output re-billed as synthesizer
+input). `reasoning` token counts come from providers that report them (e.g.
+OpenAI `completion_tokens_details.reasoning_tokens`); Anthropic folds extended
+thinking into `output_tokens` and does not report it separately.
+
 Set `LOG_LEVEL=debug` to additionally see, for **every** panel/judge/synthesizer
 call, a `request` line (target model, provider, baseURL, message count, prompt
-size, response format, thinking strength, and the full `prompt` messages sent to
-the model) and a `response` line (latency, time-to-first-token, streamed delta
-count, content size, token usage, and the full `content` returned by the model)
-— i.e. exactly how each model parses, sends, and processes a request. All lines
-for one client request share the same `requestId`:
+size, response format, thinking strength, thinking mode, a per-call `label` such
+as `panel-0`, and the full `prompt` messages sent to the model) and a `response`
+line (latency, time-to-first-token, streamed delta count, content size, token
+usage including a `reasoning` sub-field when reported, `reasoningChars` for the
+size of hidden reasoning seen on the stream, and the full `content` returned by
+the model) — i.e. exactly how each model parses, sends, and processes a request.
+All lines for one client request share the same `requestId`:
 
 ```bash
 LOG_LEVEL=debug npm run dev
