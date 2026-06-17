@@ -20,6 +20,15 @@
     },
     {
       "type": "openai",
+      "role": "judge",
+      "model": "deepseek-v4-pro",
+      "baseURL": "https://api.deepseek.com",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "thinkingStrength": "xhigh",
+      "jsonMode": "json_object"
+    },
+    {
+      "type": "openai",
       "role": "synthesizer",
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
