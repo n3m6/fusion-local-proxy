@@ -6,7 +6,8 @@
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
       "apiKeyEnv": "DEEPSEEK_API_KEY",
-      "thinkingMode": "lateral"
+      "thinkingMode": "lateral",
+      "thinkingStrength": "high"
     },
     {
       "type": "openai",
@@ -14,22 +15,16 @@
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
       "apiKeyEnv": "DEEPSEEK_API_KEY",
-      "thinkingMode": "vertical"
-    },
-    {
-      "type": "openai",
-      "role": "panel",
-      "model": "deepseek-v4-pro",
-      "baseURL": "https://api.deepseek.com",
-      "apiKeyEnv": "DEEPSEEK_API_KEY",
-      "thinkingMode": "divergent"
+      "thinkingMode": "vertical",
+      "thinkingStrength": "high"
     },
     {
       "type": "openai",
       "role": "synthesizer",
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
-      "apiKeyEnv": "DEEPSEEK_API_KEY"
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "thinkingStrength": "xhigh"
     }
   ],
   "timeoutMs": 300000
