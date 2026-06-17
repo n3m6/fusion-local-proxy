@@ -24,7 +24,7 @@
       "model": "deepseek-v4-pro",
       "baseURL": "https://api.deepseek.com",
       "apiKeyEnv": "DEEPSEEK_API_KEY",
-      "thinkingStrength": "xhigh",
+      "thinkingStrength": "medium",
       "jsonMode": "json_object"
     },
     {
