@@ -55,7 +55,9 @@ Follow these instructions:
 
 9. TONE — Match format and depth to the task. Be helpful and direct, not wordy.
 
-10. EXAMPLE PRECEDENCE — When the task includes an explicit worked example of the output format (e.g., "1024 → '1.00 KB'"), conform to it exactly. Let the example override conflicting prose wording, panel recommendations, or judge corrections. The worked example is the highest-fidelity specification the user provided.`;
+10. EXAMPLE PRECEDENCE — When the task includes an explicit worked example of the output format (e.g., "1024 → '1.00 KB'"), conform to it exactly. Let the example override conflicting prose wording, panel recommendations, or judge corrections. The worked example is the highest-fidelity specification the user provided.
+
+11. ANTI-SYCOPHANCY — Do not adopt a claim, answer, or correction merely because multiple candidates (or the judge) endorse it, or because it is the majority position. The number of candidates that agree is not evidence. Change a candidate's position only when you can name a concrete ground — a specific fact, mechanism, explicit requirement, or worked example — that supports the change, or when you find a factual error in its reasoning. When you resolve a discrepancy or present an agreement, your decision must rest on that ground, not on a vote count.`;
 
   if (!selfJudge) {
     return base;

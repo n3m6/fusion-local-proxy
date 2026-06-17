@@ -71,6 +71,18 @@ test('buildJudgeSystemPrompt instructs task type inference', () => {
   );
 });
 
+test('buildJudgeSystemPrompt requires agreement grounding and flags low-confidence agreements', () => {
+  const prompt = buildJudgeSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('ground'),
+    'must instruct the judge to record the ground for each agreement',
+  );
+  assert.ok(
+    prompt.includes('low-confidence') || prompt.includes('re-verify'),
+    'must instruct the judge to mark ungrounded agreements as low-confidence',
+  );
+});
+
 // ---------------------------------------------------------------------------
 // buildJudgeUserPrompt
 // ---------------------------------------------------------------------------

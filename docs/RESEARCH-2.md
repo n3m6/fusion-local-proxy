@@ -18,7 +18,7 @@ Quick orientation on how this project maps to the multi-agent literature:
   `selfJudge` fallback when no judge is configured.
 
 Where the first batch established that **answer-level agreement is a weak signal
-of correctness**, this batch sharpens *what to do about it*: the dominant lever
+of correctness**, this batch sharpens _what to do about it_: the dominant lever
 is **base-model reasoning strength + diversity** (Papers 5, 8), naive debate is
 **bounded by the strongest reasoner and can even hurt strong models** (Papers 5,
 7), and **shared misconceptions are not fixed by adding more similar models**
@@ -33,7 +33,7 @@ and routing signal** (Paper 8).
 - **Authors / venue:** Haolun Wu (McGill / Mila), Zhenkun Li, Lingyao Li
   (University of South Florida) — arXiv 2025, cs.MA
 
-> A rigorous, controlled dissection of *what actually makes debate work*, on a
+> A rigorous, controlled dissection of _what actually makes debate work_, on a
 > task with verifiable ground truth. The headline is sobering for any
 > debate-style design: structure barely matters; **model strength and diversity
 > dominate.**
@@ -44,17 +44,17 @@ and routing signal** (Paper 8).
    they need real deductive reasoning, decompose **step-by-step** (one player's
    role at a time), and have **unambiguous ground truth**. Dataset of 1,800
    puzzles, sizes 4–9 players (300 each), so difficulty scales cleanly.
-2. **A phased debate protocol.** (i) *Initial proposal*: each agent independently
-   assigns roles + a self-reported confidence. (ii) *Player-by-player debate
-   loop*: a debate phase (agents argue about one player, citing peers) followed
-   by a self-adjustment phase (each agent may revise). (iii) *Final decision*:
+2. **A phased debate protocol.** (i) _Initial proposal_: each agent independently
+   assigns roles + a self-reported confidence. (ii) _Player-by-player debate
+   loop_: a debate phase (agents argue about one player, citing peers) followed
+   by a self-adjustment phase (each agent may revise). (iii) _Final decision_:
    per-player majority vote, with a supervisor model (gpt-5) breaking ties.
 3. **Six controlled factors (C1–C6), one varied at a time vs. an anchor:** team
    size, team composition (homogeneous vs. heterogeneous), confidence
    visibility, debate order, debate depth, and task difficulty. Models were first
    mapped onto an accuracy×confidence grid to build balanced/stressed/diverse
    teams.
-4. **Process-level analysis, not just accuracy.** Three desiderata of *effective*
+4. **Process-level analysis, not just accuracy.** Three desiderata of _effective_
    debate — **inclusive deliberation**, **rationale over assertion**, and
    **advancement of understanding** — operationalized via belief-state-transition
    tracking and an external judge (deepseek-r1) rating the soundness (1–4) of
@@ -63,11 +63,11 @@ and routing signal** (Paper 8).
 ### Key findings
 
 - **Reasoning strength + diversity dominate; structure barely moves the needle.**
-  Debate accuracy is *bounded by the strongest reasoner*; heterogeneity adds
+  Debate accuracy is _bounded by the strongest reasoner_; heterogeneity adds
   modest, consistent gains **only when strong reasoners are present**. Order,
   confidence visibility, and debate depth were statistically insignificant. A
-  regression found *initial accuracy* (β ≈ 0.60) and *number of agents* the
-  strongest positive predictors; *task difficulty* negative; **moderate "initial
+  regression found _initial accuracy_ (β ≈ 0.60) and _number of agents_ the
+  strongest positive predictors; _task difficulty_ negative; **moderate "initial
   chaos" (early disagreement) positive**.
 - **Debate's value is overturning a wrong consensus.** `MaW→C` transitions
   (majority-wrong → correct) are rare but carry the largest positive weight on
@@ -75,7 +75,7 @@ and routing signal** (Paper 8).
   correction**: under a wrong majority, weak models corrected only ~3.6% of the
   time vs. ~30–34% for strong models.
 - **Rationality predicts correction.** Agents that change position in response to
-  *valid* arguments correct >90% of the time; "irrational" conformity-driven
+  _valid_ arguments correct >90% of the time; "irrational" conformity-driven
   changes correct <55%. Weak models can't reliably judge argument quality, so
   they defer to consensus — fueling echo chambers.
 
@@ -88,14 +88,14 @@ and routing signal** (Paper 8).
   "use your strongest model as synthesizer" guidance.
 - **"Moderate initial chaos helps" → treat panel disagreement as fuel, not
   noise.** This reinforces a theme from `RESEARCH.md` (Papers 1 & 3): a panel
-  that *disagrees* is where the judge/synthesizer earns its keep. We could
+  that _disagrees_ is where the judge/synthesizer earns its keep. We could
   surface a panel-spread statistic and escalate effort when disagreement is
-  moderate (productive) — while noting that *excessive* early chaos hurt
+  moderate (productive) — while noting that _excessive_ early chaos hurt
   consensus stability in their data, so disagreement isn't monotonically good.
 - **The synthesizer must be strong enough to overturn a wrong panel majority.**
   Their `MaW→C` result is the empirical core of our "synthesizer is an authority,
   not a vote-counter" stance. A `selfJudge` synthesizer that merely tallies panel
-  agreement would reproduce *majority pressure*; our prompts should keep pushing
+  agreement would reproduce _majority pressure_; our prompts should keep pushing
   it to independently overturn confident-but-wrong consensus.
 - **Skip low-value structural knobs.** If we ever add a panel-debate round, don't
   bother engineering debate order or confidence-sharing — they showed negligible
@@ -105,14 +105,14 @@ and routing signal** (Paper 8).
 
 - It is a **controlled, ground-truth study** of the exact failure mode our design
   fears: confident convergence on a wrong answer, with weak agents conforming. It
-  validates **panel diversity** *and* the requirement that diversity include at
+  validates **panel diversity** _and_ the requirement that diversity include at
   least one strong reasoner.
 - The "**bounded by the strongest reasoner**" ceiling is a useful expectation
   setter: fusion can't exceed what its best participant can reach on a hard task;
   its value is reliability, error-correction, and integration — not magic.
 - **Scope caveat:** their task is stepwise logic with verifiable answers, the
   opposite end of the spectrum from our open-ended chat/coding traffic. Treat the
-  *direction* (strength + diversity > structure) as transferable; the exact
+  _direction_ (strength + diversity > structure) as transferable; the exact
   significance of each knob may differ on generative tasks.
 
 ---
@@ -122,7 +122,7 @@ and routing signal** (Paper 8).
 - **Link:** https://proceedings.neurips.cc/paper_files/paper/2024/hash/32e07a110c6c6acf1afbf2bf82b614ad-Abstract-Conference.html
 - **Authors / venue:** Andrew Estornell, Yang Liu — NeurIPS 2024
 
-> The theoretical companion to Paper 5: *why* homogeneous debate stagnates, and
+> The theoretical companion to Paper 5: _why_ homogeneous debate stagnates, and
 > three concrete interventions to fix it. Its echo-chamber / shared-misconception
 > theorems are the formal backbone for our panel-diversity and judge-independence
 > rules.
@@ -140,21 +140,21 @@ and routing signal** (Paper 8).
      copies of the same model defeats the purpose of debate.
    - **Shared misconceptions are self-reinforcing.** If ≥ half the agents share an
      erroneous concept `θ'` (e.g., from correlated training data), debate
-     converges to the *wrong* answer — and **adding more models does not help**,
+     converges to the _wrong_ answer — and **adding more models does not help**,
      because correlated training makes them likely to share the same error.
 3. **Three interventions (best applied in this order).**
-   - **Quality-pruning** — keep the `k` responses most *relevant* to the task
+   - **Quality-pruning** — keep the `k` responses most _relevant_ to the task
      (raises convergence to correct answers).
    - **Diversity-pruning** — among those, drop near-duplicate responses to
-     *maximize information entropy* (provably lowers the chance of converging to a
+     _maximize information entropy_ (provably lowers the chance of converging to a
      shared-misconception answer). KL terms are approximated with **sentence
      embeddings**.
    - **Misconception-refutation** — explicitly list the misconceptions/errors in
-     responses, then re-prompt for a *refutation + corrected* response. Motivated
+     responses, then re-prompt for a _refutation + corrected_ response. Motivated
      by the result that **LLMs are better at evaluating answers than producing
      them**.
    - Combined (quality → diversity → refutation) beats any single intervention;
-     applied individually they can *underperform a single model*.
+     applied individually they can _underperform a single model_.
 4. **Validation.** Consistent gains across BoolQ, MMLU, MathQ, TruthfulQA and
    three model families (GPT, Llama, Mistral).
 
@@ -163,9 +163,9 @@ and routing signal** (Paper 8).
 - **A pre-synthesis "prune" stage over panel results.** Quality- and
   diversity-pruning map almost directly onto a lightweight, embedding-based
   filter we could run on `PanelResult[]` before `SynthesizeStep`:
-  - *Quality-pruning* ≈ drop panelist outputs that are off-topic / low-relevance
+  - _Quality-pruning_ ≈ drop panelist outputs that are off-topic / low-relevance
     to the user request.
-  - *Diversity-pruning* ≈ down-weight near-duplicate answers so the synthesizer
+  - _Diversity-pruning_ ≈ down-weight near-duplicate answers so the synthesizer
     doesn't mistake `k` copies of one view for `k` independent confirmations
     (a concrete defense against the "consistency illusion" from `RESEARCH.md`
     Paper 2). This is cheap — sentence embeddings, no extra LLM calls.
@@ -173,7 +173,7 @@ and routing signal** (Paper 8).
   `judge-prompt.ts` asks for `issues` (with `trigger`/`evidence`) and
   `corrections`; this paper gives that the theoretical justification ("evaluate,
   then correct" beats "generate") and suggests an explicit
-  *identify → refute → corrected-response* loop the judge or synthesizer could
+  _identify → refute → corrected-response_ loop the judge or synthesizer could
   follow per discrepancy.
 - **"Adding more similar models won't fix a shared error."** A direct, citable
   argument for **cross-family panel diversity** and for keeping the **judge in a
@@ -187,12 +187,12 @@ and routing signal** (Paper 8).
   shared-misconception theorem. Echo-chamber and "tyranny of the majority" are
   named, proven failure modes — good ammunition for our independence-first design.
 - The **evaluate-beats-generate** result is the principled basis for having a
-  dedicated judge/synthesizer *critique* candidates rather than just blending
+  dedicated judge/synthesizer _critique_ candidates rather than just blending
   them — i.e., why our synthesizer is an authority, not an averager.
 - **Cost caveat (theirs, and ours):** misconception-refutation re-prompts each
   debater multiple times, and the embedding-proxy interventions are weaker where
   embeddings are uninformative (e.g., arithmetic). If we adopt pruning, do it as
-  a *cheap embedding filter* first; reserve any refutation re-prompting for the
+  a _cheap embedding filter_ first; reserve any refutation re-prompting for the
   judge stage where we already pay for an evaluation pass.
 
 ---
@@ -212,11 +212,11 @@ and routing signal** (Paper 8).
 
 1. **Task: ambiguity detection/resolution in user requests.** A programmatically
    generated dataset of diverse ambiguities — a different and practically useful
-   objective: *recognizing when a request is underspecified* rather than
+   objective: _recognizing when a request is underspecified_ rather than
    answering it outright.
 2. **Leader–follower debate with role rotation.** One **Leader** proposes an
    interpretation; **two Followers** must challenge it. The two-follower design
-   forces the leader to convince *two independent* agents, raising the bar for
+   forces the leader to convince _two independent_ agents, raising the bar for
    consensus and reducing premature agreement on a flawed reading. Roles **rotate**
    so each of the three models leads in turn (removing fixed-leader bias). Up to
    ~5 rounds.
@@ -227,14 +227,14 @@ and routing signal** (Paper 8).
 - **Debate's value is highly model-dependent.** It lifted the weaker models a lot
   — Mistral-7B **28.3% → 76.7%**, Llama3-8B **13.3% → 40.0%** — but **hurt the
   already-strong model**: Gemma2-9B fell from **80.0% solo to 48.3% in debate**.
-- **Takeaway:** structured debate is a *targeted augmentation for weaker models*,
+- **Takeaway:** structured debate is a _targeted augmentation for weaker models_,
   not a universal win; forcing a strong model into a committee can drag it toward
   a worse, compromise answer.
 
 ### What can be used in this project
 
 - **An ambiguity-detection step is a genuinely missing capability.** Today the
-  pipeline always tries to *answer*. We could add an explicit instruction (to the
+  pipeline always tries to _answer_. We could add an explicit instruction (to the
   panel, judge, or synthesizer) to **flag underspecified/ambiguous requests and
   ask a clarifying question instead of guessing** — and the judge's `Analysis`
   could carry an `ambiguity`/`clarificationNeeded` field. This is a prompt-level
@@ -245,7 +245,7 @@ and routing signal** (Paper 8).
   judge**, not as one equal voice in a debate that can degrade it. Validates our
   asymmetric panel→synthesizer design over a flat debate-of-equals.
 - **Mandatory-challenge + role rotation as an anti-sycophancy pattern.** If we
-  ever add a panel-debate round, requiring *two* challengers and rotating who
+  ever add a panel-debate round, requiring _two_ challengers and rotating who
   leads operationalizes the GDP anti-sycophancy rule from `RESEARCH.md` Paper 2:
   positions must survive scrutiny rather than win by being first/loudest.
 
@@ -253,15 +253,15 @@ and routing signal** (Paper 8).
 
 - **It studies our exact deployment class.** 7–9B local models are precisely what
   many fusion-local-proxy users run. The finding that orchestration helps weak
-  models but not strong ones is directly actionable for how users should *compose
-  a panel + pick a synthesizer* given local hardware.
+  models but not strong ones is directly actionable for how users should _compose
+  a panel + pick a synthesizer_ given local hardware.
 - **Reframes "fusion" honestly per-model:** the gain isn't uniform. Users with one
   strong local model and several weaker ones should likely make the strong one
   the synthesizer and let the panel supply diverse-but-weaker perspectives,
   rather than expect every model to benefit equally.
 - **Scope caveat:** small benchmark, narrow task (ambiguity), and "success rate"
-  on a constructed dataset. Treat as a qualitative signal about *model-dependence*
-  and the *ambiguity-detection use case*, not as transferable numbers.
+  on a constructed dataset. Treat as a qualitative signal about _model-dependence_
+  and the _ambiguity-detection use case_, not as transferable numbers.
 
 ---
 
@@ -275,13 +275,13 @@ and routing signal** (Paper 8).
 
 > A different multi-LLM paradigm from debate: **repeated sampling + voting across
 > diverse models**, with **consistency as a free confidence/routing signal**. Its
-> efficiency results are a strong argument that *adaptive compute over diverse
-> models* often beats both brute-force single-model sampling and full debate.
+> efficiency results are a strong argument that _adaptive compute over diverse
+> models_ often beats both brute-force single-model sampling and full debate.
 
 ### Techniques used
 
 1. **Multi-model repeated-sampling-then-voting (ModelSwitch).** Instead of
-   sampling one model `K` times, split the budget across `n` *diverse* models
+   sampling one model `K` times, split the budget across `n` _diverse_ models
    (`K/n` each). Two twists: (i) include multiple models — even weaker ones — for
    complementary strengths; (ii) use **answer consistency as a signal to switch
    models and stop early**.
@@ -313,11 +313,11 @@ and routing signal** (Paper 8).
 
 - **Consistency as a cheap confidence signal — the most portable idea here.** Two
   flavors fit our pipeline:
-  - *Cross-panel agreement* (do panelists agree?) — we already have these outputs;
+  - _Cross-panel agreement_ (do panelists agree?) — we already have these outputs;
     quantifying their spread gives the synthesizer/judge a confidence cue
     (low spread → trust consensus; high spread → verify), echoing
     `RESEARCH.md` Papers 1 & 3.
-  - *Within-model consistency* (sample one panelist a few times) — a per-model
+  - _Within-model consistency_ (sample one panelist a few times) — a per-model
     "does this model know?" signal we don't currently compute.
 - **Adaptive compute / early-exit.** ModelSwitch's "stop when consistent" is the
   same lever as `RESEARCH.md` Paper 1's adaptive stopping: when the panel is
@@ -326,8 +326,8 @@ and routing signal** (Paper 8).
   This maps onto our already-optional judge.
 - **Weighted aggregation as a synthesizer prior.** `Wα × Wβ` (consistency ×
   historical strength) is a concrete recipe we could hand the synthesizer:
-  *trust panelists that were internally consistent and that are historically
-  strong on this kind of task.* Even without literal sampling, the principle —
+  _trust panelists that were internally consistent and that are historically
+  strong on this kind of task._ Even without literal sampling, the principle —
   weight candidates by confidence and track record, don't treat them equally — is
   a useful refinement to `synthesis-prompt.ts`.
 - **Validates modest local-model panels.** "Combine a few comparable models
@@ -353,11 +353,11 @@ and routing signal** (Paper 8).
 ## Cross-cutting takeaways (this batch + links to Part 1)
 
 1. **Base-model strength + diversity beat orchestration cleverness (Papers 5,
-   6, 8).** Point budget at a strong synthesizer/judge and a *diverse* panel
+   6, 8).** Point budget at a strong synthesizer/judge and a _diverse_ panel
    before adding elaborate debate machinery; structural knobs (order, confidence
    visibility, depth) barely helped (Paper 5).
 2. **Debate is not a universal good — and can hurt strong models (Papers 5, 7).**
-   Its value is overturning a *wrong* consensus, which requires a strong,
+   Its value is overturning a _wrong_ consensus, which requires a strong,
    independent reasoner. This is the empirical case for our asymmetric
    panel→authoritative-synthesizer design over a flat debate-of-equals.
 3. **Shared misconceptions are not fixed by more similar models (Paper 6).** Hard

@@ -25,7 +25,7 @@ STEP 2 — EXTRACT REQUIREMENTS. List every explicit requirement from the task (
 
 STEP 3 — PRODUCE THE ANALYSIS. Output exactly these fields:
 
-1. AGREEMENTS — Points where candidates converge. IMPORTANT: convergence is not evidence of correctness. When candidates use similar approaches or are derived from similar training, they share the same blind spots and can agree on wrong answers. Before listing any point as an agreement, independently verify that it is actually correct. Do not list a convergent claim if you cannot verify it.
+1. AGREEMENTS — Points where candidates converge. IMPORTANT: convergence is not evidence of correctness. When candidates use similar approaches or are derived from similar training, they share the same blind spots and can agree on wrong answers. Before listing any point as an agreement, independently verify that it is actually correct. Do not list a convergent claim if you cannot verify it. For each agreement you list, note the GROUND each agreeing candidate gave for it — the specific fact, mechanism, requirement, or worked example it cited as support. If candidates reach the same conclusion via compatible grounds, that is a stronger reliability signal; if they assert the same answer with no ground or with incompatible reasoning, mark that agreement as low-confidence in your string (e.g., append "[low-confidence: ungrounded]") so the synthesizer knows to re-verify it rather than trust it.
 
 2. DISCREPANCIES — Where candidates give different or conflicting answers. For each discrepancy, state the topic, list each candidate's position, and provide your assessment of which is more correct (or "unclear" if genuinely ambiguous).
 
@@ -65,7 +65,7 @@ STEP 3 — PRODUCE THE ANALYSIS. Output exactly these fields:
    - "preferredCandidate": string ("Model N" or "none")
    - "corrections": array of strings
 
-10. GROUNDING — Accurately represent what each candidate actually said — do not misattribute positions. Every claim a candidate makes about its own output must be verified against the actual code or facts before you accept or endorse it.`;
+10. GROUNDING — Accurately represent what each candidate actually said — do not misattribute positions. Every claim a candidate makes about its own output must be verified against the actual code or facts before you accept or endorse it. Do not endorse a convergent claim merely because multiple candidates assert it; require an independently verifiable ground before accepting any agreement as reliable.`;
 }
 
 /**

@@ -21,9 +21,9 @@ Quick orientation on how this project maps to the multi-agent literature:
 A practical lens unifies this batch: **we are a black-box, single-pass proxy.**
 We call hosted backends (OpenAI / Anthropic / OpenRouter / local Ollama /
 LM Studio) over their APIs, we do not fine-tune them, and we **fan out once** —
-we do *not* run iterative debate where agents read each other across rounds. Two
+we do _not_ run iterative debate where agents read each other across rounds. Two
 of these papers (9, 11) propose white-box or RL-trained methods we cannot adopt
-wholesale; one (10) is a theorem about *why iterative debate erodes reasoning*
+wholesale; one (10) is a theorem about _why iterative debate erodes reasoning_
 that **validates our single-pass, evidence-anchored design**; and one (12) is the
 closest academic mirror of our panel + synthesizer. The recurring takeaway:
 **diversity and external grounding are the load-bearing levers; closed-loop
@@ -36,8 +36,8 @@ iteration among similar agents is a trap.**
 - **Link:** https://arxiv.org/abs/2512.23518
 - **Authors / venue:** Hazel Kim, Philip Torr (University of Oxford) — arXiv 2025, cs.CL
 
-> A white-box, inference-time method. Its *mechanism* (activation steering) is out
-> of reach for our hosted backends, but its *diagnosis* — confirmation bias is a
+> A white-box, inference-time method. Its _mechanism_ (activation steering) is out
+> of reach for our hosted backends, but its _diagnosis_ — confirmation bias is a
 > first-class failure mode that multi-agent debate **amplifies** — is directly
 > load-bearing for a chat proxy that receives leading, opinionated prompts.
 
@@ -45,11 +45,11 @@ iteration among similar agents is a trap.**
 
 1. **Confirmation bias as a latent-concept posterior shift.** Framing an LLM's
    output as a Bayesian mixture over latent concepts `θ`, a biased prompt
-   ("What evidence *supports* that MSG is harmful?" vs. "What evidence
-   *challenges*…") reweights posterior mass along two axes — **truth alignment**
+   ("What evidence _supports_ that MSG is harmful?" vs. "What evidence
+   _challenges_…") reweights posterior mass along two axes — **truth alignment**
    and **stance polarity** — and systematically distorts factual accuracy. The
    effect is large: negatively-biased phrasings drop TruthfulQA accuracy by
-   9–12pp, and "cross-bias robustness" (correct under *all* phrasings) can fall
+   9–12pp, and "cross-bias robustness" (correct under _all_ phrasings) can fall
    to single digits.
 2. **Contrastive Activation Addition (CAA) steering.** Extract a single steering
    direction `v` from contrastive prompt pairs (support vs. challenge) as the
@@ -61,12 +61,12 @@ iteration among similar agents is a trap.**
    by cosine similarity between the prompt and `v` (a Gaussian/RBF over `α`), and
    the token distributions are mixed each decoding step. This lets a **single
    LLM emulate debate internally** at a fraction of the cost. Key empirical
-   nuance: the *optimal* `α` is per-prompt and long-tailed — **no single fixed
+   nuance: the _optimal_ `α` is per-prompt and long-tailed — **no single fixed
    intervention works**, which is why adaptive gating beats uniform ensembling,
    majority vote, and LLM-judge selection.
 4. **Debate makes confirmation bias worse, not better.** Because all agents share
    the same biased prompt and correlated parameters, vanilla debate and
-   majority-vote are *echo chambers*: on TruthfulQA, debate cut Phi's cross-bias
+   majority-vote are _echo chambers_: on TruthfulQA, debate cut Phi's cross-bias
    robustness from 21% → 0.2%. MoLaCE recovers it; MoLaCE + a light debate
    (n=2) recovers it further.
 
@@ -74,19 +74,19 @@ iteration among similar agents is a trap.**
 
 - **Reality check: activation steering is not available to us.** MoLaCE needs
   residual-stream access. Our `ChatModelPort` adapters talk to backends over
-  chat APIs and treat them as black boxes, so the *method itself* is only a
+  chat APIs and treat them as black boxes, so the _method itself_ is only a
   (large, speculative) future experiment for the local-weights case (Ollama),
   not something the current architecture can express. Don't over-promise it.
 - **Black-box analogue: a stance-neutralization / reframing step.** The portable
-  idea is that a leading prompt biases *every* panelist in the same direction.
+  idea is that a leading prompt biases _every_ panelist in the same direction.
   We could add an optional pre-panel step that rewrites the user's query into a
-  neutral form (or fans out *complementary stances* — one panelist asked to argue
+  neutral form (or fans out _complementary stances_ — one panelist asked to argue
   for, one against a contested claim) so the panel's spread reflects the evidence
   rather than the prompt's framing. This is the API-level version of mixing over
   `±α`.
 - **Diversity that targets correlated error, not just style.** Our `thinkingMode`s
-  vary *cognitive style*; MoLaCE argues the more dangerous correlation on factual
-  queries is *stance/confirmation*. A "devil's-advocate" or "steelman the
+  vary _cognitive style_; MoLaCE argues the more dangerous correlation on factual
+  queries is _stance/confirmation_. A "devil's-advocate" or "steelman the
   opposite" mode would attack the failure mode our current modes don't.
 - **Reinforces echo-chamber avoidance.** The paper is more empirical support for
   our **parallel, peer-blind panel** and the README warning against panels of
@@ -96,12 +96,12 @@ iteration among similar agents is a trap.**
 
 ### What is relevant for us
 
-- A chat proxy is *exactly* the setting where confirmation bias bites: users
+- A chat proxy is _exactly_ the setting where confirmation bias bites: users
   routinely ask leading questions ("why is X bad?"). This paper names the
   mechanism and shows the standard multi-model fix (debate/vote) backfires —
   which is an argument for our authoritative, verification-first synthesizer over
   any vote-style aggregation.
-- It quantifies *why* "convergence ≠ correctness" specifically for biased inputs,
+- It quantifies _why_ "convergence ≠ correctness" specifically for biased inputs,
   complementing Paper 2 (the consistency illusion) in `RESEARCH.md`: there the
   problem was reasoning misalignment hiding behind agreement; here it's a shared
   prior skewing all agents the same way.
@@ -118,23 +118,23 @@ iteration among similar agents is a trap.**
 - **Authors / venue:** Kwan Soo Shin (PolymathMinds AI Lab) — arXiv 2026, cs.CL
 
 > The most architecturally validating paper in this batch. It proves that
-> *iterative, closed-loop* debate can only **lose** evidence-grounding over
+> _iterative, closed-loop_ debate can only **lose** evidence-grounding over
 > rounds, and that the escape hatch is **re-injecting the source evidence** —
 > which is precisely what our single-pass synthesizer (re-reading the original
 > conversation) already does.
 
 ### Techniques used
 
-1. **SFS (Supported Faithfulness Score).** A claim-level, *process* metric (not
+1. **SFS (Supported Faithfulness Score).** A claim-level, _process_ metric (not
    accuracy): decompose a response into atomic claims, then score each claim by
-   the **product** of sentence-BERT cosine similarity *and* a DeBERTa-NLI
+   the **product** of sentence-BERT cosine similarity _and_ a DeBERTa-NLI
    entailment gate against the provided evidence `E`; average over claims. The
-   product is the point — a claim must be both *about* and *entailed by* the
+   product is the point — a claim must be both _about_ and _entailed by_ the
    evidence. Condition-level rankings are decomposer-invariant (Spearman ρ=1.0).
 2. **Theorem 1 (the DPI bound).** Under standard multi-agent debate, the chain
    `E → O⁰ → O¹ → …` is Markov, so by the Data Processing Inequality the expected
    mutual information `I(E; Oᵗ)` — how much of the response is actually grounded
-   in the evidence — is **non-increasing** across rounds, and *strictly*
+   in the evidence — is **non-increasing** across rounds, and _strictly_
    decreasing under any non-injective aggregation (e.g., majority vote). Iterating
    among same-parameter agents redistributes belief but **injects no new
    information about `E`**.
@@ -143,13 +143,13 @@ iteration among similar agents is a trap.**
    43% of SFS; majority-vote debate drops SFS to **1.7% of baseline** (a
    structural "vote-aggregation floor": once you compress to a `K`-way verdict,
    `I(E;O) ≤ log₂K` regardless of how rich `E` was). Crucially, **factuality ≠
-   faithfulness** — FActScore actually ranks debate *above* the grounded method,
+   faithfulness** — FActScore actually ranks debate _above_ the grounded method,
    because debate produces fluent, individually-true sentences whose chain is
    ungrounded.
 4. **Four conditions + the escape.** The trap requires: (i) shared `θ`,
    (ii) `E` provided once with no re-injection, (iii) step `t+1` depends only on
    step `t`, (iv) symmetric aggregation. **Self-Consistency and Mixture-of-Experts
-   are explicitly *outside* the bound** (independent sampling / distinct `θ`).
+   are explicitly _outside_ the bound** (independent sampling / distinct `θ`).
    **EGSR (Evidence-Grounded Socratic Reasoning)** breaks it: a Debater →
    Questioner → Checker pipeline where the Checker **re-consults the external
    evidence every round**, turning faithfulness into a sub-martingale and
@@ -161,7 +161,7 @@ iteration among similar agents is a trap.**
 
 ### What can be used in this project
 
-- **Strongest argument yet for *not* adding iterative debate.** Our pipeline is
+- **Strongest argument yet for _not_ adding iterative debate.** Our pipeline is
   single-pass (panel → judge → synth); panelists never read each other. This
   paper says that property is a feature: any "panel round 2" where panelists
   condition on peers would put us inside the Markov chain and start eroding
@@ -172,7 +172,7 @@ iteration among similar agents is a trap.**
   summaries — that is the "re-inject `E`" move EGSR prescribes. The actionable
   refinement: for grounded tasks (RAG, tool output, coding with a spec), make
   sure the synthesizer and judge see the **actual source**, not panelists'
-  paraphrases of it, so we stay an *open* system rather than collapsing to
+  paraphrases of it, so we stay an _open_ system rather than collapsing to
   summaries-of-summaries.
 - **An SFS-style faithfulness eval for grounded traffic.** When external evidence
   exists (provided docs, retrieved context, file contents), SFS is cheap to
@@ -188,9 +188,9 @@ iteration among similar agents is a trap.**
 
 ### What is relevant for us
 
-- We sit on the *good* side of this theorem by construction: a single fan-out
+- We sit on the _good_ side of this theorem by construction: a single fan-out
   plus a synthesizer that re-reads the source is an **open-system** design, the
-  regime the paper proves is bounded *below* (recoverable) rather than above
+  regime the paper proves is bounded _below_ (recoverable) rather than above
   (eroding). Good external justification for the architecture as-is.
 - The accuracy-vs-faithfulness split mirrors our own framing that the
   synthesizer's value is **verified integration**, not a higher score — and warns
@@ -209,7 +209,7 @@ iteration among similar agents is a trap.**
   Nigel Collier, Andreas Vlachos (University of Cambridge / University of
   Sheffield) — arXiv 2026, cs.CL
 
-> Pinpoints the *two* missing ingredients that make debate work — **initial
+> Pinpoints the _two_ missing ingredients that make debate work — **initial
 > diversity** and **calibrated confidence** — and proves each fixes a different
 > stage. The diversity half is a training-free recipe we can port directly to the
 > panel; the confidence half is partly prompt-level and partly RL (which we can't
@@ -229,7 +229,7 @@ iteration among similar agents is a trap.**
    dynamics. Empirically it lifts Pass@5 substantially (Qwen 0.79 → 0.91;
    Llama 0.74 → 0.90) and increases the count of unique initial answers.
 3. **Confidence-modulated debate (RL-trained).** Agents emit a discrete
-   confidence `w ∈ {0…10}` *and* condition their updates on peers' confidence.
+   confidence `w ∈ {0…10}` _and_ condition their updates on peers' confidence.
    Confidence is **weighted into the aggregation, not the content**. Theorem 1:
    if confidence positively correlates with correctness, weighting turns the
    martingale into a **sub-martingale** — belief drifts toward the correct answer.
@@ -238,7 +238,7 @@ iteration among similar agents is a trap.**
    is otherwise systematically overconfident.
 4. **Empirical pattern.** Diversity alone already beats majority vote; diversity +
    confidence is best across six QA benchmarks. Debate helps **more on harder
-   datasets**, which *naturally* produce more diverse initial answers — initial
+   datasets**, which _naturally_ produce more diverse initial answers — initial
    diversity is significantly (if weakly) correlated with the performance gain.
 
 ### What can be used in this project
@@ -250,12 +250,12 @@ iteration among similar agents is a trap.**
   the judge/synthesizer a **deduplicated, maximally-distinct subset** rather than
   near-identical answers. It operationalizes our existing "panel diversity"
   advice with a concrete selection rule, and it raises the chance the right
-  answer is *present* for the synthesizer to recognize.
+  answer is _present_ for the synthesizer to recognize.
 - **Confidence as a soft signal to the judge/synthesizer (prompt-level only).**
   We can ask panelists to emit a self-confidence score and surface per-candidate
-  confidence to the judge/synthesizer so it can *weight* rather than *count*
+  confidence to the judge/synthesizer so it can _weight_ rather than _count_
   candidates — complementing the judge's `preferredCandidate`/`recommendation`.
-  **Important honesty caveat:** the paper's whole point is that *uncalibrated*
+  **Important honesty caveat:** the paper's whole point is that _uncalibrated_
   verbalized confidence is unreliable, and their fix is RL fine-tuning we cannot
   run. So treat panelist confidence as a weak prior the judge must cross-check,
   never as authority — consistent with our verification-first stance.
@@ -270,9 +270,9 @@ iteration among similar agents is a trap.**
 
 ### What is relevant for us
 
-- We are not iterative MAD, but both levers act on stages we *do* have:
-  diversity-aware init is purely about *what enters the panel/synthesizer*, and
-  confidence is about *how the integrator weights candidates*. Both compose with
+- We are not iterative MAD, but both levers act on stages we _do_ have:
+  diversity-aware init is purely about _what enters the panel/synthesizer_, and
+  confidence is about _how the integrator weights candidates_. Both compose with
   a single-pass design.
 - The "correct hypothesis must be present at the start" framing echoes
   `RESEARCH.md` Paper 1's theorem (debate only helps if a correct seed exists):
@@ -300,17 +300,17 @@ iteration among similar agents is a trap.**
 
 ### Techniques used
 
-1. **Mixture-of-Search-Agents (MoSA).** Multiple *distinct* LLMs act as agents in
+1. **Mixture-of-Search-Agents (MoSA).** Multiple _distinct_ LLMs act as agents in
    step-wise MCTS reasoning (built on RAP / rStar). Two roles:
    - **MoSA as Proposers:** different LLMs propose diverse sub-questions and
-     sub-answers at each search node. Because the models have *different output
-     distributions*, this yields better diversity than a single LLM with
+     sub-answers at each search node. Because the models have _different output
+     distributions_, this yields better diversity than a single LLM with
      temperature/top-k/top-p tuning — which is finicky and can still get stuck in
      local optima.
    - **MoSA as Aggregators:** a neural **aggregator LLM** reads all candidate
      sub-answers and synthesizes a refined one, replacing heuristic majority
-     voting. Intuition (and a worked example): an aggregator that sees *at least
-     one* good candidate tends to produce a good output, so aggregation increases
+     voting. Intuition (and a worked example): an aggregator that sees _at least
+     one_ good candidate tends to produce a good output, so aggregation increases
      the number of good candidates before the final vote.
 2. **Search + ensemble synergy.** Applied alone, multi-agent collaboration and
    search each give modest gains; combined, the gains are larger than either
@@ -321,14 +321,14 @@ iteration among similar agents is a trap.**
    3→4 models on MATH-500). Ablation: **proposer diversity matters more than
    aggregator diversity** (−1.23% vs −0.47% when collapsed to a single model).
 4. **The aggregator prompt** (Appendix B) instructs: synthesize into one
-   high-quality response; *critically assess — some responses may be biased or
-   incorrect*; *do not merely echo* the candidates; produce a refined, accurate,
+   high-quality response; _critically assess — some responses may be biased or
+   incorrect_; _do not merely echo_ the candidates; produce a refined, accurate,
    well-organized answer. That is essentially our synthesizer's contract.
 
 ### What can be used in this project
 
-- **Direct cross-validation of our core design.** MoSA's *proposers + aggregator*
-  is our *panel + synthesizer*; its aggregator prompt is our `synthesis-prompt.ts`
+- **Direct cross-validation of our core design.** MoSA's _proposers + aggregator_
+  is our _panel + synthesizer_; its aggregator prompt is our `synthesis-prompt.ts`
   philosophy (don't echo, critically assess, some candidates are wrong, produce a
   refined answer). Independent confirmation that this beats majority-voting the
   candidates.
@@ -349,7 +349,7 @@ iteration among similar agents is a trap.**
   aggregates per step could help on hard math/coding, but it conflicts with our
   streaming, single-pass, latency-sensitive design and adds major complexity.
   File it under "research," and note the tension with Paper 10: MoSA iterates,
-  but each aggregation re-reads the actual candidate *content* and the original
+  but each aggregation re-reads the actual candidate _content_ and the original
   question (and search re-grounds via the reward), so it is more "open-system"
   than vote-only debate — our single-pass synth is safer still.
 
@@ -363,8 +363,8 @@ iteration among similar agents is a trap.**
   is most valuable when fed diverse, partially-correct material.
 - **Caveats:** evaluated on math/commonsense QA with verifiable answers and small
   open models (7–9B); the headline gains (~1.7% avg) are real but modest; and the
-  benefits are entangled with the MCTS search machinery, so the *aggregator* and
-  *multi-model proposer* lessons transfer to us more cleanly than the absolute
+  benefits are entangled with the MCTS search machinery, so the _aggregator_ and
+  _multi-model proposer_ lessons transfer to us more cleanly than the absolute
   numbers do.
 
 ---
@@ -380,12 +380,12 @@ iteration among similar agents is a trap.**
    The single most shippable idea is a **diversity-aware panel**: oversample
    candidates and feed the judge/synthesizer a maximally-distinct, deduplicated
    subset (Paper 11), prefer **multiple model families** over one aligned model
-   at high temperature (Paper 12), and diversify *stance*, not just style, to
+   at high temperature (Paper 12), and diversify _stance_, not just style, to
    fight confirmation bias (Paper 9).
 3. **Confirmation bias is a real risk for a chat proxy, and debate amplifies it
    (Paper 9).** Consider an optional prompt-neutralization / complementary-stance
    step before fan-out; never "fix" a biased prompt by voting more similar models.
-4. **Confidence can be a *soft* weighting signal — but only that (Paper 11).**
+4. **Confidence can be a _soft_ weighting signal — but only that (Paper 11).**
    Surfacing panelist self-confidence to the judge/synthesizer is cheap and
    prompt-level, but verbalized confidence is uncalibrated without RL (which we
    don't do), so the integrator must cross-check it, not trust it.

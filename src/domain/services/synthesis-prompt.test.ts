@@ -114,6 +114,22 @@ test('buildSynthesisSystemPrompt mentions task type adaptation', () => {
   );
 });
 
+test('buildSynthesisSystemPrompt includes anti-sycophancy instruction', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(
+    prompt.includes('anti-sycophancy') || prompt.includes('vote count'),
+    'must include anti-sycophancy instruction',
+  );
+});
+
+test('buildSynthesisSystemPrompt includes anti-sycophancy instruction in selfJudge mode', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    prompt.includes('anti-sycophancy') || prompt.includes('vote count'),
+    'must include anti-sycophancy instruction in selfJudge mode',
+  );
+});
+
 // ---------------------------------------------------------------------------
 // buildSynthesisUserPrompt — with analysis
 // ---------------------------------------------------------------------------
