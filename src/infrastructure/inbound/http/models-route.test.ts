@@ -19,6 +19,8 @@ function stubConfigPort(
     getJudgeModel: () => judgeModel,
     getSynthesizerModel: () => synthesizerModel,
     getTimeoutMs: () => 30000,
+    getAgentModel: () => null,
+    getAutocompleteModel: () => null,
   };
 }
 

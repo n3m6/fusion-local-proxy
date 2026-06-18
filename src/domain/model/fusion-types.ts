@@ -1,5 +1,5 @@
 import type { Message } from './message.js';
-import type { ChatOptions, TokenUsage } from './chat-types.js';
+import type { ChatOptions, TokenUsage, ToolDefinition, ToolChoice } from './chat-types.js';
 import type { FailedModelInfo } from './stream-types.js';
 
 export type ProviderType = 'openai' | 'anthropic';
@@ -65,4 +65,6 @@ export interface FusionRequest {
   readonly stopSequences?: string[];
   readonly metadata?: { readonly user_id?: string | null };
   readonly options?: ChatOptions;
+  readonly tools?: ToolDefinition[];
+  readonly toolChoice?: ToolChoice;
 }

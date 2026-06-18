@@ -5,7 +5,7 @@ import type { ModelRef } from '../../../domain/model/fusion-types.js';
 
 const providerSchema = z.object({
   type: z.enum(['openai', 'anthropic']),
-  role: z.enum(['panel', 'judge', 'synthesizer']),
+  role: z.enum(['panel', 'judge', 'synthesizer', 'autocomplete', 'agent']),
   model: z.string().min(1),
   baseURL: z.string().min(1),
   apiKeyEnv: z.string().min(1),
@@ -70,6 +70,15 @@ export class JsonFileConfigAdapter implements ConfigPort {
         'Invalid configuration: thinkingMode is only valid on providers with role "panel"',
       );
     }
+
+    const nonOpenAiAgentOrAutocomplete = this.config.providers.find(
+      (p) => (p.role === 'agent' || p.role === 'autocomplete') && p.type !== 'openai',
+    );
+    if (nonOpenAiAgentOrAutocomplete !== undefined) {
+      throw new Error(
+        'Invalid configuration: providers with role "agent" or "autocomplete" must have type "openai"',
+      );
+    }
   }
 
   getPanelModels(): ModelRef[] {
@@ -90,6 +99,22 @@ export class JsonFileConfigAdapter implements ConfigPort {
     return this.config.timeoutMs;
   }
 
+  getAgentModel(): ModelRef | null {
+    const dedicated = this.config.providers.find((p) => p.role === 'agent');
+    if (dedicated) return this.toModelRef(dedicated);
+    const firstPanel = this.config.providers.find((p) => p.role === 'panel');
+    if (!firstPanel || firstPanel.type !== 'openai') return null;
+    return this.toRawModelRef(firstPanel);
+  }
+
+  getAutocompleteModel(): ModelRef | null {
+    const dedicated = this.config.providers.find((p) => p.role === 'autocomplete');
+    if (dedicated) return this.toModelRef(dedicated);
+    const firstPanel = this.config.providers.find((p) => p.role === 'panel');
+    if (!firstPanel || firstPanel.type !== 'openai') return null;
+    return this.toRawModelRef(firstPanel);
+  }
+
   private toModelRef(entry: ProviderEntry): ModelRef {
     const apiKey = process.env[entry.apiKeyEnv];
     if (apiKey === undefined || apiKey === '') {
@@ -105,6 +130,22 @@ export class JsonFileConfigAdapter implements ConfigPort {
       ...(entry.jsonMode !== undefined ? { jsonMode: entry.jsonMode } : {}),
       ...(entry.thinkingStrength !== undefined ? { thinkingStrength: entry.thinkingStrength } : {}),
       ...(entry.thinkingMode !== undefined ? { thinkingMode: entry.thinkingMode } : {}),
+    };
+  }
+
+  /** Like toModelRef but strips thinkingMode and thinkingStrength for raw pass-through routing. */
+  private toRawModelRef(entry: ProviderEntry): ModelRef {
+    const apiKey = process.env[entry.apiKeyEnv];
+    if (apiKey === undefined || apiKey === '') {
+      throw new Error(
+        `Environment variable ${entry.apiKeyEnv} is not set (required for provider model "${entry.model}")`,
+      );
+    }
+    return {
+      provider: entry.type,
+      model: entry.model,
+      baseURL: entry.baseURL,
+      apiKey,
     };
   }
 }

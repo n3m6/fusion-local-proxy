@@ -3,11 +3,15 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { FusionService } from '../../../application/ports/fusion-service.js';
+import type { AgentService } from '../../../application/ports/agent-service.js';
 import type { ConfigPort } from '../../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../../domain/ports/logger-port.js';
+import type { TextCompletionPort } from '../../../domain/ports/text-completion-port.js';
+import type { ModelRef } from '../../../domain/model/fusion-types.js';
 import { createOpenAiRoute } from './openai/route.js';
 import { createModelsRoute } from './models-route.js';
 import { createAnthropicRoute } from './anthropic/route.js';
+import { createCompletionsRoute } from './openai/completions-route.js';
 
 // Resolve the dev UI file relative to this module, not process.cwd(), so the
 // page is found regardless of the directory the server is launched from.
@@ -20,6 +24,9 @@ const DEV_UI_HTML_PATH = join(
 export interface CreateServerOptions {
   readonly enableDevUi?: boolean;
   readonly logger?: LoggerPort;
+  readonly agentService?: AgentService | null;
+  readonly textCompletionPort?: TextCompletionPort | null;
+  readonly autocompleteModel?: ModelRef | null;
 }
 
 export function createServer(
@@ -29,9 +36,16 @@ export function createServer(
 ): Hono {
   const app = new Hono();
 
-  app.post('/v1/chat/completions', createOpenAiRoute(fusionService, options.logger));
+  app.post(
+    '/v1/chat/completions',
+    createOpenAiRoute(fusionService, options.agentService, options.logger),
+  );
   app.get('/v1/models', createModelsRoute(configPort));
   app.post('/v1/messages', createAnthropicRoute(fusionService, options.logger));
+  app.post(
+    '/v1/completions',
+    createCompletionsRoute(options.textCompletionPort, options.autocompleteModel, options.logger),
+  );
 
   if (options.enableDevUi) {
     app.get('/', serveStatic({ path: DEV_UI_HTML_PATH }));

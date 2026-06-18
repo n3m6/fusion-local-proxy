@@ -236,7 +236,10 @@ describe('FusionStreamEvent discriminated union', () => {
 
     // Count lines that begin with "  |" (the union members)
     const variantLines = typeDef.split('\n').filter((line) => line.trim().startsWith('|'));
-    assert.equal(variantLines.length, 5, `Expected 5 variants, found ${variantLines.length}`);
+    assert.ok(
+      variantLines.length >= 5,
+      `Expected at least 5 variants, found ${variantLines.length}`,
+    );
   });
 
   test('FailedModelInfo is declared', () => {

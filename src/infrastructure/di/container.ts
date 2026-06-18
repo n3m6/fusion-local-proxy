@@ -1,7 +1,12 @@
 import { JsonFileConfigAdapter } from '../outbound/config/json-file-config-adapter.js';
 import { ConsoleLoggerAdapter, parseLogLevel } from '../outbound/logging/console-logger-adapter.js';
 import { ChatAdapterFactory } from '../outbound/llm/chat-adapter-factory.js';
+import {
+  OpenAiCompletionAdapter,
+  createOpenAiCompletionClient,
+} from '../outbound/llm/openai-completion-adapter.js';
 import { RunFusionUseCase } from '../../application/usecases/run-fusion-use-case.js';
+import { RunAgentUseCase } from '../../application/usecases/run-agent-use-case.js';
 import { PanelRunner, type PanelPair } from '../../application/usecases/panel-runner.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import { JudgeStep } from '../../application/usecases/judge-step.js';
@@ -12,6 +17,7 @@ import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { FusionService } from '../../application/ports/fusion-service.js';
+import type { AgentService } from '../../application/ports/agent-service.js';
 
 /**
  * Decide whether console logs should be ANSI-colored. Follows the de-facto
@@ -33,6 +39,7 @@ export function createApp(): {
   app: ReturnType<typeof createServer>;
   configPort: ConfigPort;
   fusionService: FusionService;
+  agentService: AgentService | null;
   loggerPort: LoggerPort;
 } {
   const configPath = process.env.FUSION_CONFIG_PATH ?? 'fusion.config.json';
@@ -79,9 +86,48 @@ export function createApp(): {
     clockPort,
   );
 
+  // Agent service — wired when an openai-type model is resolvable (dedicated or panel fallback).
+  const agentModelRef = configPort.getAgentModel();
+  const agentService: AgentService | null = agentModelRef
+    ? new RunAgentUseCase(factory.create(agentModelRef), agentModelRef, loggerPort)
+    : null;
+
+  if (!agentModelRef) {
+    loggerPort.log('warn', 'agent_not_wired', {
+      reason:
+        'No openai-type model available for agent role (no dedicated agent role or first panel is non-openai)',
+    });
+  }
+
+  // Autocomplete / text-completion service — wired only when an openai-type model is resolvable.
+  const autocompleteModelRef = configPort.getAutocompleteModel();
+  const textCompletionPort = autocompleteModelRef
+    ? new OpenAiCompletionAdapter(
+        createOpenAiCompletionClient({
+          baseURL: autocompleteModelRef.baseURL,
+          apiKey: autocompleteModelRef.apiKey,
+        }),
+        { baseURL: autocompleteModelRef.baseURL, apiKey: autocompleteModelRef.apiKey },
+        loggerPort,
+      )
+    : null;
+
+  if (!autocompleteModelRef) {
+    loggerPort.log('warn', 'autocomplete_not_wired', {
+      reason:
+        'No openai-type model available for autocomplete role (no dedicated autocomplete role or first panel is non-openai)',
+    });
+  }
+
   const enableDevUi = ['1', 'true'].includes((process.env.ENABLE_DEV_UI ?? '').toLowerCase());
-  const serverOptions: CreateServerOptions = { enableDevUi, logger: loggerPort };
+  const serverOptions: CreateServerOptions = {
+    enableDevUi,
+    logger: loggerPort,
+    agentService,
+    textCompletionPort,
+    autocompleteModel: autocompleteModelRef,
+  };
   const app = createServer(fusionService, configPort, serverOptions);
 
-  return { app, configPort, fusionService, loggerPort };
+  return { app, configPort, fusionService, agentService, loggerPort };
 }

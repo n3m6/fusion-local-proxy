@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OpenAiChatAdapter } from './openai-chat-adapter.js';
 import type { ChatRequest, ChatStreamChunk } from '../../../domain/model/chat-types.js';
+import { FusionError } from '../../../domain/model/fusion-types.js';
 
 const STUB_CONFIG = { baseURL: '', apiKey: '' } as const;
 
@@ -1709,4 +1710,87 @@ test('OpenAiChatAdapter.stream() yields reasoning_progress before content_delta 
   const contentDeltas = chunks.filter((c) => c.type === 'content_delta');
   assert.equal(contentDeltas.length, 1);
   assert.equal((contentDeltas[0] as { type: 'content_delta'; delta: string }).delta, 'Answer');
+});
+
+test('OpenAiChatAdapter rejects a tool message missing tool_call_id instead of sending an empty string', async () => {
+  let createCalled = false;
+  const client = mockOpenAiClient(async () => {
+    createCalled = true;
+    return {};
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'tool', content: 'result payload' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  await assert.rejects(
+    () => adapter.complete(request),
+    (err: unknown) => {
+      assert.ok(err instanceof FusionError);
+      assert.equal(err.code, 'invalid_tool_message');
+      return true;
+    },
+  );
+  assert.equal(createCalled, false, 'adapter must not call the API with a malformed tool message');
+});
+
+test('OpenAiChatAdapter rejects a tool message with an empty tool_call_id', async () => {
+  const client = mockOpenAiClient(async () => ({}));
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'tool', content: 'result payload', toolCallId: '' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  await assert.rejects(() => adapter.complete(request), {
+    name: 'FusionError',
+    code: 'invalid_tool_message',
+  });
+});
+
+test('OpenAiChatAdapter maps a valid tool message to tool_call_id', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'chatcmpl-tool',
+      object: 'chat.completion',
+      created: Date.now() / 1000,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'tool', content: 'result payload', toolCallId: 'call_abc123' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  await adapter.complete(request);
+
+  const sdkMessages = capturedParams.value?.messages as Array<Record<string, unknown>>;
+  assert.equal(sdkMessages[0]?.role, 'tool');
+  assert.equal(sdkMessages[0]?.tool_call_id, 'call_abc123');
 });

@@ -40,6 +40,8 @@ function narrowChunk(chunk: ChatStreamChunk): string {
       return `tokens=${chunk.usage.totalTokens}`;
     case 'reasoning_progress':
       return 'reasoning';
+    case 'tool_call_delta':
+      return `tool_call_delta:${chunk.index}`;
     default: {
       const _exhaustive: never = chunk;
       throw new Error(`Unhandled chunk type: ${JSON.stringify(chunk)}`);

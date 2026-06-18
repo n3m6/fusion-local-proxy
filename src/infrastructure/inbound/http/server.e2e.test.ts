@@ -178,6 +178,8 @@ function buildApp(opts: BuildOpts = {}) {
     getJudgeModel: () => judgeModel,
     getSynthesizerModel: () => synthRef,
     getTimeoutMs: () => 30000,
+    getAgentModel: () => null,
+    getAutocompleteModel: () => null,
   };
 
   const panelPairs = panelModels.map((m, i) => ({ modelRef: m, port: panelPorts[i]! }));

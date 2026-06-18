@@ -210,6 +210,12 @@ function stubConfigPort(opts?: {
     getTimeoutMs() {
       return this._timeoutMs;
     },
+    getAgentModel() {
+      return null;
+    },
+    getAutocompleteModel() {
+      return null;
+    },
   };
 }
 

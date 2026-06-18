@@ -37,9 +37,29 @@ export function encodeOpenAiSSE(
             object: 'chat.completion.chunk',
             created,
             model,
-            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+            choices: [{ index: 0, delta: {}, finish_reason: event.finishReason ?? 'stop' }],
           })}\n\n`;
           break;
+        case 'tool_call_delta': {
+          const toolCallDelta: Record<string, unknown> = {
+            index: event.index,
+            type: 'function',
+            function: {},
+          };
+          if (event.id !== undefined) toolCallDelta.id = event.id;
+          const fn: Record<string, unknown> = {};
+          if (event.name !== undefined) fn.name = event.name;
+          if (event.argumentsDelta !== undefined) fn.arguments = event.argumentsDelta;
+          toolCallDelta.function = fn;
+          yield `data: ${JSON.stringify({
+            id,
+            object: 'chat.completion.chunk',
+            created,
+            model,
+            choices: [{ index: 0, delta: { tool_calls: [toolCallDelta] } }],
+          })}\n\n`;
+          break;
+        }
         case 'done':
           yield 'data: [DONE]\n\n';
           return;

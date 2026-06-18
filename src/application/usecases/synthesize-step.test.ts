@@ -171,6 +171,12 @@ function stubConfigPort(overrides?: {
       calls.getTimeoutMs++;
       return timeoutMs;
     },
+    getAgentModel(): ModelRef | null {
+      return null;
+    },
+    getAutocompleteModel(): ModelRef | null {
+      return null;
+    },
   };
 }
 

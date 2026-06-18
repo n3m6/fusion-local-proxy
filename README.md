@@ -134,6 +134,62 @@ Multiple providers can share the same `role` (e.g. several `panel` members). The
 `type` must match the actual API protocol of the backend — note that
 OpenAI-compatible servers such as Ollama and OpenRouter use `type: "openai"`.
 
+### Fast-path roles: `autocomplete` and `agent`
+
+Two optional roles bypass the full ensemble pipeline for latency-sensitive use cases:
+
+| Role           | Endpoint served                                       | Description                                                                                                              |
+| -------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `autocomplete` | `POST /v1/completions`                                | FIM (fill-in-the-middle) text completion for tab autocomplete. Receives `prompt` and optional `suffix`. No deliberation. |
+| `agent`        | `POST /v1/chat/completions` (when `tools` is present) | Single-model tool-calling passthrough for agent mode / file edits. The full fusion ensemble is bypassed.                 |
+
+Both roles **must** have `type: "openai"` (they use the OpenAI adapter for tool-calls and legacy completions). Both support `thinkingStrength` but not `thinkingMode`.
+
+**Model resolution order** (same for both roles):
+
+1. A provider explicitly assigned `role: "autocomplete"` or `role: "agent"` is used as-is.
+2. If no dedicated provider exists, the first `panel` provider is used — **but `thinkingMode` and `thinkingStrength` are stripped** so the model receives the prompt raw without cognitive-style injection.
+3. If no `openai`-type model can be resolved (e.g. all panels are `anthropic`), the endpoint returns `501 Not Implemented`.
+
+**Minimal example adding a dedicated agent model:**
+
+```json
+{
+  "providers": [
+    {
+      "type": "openai",
+      "role": "panel",
+      "model": "llama3:8b",
+      "baseURL": "http://localhost:11434/v1",
+      "apiKeyEnv": "OLLAMA_API_KEY"
+    },
+    {
+      "type": "openai",
+      "role": "synthesizer",
+      "model": "gpt-4o",
+      "baseURL": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY"
+    },
+    {
+      "type": "openai",
+      "role": "agent",
+      "model": "gpt-4o",
+      "baseURL": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY"
+    },
+    {
+      "type": "openai",
+      "role": "autocomplete",
+      "model": "deepseek-coder-v2:16b",
+      "baseURL": "http://localhost:11434/v1",
+      "apiKeyEnv": "OLLAMA_API_KEY"
+    }
+  ]
+}
+```
+
+If you omit the `agent` and `autocomplete` entries but have at least one `openai`-type panel, the first such panel model is used automatically.
+
 ### Panel diversity recommendation
 
 The ensemble pipeline produces the most value when the panel is **genuinely diverse** — different model families, sizes, or reasoning styles. A panel composed of repeated instances of the same model, or of models from the same fine-tuning lineage, tends to produce trivial agreements (shared training blind spots converge, not genuine correctness), marginal discrepancies (sampling noise, not real disagreement), and a judge that cannot distinguish between them.
@@ -240,6 +296,38 @@ The Anthropic endpoint emits the full 6-event SSE sequence, each carrying both
 
 `message_start` → `content_block_start` → `content_block_delta` (one per token
 chunk) → `content_block_stop` → `message_delta` → `message_stop`.
+
+### Tab autocomplete — `POST /v1/completions`
+
+FIM (fill-in-the-middle) text completion. Used by VS Code / Cursor autocomplete extensions:
+
+```bash
+curl -s http://localhost:3000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"fusion","prompt":"def hello","suffix":"\n    pass","max_tokens":64}'
+```
+
+Returns `object: "text_completion"` with `choices[0].text`. Pass `"stream": true` for SSE.
+
+Requires an `openai`-type model resolved via the `autocomplete` or `panel` role. Returns `501` when no such model is configured.
+
+### Agent / tool calling — `POST /v1/chat/completions` with `tools`
+
+When the request body includes a `tools` array, the full ensemble is bypassed and the request goes directly to the resolved agent model:
+
+```bash
+curl -s http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "fusion",
+    "messages": [{"role": "user", "content": "What is the weather in NYC?"}],
+    "tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}}],
+    "tool_choice": "auto",
+    "stream": true
+  }'
+```
+
+Tool call deltas are streamed as `choices[0].delta.tool_calls` chunks. The non-streaming path reconstructs and returns complete `message.tool_calls`. The `finish_reason` reflects `"tool_calls"` or `"stop"` as reported by the model.
 
 ### Models
 

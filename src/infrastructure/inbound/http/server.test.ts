@@ -96,6 +96,8 @@ function stubConfigPort(panelModels?: ModelRef[]): ConfigPort {
       apiKey: 'sk-test',
     }),
     getTimeoutMs: () => 30000,
+    getAgentModel: () => null,
+    getAutocompleteModel: () => null,
   };
 }
 

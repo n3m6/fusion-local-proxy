@@ -159,6 +159,8 @@ function buildUseCase(opts: {
     getJudgeModel: () => opts.judgeModel,
     getSynthesizerModel: () => synthRef,
     getTimeoutMs: () => opts.timeoutMs ?? 30000,
+    getAgentModel: () => null,
+    getAutocompleteModel: () => null,
   };
   const panelPairs = opts.panelModels.map((m, i) => ({ modelRef: m, port: opts.panelPorts[i]! }));
   const panelRunner = new PanelRunner(panelPairs, logger, clock);

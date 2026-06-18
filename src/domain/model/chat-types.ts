@@ -1,4 +1,4 @@
-import type { Message } from './message.js';
+import type { Message, ToolCall } from './message.js';
 import type { ModelRef } from './fusion-types.js';
 
 export interface ChatRequest {
@@ -6,6 +6,19 @@ export interface ChatRequest {
   readonly model: ModelRef;
   readonly options?: ChatOptions;
 }
+
+export interface ToolDefinition {
+  readonly type: 'function';
+  readonly name: string;
+  readonly description?: string;
+  readonly parameters?: Record<string, unknown>;
+}
+
+export type ToolChoice =
+  | 'none'
+  | 'auto'
+  | 'required'
+  | { readonly type: 'function'; readonly function: { readonly name: string } };
 
 export interface ChatOptions {
   readonly temperature?: number;
@@ -22,6 +35,8 @@ export interface ChatOptions {
   readonly stage?: string;
   /** Stable per-call label (e.g. 'panel-0') so completion-order logs with identical modelIds stay attributable. */
   readonly label?: string;
+  readonly tools?: ToolDefinition[];
+  readonly toolChoice?: ToolChoice;
 }
 
 /** The subset of ChatOptions that callers may override per-request via sampling parameters. */
@@ -60,6 +75,8 @@ export interface ChatResponse {
   readonly content: string;
   readonly usage: TokenUsage;
   readonly model: string;
+  readonly toolCalls?: ToolCall[];
+  readonly finishReason?: string;
 }
 
 export interface TokenUsage {
@@ -77,6 +94,13 @@ export interface TokenUsage {
 
 export type ChatStreamChunk =
   | { readonly type: 'content_delta'; readonly delta: string }
-  | { readonly type: 'content_stop' }
+  | { readonly type: 'content_stop'; readonly finishReason?: string }
   | { readonly type: 'usage'; readonly usage: TokenUsage }
-  | { readonly type: 'reasoning_progress' };
+  | { readonly type: 'reasoning_progress' }
+  | {
+      readonly type: 'tool_call_delta';
+      readonly index: number;
+      readonly id?: string;
+      readonly name?: string;
+      readonly argumentsDelta?: string;
+    };

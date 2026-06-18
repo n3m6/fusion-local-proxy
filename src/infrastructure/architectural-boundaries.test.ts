@@ -101,23 +101,26 @@ describe('[boundary] NFR-3: SDK confinement', () => {
   const openaiPattern = /from\s+['"]openai['"]/;
   const anthropicPattern = /from\s+['"]@anthropic-ai\/sdk['"]/;
 
-  const openaiAllowed = 'src/infrastructure/outbound/llm/openai-chat-adapter.ts';
+  const openaiAllowed = new Set([
+    'src/infrastructure/outbound/llm/openai-chat-adapter.ts',
+    'src/infrastructure/outbound/llm/openai-completion-adapter.ts',
+  ]);
   const anthropicAllowed = 'src/infrastructure/outbound/llm/anthropic-chat-adapter.ts';
 
-  test('openai SDK used only in openai-chat-adapter.ts', () => {
+  test('openai SDK used only in openai-chat-adapter.ts and openai-completion-adapter.ts', () => {
     const lines = findMatchingLines('src', openaiPattern);
 
     const violations = lines.filter((l) => {
       const fp = filePath(l);
       if (isTestFile(fp)) return false;
-      if (fp === openaiAllowed) return false;
+      if (openaiAllowed.has(fp)) return false;
       return true;
     });
 
     assert.deepStrictEqual(
       violations,
       [],
-      `openai SDK imports found outside ${openaiAllowed}:\n${violations.join('\n')}`,
+      `openai SDK imports found outside allowed files:\n${violations.join('\n')}`,
     );
   });
 

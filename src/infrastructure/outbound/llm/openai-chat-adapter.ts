@@ -7,6 +7,8 @@ import type {
   ChatStreamChunk,
   TokenUsage,
 } from '../../../domain/model/chat-types.js';
+import type { Message } from '../../../domain/model/message.js';
+import { FusionError } from '../../../domain/model/fusion-types.js';
 import {
   type AdapterConfig,
   buildRequestLogFields,
@@ -32,6 +34,37 @@ type BaseCompletionParams = Omit<
   'stream'
 >;
 
+function toSdkMessage(m: Message): OpenAI.Chat.Completions.ChatCompletionMessageParam {
+  if (m.role === 'tool') {
+    if (m.toolCallId === undefined || m.toolCallId === '') {
+      throw new FusionError(
+        'invalid_tool_message',
+        'A tool-role message is missing tool_call_id. Each tool result must include the id of the preceding assistant tool call it responds to.',
+      );
+    }
+    return {
+      role: 'tool',
+      content: m.content,
+      tool_call_id: m.toolCallId,
+    };
+  }
+  if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+    return {
+      role: 'assistant',
+      content: m.content || null,
+      tool_calls: m.toolCalls.map((tc) => ({
+        id: tc.id,
+        type: 'function' as const,
+        function: { name: tc.name, arguments: tc.arguments },
+      })),
+    };
+  }
+  return {
+    role: m.role as 'system' | 'user' | 'assistant',
+    content: m.content,
+  };
+}
+
 export class OpenAiChatAdapter implements ChatModelPort {
   constructor(
     private readonly client: OpenAI,
@@ -42,10 +75,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
   private buildBaseParams(request: ChatRequest): BaseCompletionParams {
     const params: BaseCompletionParams = {
       model: request.model.model,
-      messages: request.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: request.messages.map(toSdkMessage),
       temperature: request.options?.temperature,
       max_tokens: request.options?.maxTokens,
       top_p: request.options?.topP,
@@ -70,6 +100,26 @@ export class OpenAiChatAdapter implements ChatModelPort {
             schema: rf.schema,
           },
         };
+      }
+    }
+
+    if (request.options?.tools && request.options.tools.length > 0) {
+      params.tools = request.options.tools.map((t) => ({
+        type: 'function' as const,
+        function: {
+          name: t.name,
+          ...(t.description !== undefined ? { description: t.description } : {}),
+          ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
+        },
+      }));
+    }
+
+    if (request.options?.toolChoice !== undefined) {
+      const tc = request.options.toolChoice;
+      if (tc === 'none' || tc === 'auto' || tc === 'required') {
+        params.tool_choice = tc;
+      } else {
+        params.tool_choice = { type: 'function', function: { name: tc.function.name } };
       }
     }
 
@@ -107,6 +157,22 @@ export class OpenAiChatAdapter implements ChatModelPort {
       ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
     };
 
+    type SdkFunctionToolCall = {
+      id: string;
+      type: string;
+      function?: { name: string; arguments: string };
+    };
+    const sdkToolCalls = choice?.message?.tool_calls as SdkFunctionToolCall[] | undefined;
+    const toolCalls = sdkToolCalls
+      ?.filter((tc) => tc.function !== undefined)
+      .map((tc) => ({
+        id: tc.id,
+        name: tc.function!.name,
+        arguments: tc.function!.arguments,
+      }));
+
+    const finishReason = choice?.finish_reason ?? undefined;
+
     this.logger?.logResponse(
       buildCompleteResponseLogFields(
         request,
@@ -120,13 +186,19 @@ export class OpenAiChatAdapter implements ChatModelPort {
           ...(reasoningTokens !== undefined ? { reasoning: reasoningTokens } : {}),
         },
         {
-          finishReason: choice?.finish_reason,
+          finishReason,
           ...(reasoningChars > 0 ? { reasoningChars } : {}),
         },
       ),
     );
 
-    return { content, usage, model: response.model };
+    return {
+      content,
+      usage,
+      model: response.model,
+      ...(toolCalls && toolCalls.length > 0 ? { toolCalls } : {}),
+      ...(finishReason !== undefined ? { finishReason } : {}),
+    };
   }
 
   async *stream(request: ChatRequest): AsyncIterable<ChatStreamChunk> {
@@ -182,13 +254,30 @@ export class OpenAiChatAdapter implements ChatModelPort {
         yield { type: 'reasoning_progress' };
       }
 
+      const toolCallDeltas = choice?.delta?.tool_calls;
+      if (toolCallDeltas) {
+        for (const tc of toolCallDeltas) {
+          yield {
+            type: 'tool_call_delta',
+            index: tc.index,
+            ...(tc.id !== undefined ? { id: tc.id } : {}),
+            ...(tc.function?.name !== undefined && tc.function.name !== ''
+              ? { name: tc.function.name }
+              : {}),
+            ...(tc.function?.arguments !== undefined && tc.function.arguments !== ''
+              ? { argumentsDelta: tc.function.arguments }
+              : {}),
+          };
+        }
+      }
+
       if (choice?.delta?.content) {
         onContentDelta(metrics, choice.delta.content, startTime);
         yield { type: 'content_delta', delta: choice.delta.content };
       }
 
       if (choice?.finish_reason) {
-        yield { type: 'content_stop' };
+        yield { type: 'content_stop', finishReason: choice.finish_reason };
         stopYielded = true;
       }
 
@@ -208,7 +297,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
     }
 
     if (!stopYielded) {
-      yield { type: 'content_stop' };
+      yield { type: 'content_stop', finishReason: 'stop' };
     }
 
     this.logger?.logResponse(
