@@ -180,6 +180,108 @@ test('openAiRequestToFusion options undefined when no options present', () => {
 });
 
 // ---------------------------------------------------------------------------
+// openAiRequestToFusion — multipart content normalization
+// ---------------------------------------------------------------------------
+
+test('openAiRequestToFusion normalizes content array of text parts to joined string', () => {
+  const body: Record<string, unknown> = {
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Hello' },
+          { type: 'text', text: 'World' },
+        ],
+      },
+    ],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, 'Hello\nWorld');
+});
+
+test('openAiRequestToFusion keeps single text part without extra newline', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, 'Hello');
+});
+
+test('openAiRequestToFusion ignores non-text parts such as image_url', () => {
+  const body: Record<string, unknown> = {
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this' },
+          { type: 'image_url', image_url: { url: 'https://example.com/img.png' } },
+        ],
+      },
+    ],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, 'Describe this');
+});
+
+test('openAiRequestToFusion returns empty string for content array with no text parts', () => {
+  const body: Record<string, unknown> = {
+    messages: [
+      {
+        role: 'user',
+        content: [{ type: 'image_url', image_url: { url: 'https://example.com/img.png' } }],
+      },
+    ],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, '');
+});
+
+test('openAiRequestToFusion still passes plain string content through unchanged', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: 'plain text' }],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, 'plain text');
+});
+
+test('openAiRequestToFusion returns empty string for null content', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: null }],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, '');
+});
+
+test('openAiRequestToFusion serializes unexpected object content as JSON instead of [object Object]', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: { unexpected: true } }],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, '{"unexpected":true}');
+});
+
+test('openAiRequestToFusion normalizes content array on system messages', () => {
+  const body: Record<string, unknown> = {
+    messages: [
+      {
+        role: 'system',
+        content: [{ type: 'text', text: 'You are helpful.' }],
+      },
+    ],
+  };
+
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.messages[0].content, 'You are helpful.');
+});
+
+// ---------------------------------------------------------------------------
 // fusionStreamToOpenAiResponse
 // ---------------------------------------------------------------------------
 

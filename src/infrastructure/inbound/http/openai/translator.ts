@@ -11,13 +11,30 @@ import { FusionError } from '../../../../domain/model/fusion-types.js';
 import { errorEventToFusionError, parseCommonRequestFields } from '../shared.js';
 import { encodeOpenAiSSE } from './sse-encoder.js';
 
+function parseMessageContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (content === null || content === undefined) return '';
+  if (Array.isArray(content)) {
+    return content
+      .flatMap((part): string[] => {
+        if (typeof part === 'string') return [part];
+        if (typeof part !== 'object' || part === null) return [];
+        const obj = part as Record<string, unknown>;
+        if (typeof obj.text === 'string' && obj.text.length > 0) return [obj.text];
+        return [];
+      })
+      .join('\n');
+  }
+  return JSON.stringify(content);
+}
+
 function parseIncomingMessage(m: Record<string, unknown>): Message {
   const role = String(m.role ?? 'user');
 
   if (role === 'tool') {
     return {
       role: 'tool',
-      content: typeof m.content === 'string' ? m.content : '',
+      content: parseMessageContent(m.content),
       toolCallId: typeof m.tool_call_id === 'string' ? m.tool_call_id : undefined,
     };
   }
@@ -37,14 +54,14 @@ function parseIncomingMessage(m: Record<string, unknown>): Message {
     );
     return {
       role: 'assistant',
-      content: typeof m.content === 'string' ? m.content : '',
+      content: parseMessageContent(m.content),
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
   }
 
   return {
     role: role as 'system' | 'user' | 'assistant',
-    content: typeof m.content === 'string' ? m.content : String(m.content ?? ''),
+    content: parseMessageContent(m.content),
   };
 }
 
