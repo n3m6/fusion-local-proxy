@@ -7,6 +7,7 @@ import {
 } from '../outbound/llm/openai-completion-adapter.js';
 import { RunFusionUseCase } from '../../application/usecases/run-fusion-use-case.js';
 import { RunAgentUseCase } from '../../application/usecases/run-agent-use-case.js';
+import { AgentSynthesisUseCase } from '../../application/usecases/agent-synthesis-use-case.js';
 import { PanelRunner, type PanelPair } from '../../application/usecases/panel-runner.js';
 import type { ChatModelPort } from '../../domain/ports/chat-model-port.js';
 import { JudgeStep } from '../../application/usecases/judge-step.js';
@@ -87,9 +88,15 @@ export function createApp(): {
   );
 
   // Agent service — wired when an openai-type model is resolvable (dedicated or panel fallback).
+  // Wrapped with AgentSynthesisUseCase so that tool-call turns are relayed verbatim (single agent
+  // drives tools, fired once) while final answer turns are routed through the full fusion ensemble.
   const agentModelRef = configPort.getAgentModel();
   const agentService: AgentService | null = agentModelRef
-    ? new RunAgentUseCase(factory.create(agentModelRef), agentModelRef, loggerPort)
+    ? new AgentSynthesisUseCase(
+        new RunAgentUseCase(factory.create(agentModelRef), agentModelRef, loggerPort),
+        fusionService,
+        loggerPort,
+      )
     : null;
 
   if (!agentModelRef) {

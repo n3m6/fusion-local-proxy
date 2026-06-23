@@ -225,10 +225,10 @@ distinct perspective, amplifying the diversity benefit of the ensemble.
 Two optional roles bypass the full ensemble pipeline for latency-sensitive use
 cases:
 
-| Role           | Endpoint served                                       | Description                                                                                                              |
-| -------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `autocomplete` | `POST /v1/completions`                                | FIM (fill-in-the-middle) text completion for tab autocomplete. Receives `prompt` and optional `suffix`. No deliberation. |
-| `agent`        | `POST /v1/chat/completions` (when `tools` is present) | Single-model tool-calling passthrough for agent mode / file edits. The full fusion ensemble is bypassed.                 |
+| Role           | Endpoint served                                       | Description                                                                                                                                                                                   |
+| -------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `autocomplete` | `POST /v1/completions`                                | FIM (fill-in-the-middle) text completion for tab autocomplete. Receives `prompt` and optional `suffix`. No deliberation.                                                                      |
+| `agent`        | `POST /v1/chat/completions` (when `tools` is present) | Hybrid tool-calling mode: the agent model drives tool calls (fired once per turn), and the final natural-language answer is produced by the full fusion ensemble (panel → judge → synthesis). |
 
 Both roles **must** have `type: "openai"` (they use the OpenAI adapter for
 tool-calls and legacy completions). Both support `thinkingStrength` but not
@@ -447,8 +447,23 @@ Returns `501` when no such model is configured.
 
 ### Agent / tool calling — `POST /v1/chat/completions` with `tools`
 
-When the request body includes a `tools` array, the full ensemble is bypassed
-and the request goes directly to the resolved agent model:
+When the request body includes a `tools` array, a two-phase routing strategy is
+applied:
+
+1. **Tool-call turns** — the agent model drives tool calls exactly as before.
+   Tool call deltas are streamed as `choices[0].delta.tool_calls` chunks. The
+   non-streaming path returns complete `message.tool_calls`. The `finish_reason`
+   reflects `"tool_calls"` as reported by the model.
+2. **Final answer turn** — when the agent emits a natural-language answer (no
+   tool call), that turn is routed through the full fusion ensemble
+   (panel → judge → synthesis). The synthesized response is streamed back to the
+   client as a normal `content_delta` stream.
+
+The routing decision is made on the **first decisive stream event**: a
+`tool_call_delta` means tool turn; a `content_delta` (or an empty stream) means
+answer turn. The agent model is called once on every answer turn and then
+discarded so the ensemble can deliberate — this costs one extra agent preflight
+whose token usage is not added to the reported usage (fusion reports its own).
 
 ```bash
 curl -s http://localhost:3000/v1/chat/completions \
@@ -462,9 +477,8 @@ curl -s http://localhost:3000/v1/chat/completions \
   }'
 ```
 
-Tool call deltas are streamed as `choices[0].delta.tool_calls` chunks. The
-non-streaming path reconstructs and returns complete `message.tool_calls`. The
-`finish_reason` reflects `"tool_calls"` or `"stop"` as reported by the model.
+**Known trade-off:** a model that emits visible prose before a tool call in the
+same turn will be routed to synthesis and its tool call dropped.
 
 ### Models
 
