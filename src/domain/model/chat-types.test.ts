@@ -1,6 +1,7 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ChatStreamChunk, ChatRequest, ChatResponse, TokenUsage } from './chat-types.js';
+import { samplingToOptions, createTimeoutSignal } from './chat-types.js';
 import type { ChatModelPort } from '../ports/chat-model-port.js';
 import type { Message } from './message.js';
 import type { ModelRef } from './fusion-types.js';
@@ -154,5 +155,100 @@ describe('AbortSignal passthrough on stream()', () => {
   test('ChatRequest without options.signal is also valid', () => {
     const request: ChatRequest = makeTestChatRequest();
     assert.equal(request.options, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// samplingToOptions
+// ---------------------------------------------------------------------------
+
+describe('samplingToOptions', () => {
+  test('returns empty object when sampling is undefined', () => {
+    const result = samplingToOptions(undefined);
+    assert.deepEqual(result, {});
+  });
+
+  test('returns empty object when all sampling fields are undefined', () => {
+    const result = samplingToOptions({});
+    assert.deepEqual(result, {});
+  });
+
+  test('copies only defined sampling fields', () => {
+    const result = samplingToOptions({ temperature: 0.7, maxTokens: 512 });
+    assert.equal(result.temperature, 0.7);
+    assert.equal(result.maxTokens, 512);
+    assert.equal('topP' in result, false);
+    assert.equal('topK' in result, false);
+    assert.equal('stopSequences' in result, false);
+    assert.equal('metadata' in result, false);
+  });
+
+  test('copies topP when defined', () => {
+    const result = samplingToOptions({ topP: 0.9 });
+    assert.equal(result.topP, 0.9);
+    assert.equal('temperature' in result, false);
+  });
+
+  test('copies topK when defined', () => {
+    const result = samplingToOptions({ topK: 40 });
+    assert.equal(result.topK, 40);
+  });
+
+  test('copies stopSequences when defined', () => {
+    const result = samplingToOptions({ stopSequences: ['END', '###'] });
+    assert.deepEqual(result.stopSequences, ['END', '###']);
+  });
+
+  test('copies metadata when defined', () => {
+    const result = samplingToOptions({ metadata: { user_id: 'u1' } });
+    assert.deepEqual(result.metadata, { user_id: 'u1' });
+  });
+
+  test('copies all fields when all are defined', () => {
+    const sampling = {
+      temperature: 0.5,
+      maxTokens: 256,
+      topP: 0.95,
+      topK: 20,
+      stopSequences: ['stop'],
+      metadata: { user_id: 'u2' },
+    };
+    const result = samplingToOptions(sampling);
+    assert.equal(result.temperature, 0.5);
+    assert.equal(result.maxTokens, 256);
+    assert.equal(result.topP, 0.95);
+    assert.equal(result.topK, 20);
+    assert.deepEqual(result.stopSequences, ['stop']);
+    assert.deepEqual(result.metadata, { user_id: 'u2' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createTimeoutSignal
+// ---------------------------------------------------------------------------
+
+describe('createTimeoutSignal', () => {
+  test('returns undefined when timeoutMs is 0', () => {
+    const signal = createTimeoutSignal(0);
+    assert.equal(signal, undefined);
+  });
+
+  test('returns undefined when timeoutMs is negative', () => {
+    const signal = createTimeoutSignal(-100);
+    assert.equal(signal, undefined);
+  });
+
+  test('returns an AbortSignal when timeoutMs is positive', () => {
+    const signal = createTimeoutSignal(5000);
+    assert.ok(signal instanceof AbortSignal, 'expected AbortSignal');
+    assert.equal(signal.aborted, false, 'signal should not be immediately aborted');
+  });
+
+  test('signal eventually aborts after timeoutMs', async () => {
+    const signal = createTimeoutSignal(50);
+    assert.ok(signal instanceof AbortSignal);
+    // Wait longer than the timeout
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(signal!.aborted, true, 'signal should be aborted after timeout');
   });
 });

@@ -994,3 +994,33 @@ test('SSE encoder content_block_stop has correct shape', async () => {
   assert.equal(payload.type, 'content_block_stop');
   assert.equal(payload.index, 0);
 });
+
+// ---------------------------------------------------------------------------
+// fusionStreamToAnthropicResponse: stream ending without a done event
+// (silent-partial asymmetry: unlike OpenAI which throws incomplete_stream,
+//  the Anthropic buffered path silently returns partial text with zero usage)
+// ---------------------------------------------------------------------------
+
+test('fusionStreamToAnthropicResponse with no done event returns partial type:message with zero usage', async () => {
+  const events: FusionStreamEvent[] = [
+    { type: 'content_delta', delta: 'partial text' },
+    { type: 'content_stop' },
+    // No 'done' event — stream ends abruptly
+  ];
+
+  const result = (await fusionStreamToAnthropicResponse(
+    await asyncIterableFrom(events),
+    'claude-3-opus-20240229',
+  )) as Record<string, unknown>;
+
+  assert.equal(result.type, 'message', 'must return type:message even for incomplete stream');
+  assert.equal(result.role, 'assistant');
+  const content = result.content as Array<{ type: string; text: string }>;
+  assert.ok(Array.isArray(content));
+  assert.equal(content[0].type, 'text');
+  assert.equal(content[0].text, 'partial text', 'must include accumulated text');
+
+  const usage = result.usage as { input_tokens: number; output_tokens: number };
+  assert.equal(usage.input_tokens, 0, 'input_tokens must be 0 when done event absent');
+  assert.equal(usage.output_tokens, 0, 'output_tokens must be 0 when done event absent');
+});

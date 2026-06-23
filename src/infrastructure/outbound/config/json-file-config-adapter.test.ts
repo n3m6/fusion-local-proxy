@@ -1104,3 +1104,149 @@ test('JsonFileConfigAdapter throws on empty env var value', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// getJudgeModel() throws when judge provider env var is missing or empty
+// ---------------------------------------------------------------------------
+
+test('getJudgeModel() throws when judge provider env var is not set', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'gpt-4o-judge',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'JUDGE_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-synth';
+    delete process.env.JUDGE_API_KEY;
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      assert.throws(
+        () => adapter.getJudgeModel(),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok((err as Error).message.includes('JUDGE_API_KEY'));
+          return true;
+        },
+      );
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});
+
+test('getJudgeModel() throws when judge provider env var is empty string', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'judge',
+          model: 'gpt-4o-judge',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'JUDGE_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-synth';
+    process.env.JUDGE_API_KEY = '';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      assert.throws(
+        () => adapter.getJudgeModel(),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok((err as Error).message.includes('JUDGE_API_KEY'));
+          return true;
+        },
+      );
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.JUDGE_API_KEY;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAutocompleteModel() returns null when first panel is non-openai
+// ---------------------------------------------------------------------------
+
+test('getAutocompleteModel() returns null when only panel is anthropic type', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'anthropic',
+          role: 'panel',
+          model: 'claude-haiku',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
+        {
+          type: 'anthropic',
+          role: 'synthesizer',
+          model: 'claude-sonnet',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    });
+
+    process.env.ANTHROPIC_API_KEY = 'sk-ant';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      assert.equal(adapter.getAutocompleteModel(), null, 'must return null when no openai panel');
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY;
+    }
+  });
+});
+
+test('getAutocompleteModel() returns null when there is no panel at all', () => {
+  withTempDir((dir) => {
+    const path = writeConfig(dir, {
+      providers: [
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    });
+
+    process.env.OPENAI_API_KEY = 'sk-test';
+    try {
+      const adapter = new JsonFileConfigAdapter(path);
+      assert.equal(adapter.getAutocompleteModel(), null, 'must return null when no panel');
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+});

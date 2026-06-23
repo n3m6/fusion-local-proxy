@@ -448,3 +448,51 @@ test('fusionStreamToOpenAiSSE handles empty stream with [DONE]', async () => {
   assert.equal(strings.length, 1);
   assert.equal(strings[0].trim(), 'data: [DONE]');
 });
+
+// ---------------------------------------------------------------------------
+// openAiRequestToFusion — top_p and stop field mapping
+// ---------------------------------------------------------------------------
+
+test('openAiRequestToFusion maps top_p to topP on FusionRequest', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: 'hi' }],
+    top_p: 0.85,
+  };
+  const result = openAiRequestToFusion(body);
+  assert.equal(result.topP, 0.85);
+});
+
+test('openAiRequestToFusion does not include topP when top_p absent', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: 'hi' }],
+  };
+  const result = openAiRequestToFusion(body);
+  assert.equal('topP' in result, false);
+});
+
+test('openAiRequestToFusion wraps stop string in stopSequences array', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: 'hi' }],
+    stop: '\n',
+  };
+  const result = openAiRequestToFusion(body);
+  assert.deepEqual(result.stopSequences, ['\n']);
+});
+
+test('openAiRequestToFusion filters stop array to string values', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: 'hi' }],
+    stop: ['END', 42, 'STOP', null],
+  };
+  const result = openAiRequestToFusion(body);
+  assert.deepEqual(result.stopSequences, ['END', 'STOP']);
+});
+
+test('openAiRequestToFusion omits stopSequences for empty stop array', () => {
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: 'hi' }],
+    stop: [],
+  };
+  const result = openAiRequestToFusion(body);
+  assert.equal('stopSequences' in result, false, 'empty stop array must not produce stopSequences');
+});

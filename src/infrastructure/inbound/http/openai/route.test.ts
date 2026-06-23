@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { createOpenAiRoute } from './route.js';
 import type { FusionService } from '../../../../application/ports/fusion-service.js';
+import type { AgentService } from '../../../../application/ports/agent-service.js';
 import { FusionError, type FusionRequest } from '../../../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
 
@@ -54,10 +55,31 @@ function stubFusionServiceThatThrows(error: Error): FusionService {
   };
 }
 
-function createApp(fusionService: FusionService): Hono {
+function createApp(fusionService: FusionService, agentService?: AgentService | null): Hono {
   const app = new Hono();
-  app.post('/v1/chat/completions', createOpenAiRoute(fusionService));
+  app.post('/v1/chat/completions', createOpenAiRoute(fusionService, agentService));
   return app;
+}
+
+function stubAgentService(events?: FusionStreamEvent[]): AgentService & { calls: FusionRequest[] } {
+  const streamEvents = events ?? [
+    { type: 'content_delta', delta: 'tool response' },
+    { type: 'content_stop' },
+    {
+      type: 'done',
+      usage: { promptTokens: 5, completionTokens: 10, totalTokens: 15 },
+      failedModels: [],
+      model: 'gpt-4o',
+    },
+  ];
+  const calls: FusionRequest[] = [];
+  return {
+    calls,
+    runAgent(request: FusionRequest): AsyncIterable<FusionStreamEvent> {
+      calls.push(request);
+      return asyncIterableOf(streamEvents);
+    },
+  };
 }
 
 async function postJson(app: Hono, body: unknown): Promise<Response> {
@@ -244,4 +266,94 @@ test('POST /v1/chat/completions streaming with generic (non-FusionError) thrown 
   const body = await res.text();
   assert.ok(body.includes('internal_error'), 'SSE body must contain internal_error code');
   assert.ok(!body.includes('[DONE]'), 'SSE stream must not contain [DONE] after a generic error');
+});
+
+// ---------------------------------------------------------------------------
+// Agent / tool-calling path
+// ---------------------------------------------------------------------------
+
+test('POST /v1/chat/completions with tools but no agentService returns 501 agent_not_configured', async () => {
+  const app = createApp(stubFusionService()); // no agentService
+
+  const res = await postJson(app, {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+    tools: [{ type: 'function', function: { name: 'search', description: 'Search the web' } }],
+  });
+
+  assert.equal(res.status, 501);
+  const json = (await res.json()) as Record<string, unknown>;
+  const error = json.error as Record<string, unknown>;
+  assert.ok(error, 'must contain an error object');
+  assert.equal(error.code, 'agent_not_configured');
+});
+
+test('POST /v1/chat/completions with tools and empty tools array does NOT return 501', async () => {
+  // An empty tools array should not trigger the agent path
+  const app = createApp(stubFusionService());
+
+  const res = await postJson(app, {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+    tools: [],
+  });
+
+  // Should proceed normally with fusion service
+  assert.equal(res.status, 200);
+});
+
+test('POST /v1/chat/completions with tools and agentService calls runAgent not runFusion', async () => {
+  const fusionService = stubFusionService();
+  const agentService = stubAgentService();
+
+  // Track whether runFusion was called
+  let fusionCalled = false;
+  const trackingFusionService: FusionService = {
+    runFusion(request: FusionRequest): AsyncIterable<FusionStreamEvent> {
+      fusionCalled = true;
+      return fusionService.runFusion(request);
+    },
+  };
+
+  const app = createApp(trackingFusionService, agentService);
+
+  await postJson(app, {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+    tools: [{ type: 'function', function: { name: 'search' } }],
+  });
+
+  assert.equal(fusionCalled, false, 'runFusion must NOT be called when tools are present');
+  assert.equal(agentService.calls.length, 1, 'runAgent must be called exactly once');
+});
+
+test('POST /v1/chat/completions without tools and agentService calls runFusion not runAgent', async () => {
+  const fusionService = stubFusionService();
+  const agentService = stubAgentService();
+
+  const app = createApp(fusionService, agentService);
+
+  await postJson(app, {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+    // No tools
+  });
+
+  assert.equal(agentService.calls.length, 0, 'runAgent must NOT be called when no tools');
+});
+
+test('POST /v1/chat/completions with tools and agentService returns 200 non-streaming response', async () => {
+  const fusionService = stubFusionService();
+  const agentService = stubAgentService();
+  const app = createApp(fusionService, agentService);
+
+  const res = await postJson(app, {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+    tools: [{ type: 'function', function: { name: 'search' } }],
+  });
+
+  assert.equal(res.status, 200);
+  const json = (await res.json()) as Record<string, unknown>;
+  assert.equal(json.object, 'chat.completion');
 });

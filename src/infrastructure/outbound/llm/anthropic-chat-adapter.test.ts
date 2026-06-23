@@ -959,3 +959,133 @@ test('Stream does not expose output_config when responseFormat is not json_objec
   assert.ok(capturedParams.value);
   assert.equal('output_config' in capturedParams.value!, false);
 });
+
+// ---------------------------------------------------------------------------
+// buildCreateParams: outbound option mapping
+// ---------------------------------------------------------------------------
+
+test('complete() forwards top_p, top_k, stop_sequences, metadata to SDK params', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'ok' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-3',
+    };
+  });
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
+
+  await adapter.complete(
+    makeRequest({
+      options: {
+        topP: 0.9,
+        topK: 40,
+        stopSequences: ['END', '\n'],
+        metadata: { user_id: 'user-123' },
+      },
+    }),
+  );
+
+  const p = capturedParams.value!;
+  assert.equal(p.top_p, 0.9);
+  assert.equal(p.top_k, 40);
+  assert.deepEqual(p.stop_sequences, ['END', '\n']);
+  assert.deepEqual(p.metadata, { user_id: 'user-123' });
+});
+
+test('complete() omits top_p, top_k, stop_sequences, metadata when not provided', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = stubAnthropicClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      content: [{ type: 'text', text: 'ok' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude-3',
+    };
+  });
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
+
+  await adapter.complete(makeRequest({ options: {} }));
+
+  const p = capturedParams.value!;
+  assert.equal('top_p' in p, false, 'top_p must be absent');
+  assert.equal('top_k' in p, false, 'top_k must be absent');
+  assert.equal('stop_sequences' in p, false, 'stop_sequences must be absent');
+  assert.equal('metadata' in p, false, 'metadata must be absent');
+});
+
+// ---------------------------------------------------------------------------
+// complete(): no-text content block → warn + throw
+// ---------------------------------------------------------------------------
+
+test('complete() logs anthropic_no_text_content_block warn and throws when no text block', async () => {
+  const warnLogs: Array<{ event: string; fields: unknown }> = [];
+  const stubLogger = {
+    logStageStart: () => {},
+    logStageEnd: () => {},
+    logFailedModels: () => {},
+    logError: () => {},
+    logRequest: () => {},
+    logResponse: () => {},
+    log(level: string, event: string, fields: unknown) {
+      if (level === 'warn') warnLogs.push({ event, fields });
+    },
+  };
+
+  // Return response with no text block (only tool_use)
+  const client = stubAnthropicClient(async () => ({
+    content: [{ type: 'tool_use' as const, id: 'tu1', name: 'search', input: {} }],
+    usage: { input_tokens: 5, output_tokens: 2 },
+    model: 'claude-3',
+  }));
+
+  const adapter = new AnthropicChatAdapter(
+    client,
+    STUB_CONFIG,
+    stubLogger as import('../../../domain/ports/logger-port.js').LoggerPort,
+  );
+
+  await assert.rejects(
+    async () => {
+      await adapter.complete(makeRequest());
+    },
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok((err as Error).message.includes('no text content block'));
+      return true;
+    },
+  );
+
+  const noTextWarn = warnLogs.find((l) => l.event === 'anthropic_no_text_content_block');
+  assert.ok(noTextWarn, 'must log anthropic_no_text_content_block warn before throwing');
+});
+
+// ---------------------------------------------------------------------------
+// stream(): no message_stop → fallback content_stop, no usage chunk
+// ---------------------------------------------------------------------------
+
+test('stream() without message_stop yields fallback content_stop but no usage chunk', async () => {
+  const client = stubAnthropicClient(
+    async () => ({ content: [], usage: { input_tokens: 0, output_tokens: 0 }, model: 'claude-3' }),
+    () =>
+      asyncIterable([
+        { type: 'message_start', message: { usage: { input_tokens: 3 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hello' } },
+        // No message_stop event
+      ]),
+  );
+
+  const adapter = new AnthropicChatAdapter(client, STUB_CONFIG);
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(makeRequest())) {
+    chunks.push(chunk);
+  }
+
+  const stopChunks = chunks.filter((c) => c.type === 'content_stop');
+  assert.equal(stopChunks.length, 1, 'fallback content_stop must be emitted exactly once');
+
+  const usageChunks = chunks.filter((c) => c.type === 'usage');
+  assert.equal(usageChunks.length, 0, 'no usage chunk must be emitted when message_stop is absent');
+});

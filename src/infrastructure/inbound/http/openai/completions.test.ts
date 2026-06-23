@@ -11,6 +11,10 @@ import type { TextCompletionPort } from '../../../../domain/ports/text-completio
 import { parseTextCompletionRequest, textCompletionToResponse } from './completions-translator.js';
 import { encodeTextCompletionSSE } from './completions-sse-encoder.js';
 import { createCompletionsRoute } from './completions-route.js';
+import type { FusionService } from '../../../../application/ports/fusion-service.js';
+import type { FusionRequest } from '../../../../domain/model/fusion-types.js';
+import type { FusionStreamEvent } from '../../../../domain/model/stream-types.js';
+import { createServer } from '../server.js';
 
 const MODEL_REF: ModelRef = {
   provider: 'openai',
@@ -191,6 +195,226 @@ describe('createCompletionsRoute — not configured', () => {
     app.post('/v1/completions', createCompletionsRoute(stubTextCompletionPort(), MODEL_REF));
 
     const res = await postJson(app, { model: 'fusion', prompt: 'x' });
+    assert.equal(res.status, 200);
+    const json = (await res.json()) as Record<string, unknown>;
+    assert.equal(json.object, 'text_completion');
+  });
+});
+
+function postCompletionsJson(app: Hono, body: unknown): Promise<Response> {
+  return Promise.resolve(
+    app.request('/v1/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// createCompletionsRoute — streaming path
+// ---------------------------------------------------------------------------
+
+describe('createCompletionsRoute — streaming', () => {
+  function streamingPort(): TextCompletionPort {
+    return {
+      async complete(_request: TextCompletionRequest): Promise<TextCompletionResponse> {
+        return {
+          text: 'non-streaming',
+          model: 'm',
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      },
+      async *stream(_request: TextCompletionRequest): AsyncIterable<TextCompletionChunk> {
+        yield { type: 'text_delta', delta: 'Hello' };
+        yield { type: 'text_delta', delta: ' world' };
+        yield { type: 'text_stop' };
+      },
+    };
+  }
+
+  test('stream:true returns text/event-stream content type', async () => {
+    const app = new Hono();
+    app.post('/v1/completions', createCompletionsRoute(streamingPort(), MODEL_REF));
+
+    const res = await postCompletionsJson(app, { prompt: 'x', stream: true });
+    assert.equal(res.status, 200);
+    const ct = res.headers.get('Content-Type') ?? '';
+    assert.ok(ct.includes('text/event-stream'), `expected event-stream, got ${ct}`);
+  });
+
+  test('stream:true response body contains text_delta chunks and [DONE]', async () => {
+    const app = new Hono();
+    app.post('/v1/completions', createCompletionsRoute(streamingPort(), MODEL_REF));
+
+    const res = await postCompletionsJson(app, { prompt: 'x', stream: true });
+    const body = await res.text();
+    assert.ok(body.includes('text_completion'), 'must contain text_completion chunks');
+    assert.ok(body.includes('"Hello"'), 'must contain first delta');
+    assert.ok(body.includes('[DONE]'), 'must terminate with [DONE]');
+  });
+
+  test('stream:true with port throw writes SSE error payload, no [DONE]', async () => {
+    const throwingPort: TextCompletionPort = {
+      async complete(_r: TextCompletionRequest): Promise<TextCompletionResponse> {
+        return {
+          text: '',
+          model: '',
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        };
+      },
+      async *stream(_r: TextCompletionRequest): AsyncIterable<TextCompletionChunk> {
+        throw new Error('upstream error');
+      },
+    };
+
+    const app = new Hono();
+    app.post('/v1/completions', createCompletionsRoute(throwingPort, MODEL_REF));
+
+    const res = await postCompletionsJson(app, { prompt: 'x', stream: true });
+    const body = await res.text();
+    assert.ok(body.includes('Internal server error'), 'must include error message in SSE body');
+    assert.ok(!body.includes('[DONE]'), 'must not emit [DONE] after error');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createCompletionsRoute — non-streaming error paths
+// ---------------------------------------------------------------------------
+
+describe('createCompletionsRoute — error paths', () => {
+  test('invalid JSON returns 400', async () => {
+    const app = new Hono();
+    app.post(
+      '/v1/completions',
+      createCompletionsRoute(
+        {
+          async complete(): Promise<TextCompletionResponse> {
+            return {
+              text: '',
+              model: '',
+              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            };
+          },
+          async *stream(): AsyncIterable<TextCompletionChunk> {},
+        },
+        MODEL_REF,
+      ),
+    );
+
+    const res = await app.request('/v1/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'not valid json',
+    });
+
+    assert.equal(res.status, 400);
+    const json = (await res.json()) as Record<string, unknown>;
+    const error = json.error as Record<string, unknown>;
+    assert.ok(error.message, 'must have error.message');
+  });
+
+  test('port.complete() throw returns 500', async () => {
+    const throwingPort: TextCompletionPort = {
+      async complete(_r: TextCompletionRequest): Promise<TextCompletionResponse> {
+        throw new Error('LLM unavailable');
+      },
+      async *stream(_r: TextCompletionRequest): AsyncIterable<TextCompletionChunk> {},
+    };
+
+    const app = new Hono();
+    app.post('/v1/completions', createCompletionsRoute(throwingPort, MODEL_REF));
+
+    const res = await postCompletionsJson(app, { prompt: 'x' });
+    assert.equal(res.status, 500);
+    const json = (await res.json()) as Record<string, unknown>;
+    const error = json.error as Record<string, unknown>;
+    assert.ok(error.message, 'must have error.message');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createServer — /v1/completions routing
+// ---------------------------------------------------------------------------
+
+function makeStubFusionService(): FusionService {
+  return {
+    runFusion(_request: FusionRequest): AsyncIterable<FusionStreamEvent> {
+      return {
+        [Symbol.asyncIterator]() {
+          const events: FusionStreamEvent[] = [
+            { type: 'content_delta', delta: 'hi' },
+            { type: 'content_stop' },
+            { type: 'done', model: 'gpt-4o', failedModels: [] },
+          ];
+          let i = 0;
+          return {
+            async next() {
+              if (i < events.length) return { value: events[i++]!, done: false };
+              return { value: undefined as never, done: true };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+function makeStubConfigPort(): import('../../../../domain/ports/config-port.js').ConfigPort {
+  return {
+    getPanelModels: () => [],
+    getJudgeModel: () => null,
+    getSynthesizerModel: () => ({
+      provider: 'openai' as const,
+      model: 'gpt-4o',
+      baseURL: '',
+      apiKey: '',
+    }),
+    getTimeoutMs: () => 30000,
+    getAgentModel: () => null,
+    getAutocompleteModel: () => null,
+  };
+}
+
+describe('createServer — /v1/completions mount', () => {
+  test('returns 501 when textCompletionPort is not provided to createServer', async () => {
+    const app = createServer(makeStubFusionService(), makeStubConfigPort());
+
+    const res = await app.request('/v1/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'hello' }),
+    });
+
+    assert.equal(res.status, 501);
+    const json = (await res.json()) as Record<string, unknown>;
+    const error = json.error as Record<string, unknown>;
+    assert.equal(error.code, 'autocomplete_not_configured');
+  });
+
+  test('returns 200 to POST /v1/completions when textCompletionPort is provided', async () => {
+    const stubPort: TextCompletionPort = {
+      async complete(_r: TextCompletionRequest): Promise<TextCompletionResponse> {
+        return {
+          text: 'done',
+          model: 'm',
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      },
+      async *stream(_r: TextCompletionRequest): AsyncIterable<TextCompletionChunk> {},
+    };
+
+    const app = createServer(makeStubFusionService(), makeStubConfigPort(), {
+      textCompletionPort: stubPort,
+      autocompleteModel: MODEL_REF,
+    });
+
+    const res = await app.request('/v1/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'hello' }),
+    });
+
     assert.equal(res.status, 200);
     const json = (await res.json()) as Record<string, unknown>;
     assert.equal(json.object, 'text_completion');

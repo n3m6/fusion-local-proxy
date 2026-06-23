@@ -1034,6 +1034,159 @@ test('fusion_run_end log includes totalTokens and tokensByStage from all stages'
   });
 });
 
+// — synthesizer throw rejects runFusion and skips fusion_run_end —
+test('synthesizer throw rejects runFusion and does NOT log fusion_run_end', async () => {
+  const throwingSynth: StubSynthesizeStep = {
+    _synthesizeCalls: [],
+    async *synthesize(panelResults, originalMessages, analysis, _requestId, sampling) {
+      throwingSynth._synthesizeCalls.push({ panelResults, originalMessages, analysis, sampling });
+      throw new Error('synthesizer crashed unexpectedly');
+    },
+  };
+
+  const panelRunner = stubPanelRunner() as unknown as PanelRunner;
+  const judgeStep = stubJudgeStep() as unknown as JudgeStep;
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    panelRunner,
+    judgeStep,
+    throwingSynth as unknown as SynthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+  );
+
+  await assert.rejects(
+    async () => {
+      await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+    },
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal((err as Error).message, 'synthesizer crashed unexpectedly');
+      return true;
+    },
+  );
+
+  const logCalls = (loggerPort as unknown as StubLoggerPort)._calls;
+  const loggedEvents = logCalls.filter((c) => c.method === 'log').map((c) => c.args[1] as string);
+  assert.ok(
+    !loggedEvents.includes('fusion_run_end'),
+    'fusion_run_end must NOT be logged when synthesizer throws',
+  );
+});
+
+// — requestId propagation: same UUID forwarded to all three stages —
+test('same requestId is forwarded to panel, judge, and synthesize stages', async () => {
+  const capturedRequestIds: { panel?: string; judge?: string; synth?: string } = {};
+
+  const capturingPanel = {
+    _lastMessages: null as Message[] | null,
+    _lastTimeoutMs: -1,
+    _lastSampling: undefined as unknown,
+    _callCount: 0,
+    async run(
+      messages: Message[],
+      timeoutMs: number,
+      requestId?: string,
+      sampling?: { temperature?: number; maxTokens?: number },
+    ): Promise<{
+      results: (typeof samplePanelResult)[];
+      failedModels: (typeof sampleFailedModel)[];
+      usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+    }> {
+      capturingPanel._callCount++;
+      capturingPanel._lastMessages = messages;
+      capturingPanel._lastTimeoutMs = timeoutMs;
+      capturingPanel._lastSampling = sampling;
+      capturedRequestIds.panel = requestId;
+      return {
+        results: [samplePanelResult],
+        failedModels: [],
+        usage: { promptTokens: 5, completionTokens: 3, totalTokens: 8 },
+      };
+    },
+  };
+
+  const capturingJudge = {
+    _analyzeCalls: [] as Array<{
+      panelResults: (typeof samplePanelResult)[];
+      originalMessages: Message[];
+      timeoutMs: number;
+    }>,
+    async analyze(
+      panelResults: (typeof samplePanelResult)[],
+      originalMessages: Message[],
+      timeoutMs: number,
+      requestId?: string,
+    ): Promise<{
+      analysis: typeof sampleAnalysis | null;
+      usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+    }> {
+      capturingJudge._analyzeCalls.push({ panelResults, originalMessages, timeoutMs });
+      capturedRequestIds.judge = requestId;
+      return { analysis: sampleAnalysis };
+    },
+  };
+
+  const capturingSynth = {
+    _synthesizeCalls: [] as Array<{
+      panelResults: (typeof samplePanelResult)[];
+      originalMessages: Message[];
+      analysis: typeof sampleAnalysis | null;
+      sampling: unknown;
+    }>,
+    async *synthesize(
+      panelResults: (typeof samplePanelResult)[],
+      originalMessages: Message[],
+      analysis: typeof sampleAnalysis | null,
+      requestId?: string,
+      sampling?: { temperature?: number; maxTokens?: number },
+    ): AsyncIterable<FusionStreamEvent> {
+      capturingSynth._synthesizeCalls.push({ panelResults, originalMessages, analysis, sampling });
+      capturedRequestIds.synth = requestId;
+      yield { type: 'content_delta', delta: 'done' };
+      yield { type: 'content_stop' };
+      yield {
+        type: 'done',
+        model: 'test',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      };
+    },
+  };
+
+  const configPort = stubConfigPort() as ConfigPort;
+  const loggerPort = stubLoggerPort();
+  const clockPort = stubClockPort([0]);
+
+  const useCase = new RunFusionUseCase(
+    capturingPanel as unknown as PanelRunner,
+    capturingJudge as unknown as JudgeStep,
+    capturingSynth as unknown as SynthesizeStep,
+    configPort,
+    loggerPort,
+    clockPort,
+  );
+
+  await collectEvents(useCase.runFusion({ messages: [{ role: 'user', content: 'x' }] }));
+
+  assert.ok(capturedRequestIds.panel !== undefined, 'panel must receive a requestId');
+  assert.ok(capturedRequestIds.judge !== undefined, 'judge must receive a requestId');
+  assert.ok(capturedRequestIds.synth !== undefined, 'synth must receive a requestId');
+  assert.equal(
+    capturedRequestIds.panel,
+    capturedRequestIds.judge,
+    'panel and judge must share the same requestId',
+  );
+  assert.equal(
+    capturedRequestIds.judge,
+    capturedRequestIds.synth,
+    'judge and synth must share the same requestId',
+  );
+});
+
 // 20. fusion_run_end surfaces per-stage and aggregate reasoning tokens
 test('fusion_run_end log surfaces reasoning tokens per stage and in the cost block', async () => {
   const panelMeta: PanelMeta = {

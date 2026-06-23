@@ -1794,3 +1794,460 @@ test('OpenAiChatAdapter maps a valid tool message to tool_call_id', async () => 
   assert.equal(sdkMessages[0]?.role, 'tool');
   assert.equal(sdkMessages[0]?.tool_call_id, 'call_abc123');
 });
+
+// ---------------------------------------------------------------------------
+// Tool-calling — request mapping (tools + toolChoice)
+// ---------------------------------------------------------------------------
+
+test('OpenAiChatAdapter.complete() maps tools to SDK function format', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [
+        { index: 0, message: { role: 'assistant', content: null }, finish_reason: 'tool_calls' },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+    options: {
+      tools: [
+        {
+          type: 'function',
+          name: 'search',
+          description: 'Search the web',
+          parameters: { type: 'object' },
+        },
+      ],
+    },
+  };
+
+  await adapter.complete(request);
+
+  const params = capturedParams.value!;
+  const tools = params.tools as Array<Record<string, unknown>>;
+  assert.ok(Array.isArray(tools) && tools.length === 1, 'tools must be forwarded');
+  assert.equal(tools[0].type, 'function');
+  const fn = tools[0].function as Record<string, unknown>;
+  assert.equal(fn.name, 'search');
+  assert.equal(fn.description, 'Search the web');
+  assert.deepEqual(fn.parameters, { type: 'object' });
+});
+
+test('OpenAiChatAdapter.complete() passes toolChoice: "none"', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: null }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+    options: {
+      tools: [{ type: 'function', name: 'fn' }],
+      toolChoice: 'none',
+    },
+  });
+
+  assert.equal(capturedParams.value!.tool_choice, 'none');
+});
+
+test('OpenAiChatAdapter.complete() passes toolChoice: "auto"', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: null }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+    options: { tools: [{ type: 'function', name: 'fn' }], toolChoice: 'auto' },
+  });
+
+  assert.equal(capturedParams.value!.tool_choice, 'auto');
+});
+
+test('OpenAiChatAdapter.complete() passes toolChoice: "required"', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: null }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+    options: { tools: [{ type: 'function', name: 'fn' }], toolChoice: 'required' },
+  });
+
+  assert.equal(capturedParams.value!.tool_choice, 'required');
+});
+
+test('OpenAiChatAdapter.complete() passes named toolChoice as object', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: null }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+    options: {
+      tools: [{ type: 'function', name: 'search' }],
+      toolChoice: { type: 'function', function: { name: 'search' } },
+    },
+  });
+
+  const tc = capturedParams.value!.tool_choice as Record<string, unknown>;
+  assert.equal(tc.type, 'function');
+  const fn = tc.function as Record<string, unknown>;
+  assert.equal(fn.name, 'search');
+});
+
+test('OpenAiChatAdapter.complete() maps assistant toolCalls to SDK tool_calls with content null', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: '' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  await adapter.complete({
+    messages: [
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [{ id: 'call_1', name: 'search', arguments: '{"q":"hi"}' }],
+      },
+    ],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+  });
+
+  const sdkMessages = capturedParams.value!.messages as Array<Record<string, unknown>>;
+  const assistantMsg = sdkMessages[0]!;
+  assert.equal(assistantMsg.role, 'assistant');
+  assert.equal(assistantMsg.content, null, 'empty content must map to null in SDK message');
+  const sdkToolCalls = assistantMsg.tool_calls as Array<Record<string, unknown>>;
+  assert.ok(Array.isArray(sdkToolCalls) && sdkToolCalls.length === 1);
+  assert.equal(sdkToolCalls[0].id, 'call_1');
+  assert.equal(sdkToolCalls[0].type, 'function');
+  const sdkFn = sdkToolCalls[0].function as Record<string, unknown>;
+  assert.equal(sdkFn.name, 'search');
+  assert.equal(sdkFn.arguments, '{"q":"hi"}');
+});
+
+// ---------------------------------------------------------------------------
+// Tool-calling — response mapping (complete)
+// ---------------------------------------------------------------------------
+
+test('OpenAiChatAdapter.complete() maps SDK tool_calls in response to domain toolCalls', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'gpt-4o',
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'search', arguments: '{"q":"TypeScript"}' },
+            },
+            {
+              id: 'call_2',
+              type: 'function',
+              function: { name: 'lookup', arguments: '{"id":42}' },
+            },
+          ],
+        },
+        finish_reason: 'tool_calls',
+      },
+    ],
+    usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const response = await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+  });
+
+  assert.ok(response.toolCalls, 'toolCalls must be present');
+  assert.equal(response.toolCalls!.length, 2);
+  assert.equal(response.toolCalls![0].id, 'call_1');
+  assert.equal(response.toolCalls![0].name, 'search');
+  assert.equal(response.toolCalls![0].arguments, '{"q":"TypeScript"}');
+  assert.equal(response.toolCalls![1].id, 'call_2');
+});
+
+test('OpenAiChatAdapter.complete() omits toolCalls from response when not present', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'gpt-4o',
+    choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const response = await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+  });
+
+  assert.equal('toolCalls' in response, false, 'toolCalls must be absent when not in SDK response');
+});
+
+test('OpenAiChatAdapter.complete() propagates finishReason from SDK', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'gpt-4o',
+    choices: [
+      { index: 0, message: { role: 'assistant', content: null }, finish_reason: 'tool_calls' },
+    ],
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const response = await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+  });
+
+  assert.equal(response.finishReason, 'tool_calls');
+});
+
+test('OpenAiChatAdapter.complete() omits finishReason when finish_reason is absent', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'gpt-4o',
+    choices: [{ index: 0, message: { role: 'assistant', content: 'ok' } }],
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const response = await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+  });
+
+  assert.equal('finishReason' in response, false, 'finishReason must be absent when not provided');
+});
+
+// ---------------------------------------------------------------------------
+// Tool-calling — stream() tool_call_delta
+// ---------------------------------------------------------------------------
+
+test('OpenAiChatAdapter.stream() emits tool_call_delta chunks for tool_calls in delta', async () => {
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-tc1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [{ index: 0, id: 'call_1', function: { name: 'search', arguments: '' } }],
+          } as unknown as NonNullable<NonNullable<MockStreamChunk['choices']>[0]['delta']>,
+          finish_reason: null,
+        },
+      ],
+    },
+    {
+      id: 'chatcmpl-tc1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [{ index: 0, function: { name: '', arguments: '{"q":"TypeScript"}' } }],
+          } as unknown as NonNullable<NonNullable<MockStreamChunk['choices']>[0]['delta']>,
+          finish_reason: null,
+        },
+      ],
+    },
+    {
+      id: 'chatcmpl-tc1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+      usage: { prompt_tokens: 5, completion_tokens: 15, total_tokens: 20 },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  const toolCallDeltas = chunks.filter((c) => c.type === 'tool_call_delta');
+  assert.ok(toolCallDeltas.length >= 1, 'must emit at least one tool_call_delta');
+
+  // First tool_call_delta should have the id and name from the first chunk
+  const first = toolCallDeltas[0] as {
+    type: 'tool_call_delta';
+    index: number;
+    id?: string;
+    name?: string;
+    argumentsDelta?: string;
+  };
+  assert.equal(first.index, 0);
+  assert.equal(first.id, 'call_1');
+  assert.equal(first.name, 'search');
+
+  // Second tool_call_delta should have the arguments delta
+  const second = toolCallDeltas[1] as {
+    type: 'tool_call_delta';
+    index: number;
+    argumentsDelta?: string;
+  };
+  assert.equal(second.index, 0);
+  assert.equal(second.argumentsDelta, '{"q":"TypeScript"}');
+  assert.equal('name' in second, false, 'empty name must be omitted from tool_call_delta');
+});
+
+test('OpenAiChatAdapter.stream() content_stop carries finishReason', async () => {
+  const sdkChunks: MockStreamChunk[] = [
+    {
+      id: 'chatcmpl-fr1',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: 'length' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    },
+  ];
+
+  const client = mockOpenAiStreamingClient(sdkChunks);
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+
+  const request: ChatRequest = {
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    },
+  };
+
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(request)) {
+    chunks.push(chunk);
+  }
+
+  const stop = chunks.find((c) => c.type === 'content_stop') as
+    | { type: 'content_stop'; finishReason?: string }
+    | undefined;
+  assert.ok(stop, 'expected content_stop chunk');
+  assert.equal(stop!.finishReason, 'length');
+});
+
+test('OpenAiChatAdapter.complete() forwards top_p and stop (stopSequences) to SDK', async () => {
+  const capturedParams: { value: Record<string, unknown> | null } = { value: null };
+  const client = mockOpenAiClient(async (params) => {
+    capturedParams.value = params;
+    return {
+      id: 'id',
+      object: 'chat.completion',
+      created: 1,
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+
+  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+    options: { topP: 0.9, stopSequences: ['END', '---'] },
+  });
+
+  assert.equal(capturedParams.value!.top_p, 0.9);
+  assert.deepEqual(capturedParams.value!.stop, ['END', '---']);
+});

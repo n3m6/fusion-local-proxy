@@ -307,6 +307,76 @@ test('invalid JSON response returns null and logs SyntaxError', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Test: JSON-parse soft failure returns usage (tokens were billed)
+// ---------------------------------------------------------------------------
+
+test('JSON-parse failure returns null analysis WITH billed usage', async () => {
+  const billedUsage: TokenUsage = { promptTokens: 30, completionTokens: 70, totalTokens: 100 };
+  const chatPort = stubChatPort({
+    content: 'not-json-at-all',
+    usage: billedUsage,
+    model: 'gpt-4o-judge',
+  });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0]);
+
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
+
+  assert.equal(result.analysis, null);
+  assert.deepStrictEqual(
+    result.usage,
+    billedUsage,
+    'usage must be returned even on JSON-parse failure (tokens were billed)',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Test: Schema-validation soft failure returns usage (tokens were billed)
+// ---------------------------------------------------------------------------
+
+test('schema-validation failure returns null analysis WITH billed usage', async () => {
+  const billedUsage: TokenUsage = { promptTokens: 40, completionTokens: 60, totalTokens: 100 };
+  const chatPort = stubChatPort({
+    content: validAnalysisMissingAgreements,
+    usage: billedUsage,
+    model: 'gpt-4o-judge',
+  });
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0]);
+
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
+
+  assert.equal(result.analysis, null);
+  assert.deepStrictEqual(
+    result.usage,
+    billedUsage,
+    'usage must be returned even on schema-validation failure (tokens were billed)',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Test: chat-port failure returns null analysis WITHOUT usage (no response received)
+// ---------------------------------------------------------------------------
+
+test('chat-port failure returns null analysis WITHOUT usage', async () => {
+  const chatPort = stubChatPortReject(new Error('connection refused'));
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 0]);
+
+  const step = new JudgeStep(chatPort, judgeModel(), logger, clock);
+  const result = await step.analyze([panelResult()], sampleMessages, 0);
+
+  assert.equal(result.analysis, null);
+  assert.equal(
+    result.usage,
+    undefined,
+    'usage must be absent when chat-port itself fails (no response)',
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Test: Markdown code-fence stripping
 // ---------------------------------------------------------------------------
 

@@ -603,3 +603,266 @@ test('ChatAdapterFactory routes openai and anthropic ModelRefs to correct adapte
   assert.ok(factory.create(openaiRef) instanceof OpenAiChatAdapter);
   assert.ok(factory.create(anthropicRef) instanceof AnthropicChatAdapter);
 });
+
+// ---------------------------------------------------------------------------
+// Agent service wiring
+// ---------------------------------------------------------------------------
+
+test('createApp returns non-null agentService when dedicated agent role is configured', () => {
+  withConfigAndEnv(
+    {
+      providers: [
+        {
+          type: 'openai',
+          role: 'agent',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    },
+    { OPENAI_API_KEY: 'sk-test' },
+    () => {
+      const { agentService } = createApp();
+      assert.ok(
+        agentService !== null,
+        'agentService must be non-null when agent role is configured',
+      );
+    },
+  );
+});
+
+test('createApp returns non-null agentService when first panel is openai type', () => {
+  withConfigAndEnv(
+    {
+      providers: [
+        {
+          type: 'openai',
+          role: 'panel',
+          model: 'gpt-4o-mini',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+        {
+          type: 'openai',
+          role: 'synthesizer',
+          model: 'gpt-4o',
+          baseURL: 'https://api.openai.com/v1',
+          apiKeyEnv: 'OPENAI_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    },
+    { OPENAI_API_KEY: 'sk-test' },
+    () => {
+      const { agentService } = createApp();
+      assert.ok(agentService !== null, 'agentService must be non-null when first panel is openai');
+    },
+  );
+});
+
+test('createApp returns null agentService when all panels are anthropic', () => {
+  withConfigAndEnv(
+    {
+      providers: [
+        {
+          type: 'anthropic',
+          role: 'panel',
+          model: 'claude-haiku',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
+        {
+          type: 'anthropic',
+          role: 'synthesizer',
+          model: 'claude-sonnet',
+          baseURL: 'https://api.anthropic.com/v1',
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
+        },
+      ],
+      timeoutMs: 30000,
+    },
+    { ANTHROPIC_API_KEY: 'sk-ant' },
+    () => {
+      const { agentService } = createApp();
+      assert.equal(
+        agentService,
+        null,
+        'agentService must be null when no openai provider available',
+      );
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Autocomplete wiring — tested via HTTP server response to POST /v1/completions
+// ---------------------------------------------------------------------------
+
+test('createApp server responds 200 to POST /v1/completions when openai panel is configured', async () => {
+  await new Promise<void>((resolve) => {
+    withConfigAndEnv(
+      {
+        providers: [
+          {
+            type: 'openai',
+            role: 'panel',
+            model: 'deepseek-coder',
+            baseURL: 'http://localhost:11434/v1',
+            apiKeyEnv: 'OPENAI_API_KEY',
+          },
+          {
+            type: 'openai',
+            role: 'synthesizer',
+            model: 'gpt-4o',
+            baseURL: 'https://api.openai.com/v1',
+            apiKeyEnv: 'OPENAI_API_KEY',
+          },
+        ],
+        timeoutMs: 30000,
+      },
+      { OPENAI_API_KEY: 'sk-test' },
+      () => {
+        const { app } = createApp();
+        // Direct app.request to avoid real network
+        Promise.resolve(
+          app.request('/v1/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: 'hello', model: 'deepseek-coder' }),
+          }),
+        )
+          .then((res) => {
+            // The port can't call the LLM so may fail, but it should NOT return 501 (not configured)
+            assert.notEqual(res.status, 501, 'status must not be 501 when autocomplete is wired');
+            resolve();
+          })
+          .catch(resolve);
+      },
+    );
+  });
+});
+
+test('createApp server responds 501 to POST /v1/completions when only anthropic providers are configured', async () => {
+  await new Promise<void>((resolve) => {
+    withConfigAndEnv(
+      {
+        providers: [
+          {
+            type: 'anthropic',
+            role: 'panel',
+            model: 'claude-haiku',
+            baseURL: 'https://api.anthropic.com/v1',
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+          },
+          {
+            type: 'anthropic',
+            role: 'synthesizer',
+            model: 'claude-sonnet',
+            baseURL: 'https://api.anthropic.com/v1',
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+          },
+        ],
+        timeoutMs: 30000,
+      },
+      { ANTHROPIC_API_KEY: 'sk-ant' },
+      () => {
+        const { app } = createApp();
+        Promise.resolve(
+          app.request('/v1/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: 'hello' }),
+          }),
+        )
+          .then(async (res) => {
+            assert.equal(res.status, 501, 'expected 501 when autocomplete not wired');
+            const json = (await res.json()) as Record<string, unknown>;
+            const error = json.error as Record<string, unknown>;
+            assert.equal(error.code, 'autocomplete_not_configured');
+            resolve();
+          })
+          .catch(resolve);
+      },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Warn log emission for not-wired services
+// ---------------------------------------------------------------------------
+
+test('createApp emits agent_not_wired warn log when no openai provider available', () => {
+  const warnLogs: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnLogs.push(String(args[0]));
+  };
+
+  try {
+    withConfigAndEnv(
+      {
+        providers: [
+          {
+            type: 'anthropic',
+            role: 'synthesizer',
+            model: 'claude-sonnet',
+            baseURL: 'https://api.anthropic.com/v1',
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+          },
+        ],
+        timeoutMs: 30000,
+      },
+      { ANTHROPIC_API_KEY: 'sk-ant' },
+      () => {
+        createApp();
+      },
+    );
+
+    const agentWarnLogged = warnLogs.some((l) => l.includes('agent_not_wired'));
+    assert.ok(agentWarnLogged, 'must emit agent_not_wired warn log');
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+test('createApp emits autocomplete_not_wired warn log when no openai provider available', () => {
+  const warnLogs: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnLogs.push(String(args[0]));
+  };
+
+  try {
+    withConfigAndEnv(
+      {
+        providers: [
+          {
+            type: 'anthropic',
+            role: 'synthesizer',
+            model: 'claude-sonnet',
+            baseURL: 'https://api.anthropic.com/v1',
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+          },
+        ],
+        timeoutMs: 30000,
+      },
+      { ANTHROPIC_API_KEY: 'sk-ant' },
+      () => {
+        createApp();
+      },
+    );
+
+    const autocompleteWarnLogged = warnLogs.some((l) => l.includes('autocomplete_not_wired'));
+    assert.ok(autocompleteWarnLogged, 'must emit autocomplete_not_wired warn log');
+  } finally {
+    console.warn = origWarn;
+  }
+});

@@ -654,3 +654,71 @@ test('POST /v1/messages with stream:false and FusionError returns JSON error', a
   assert.equal(error.type, 'all_panels_failed');
   assert.equal(error.message, 'All panel models failed');
 });
+
+// ---------------------------------------------------------------------------
+// Generic (non-FusionError) throw → api_error
+// ---------------------------------------------------------------------------
+
+test('POST /v1/messages stream:false generic throw returns 500 with error.type=api_error', async () => {
+  const fusionService = stubFusionServiceThatThrows(new Error('something unexpected'));
+  const app = createApp(fusionService);
+
+  const res = await app.request('/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-3-opus-20240229',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: false,
+    }),
+  });
+
+  assert.equal(res.status, 500);
+  const body = (await res.json()) as Record<string, unknown>;
+  const error = body.error as Record<string, unknown>;
+  assert.ok(error, 'response must contain an error object');
+  assert.equal(error.type, 'api_error', 'non-FusionError must produce error.type=api_error');
+  assert.equal(error.message, 'something unexpected');
+});
+
+test('POST /v1/messages streaming generic throw writes SSE with error.type=api_error', async () => {
+  // Throw from the SSE loop after streaming has started; the handler must write an SSE error frame
+  // with type=api_error (not a FusionError code).
+  const fusionService: FusionService = {
+    runFusion(_request: FusionRequest): AsyncIterable<FusionStreamEvent> {
+      return {
+        [Symbol.asyncIterator]() {
+          let called = false;
+          return {
+            async next() {
+              if (!called) {
+                called = true;
+                throw new Error('generic upstream failure');
+              }
+              return { value: undefined as never, done: true };
+            },
+          };
+        },
+      };
+    },
+  };
+  const app = createApp(fusionService);
+
+  const res = await app.request('/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-3-opus-20240229',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Hello' }],
+    }),
+  });
+
+  const body = await res.text();
+  assert.ok(body.includes('api_error'), 'streaming error frame must contain api_error type');
+  assert.ok(
+    body.includes('generic upstream failure'),
+    'streaming error frame must contain the message',
+  );
+});
