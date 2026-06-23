@@ -1,9 +1,8 @@
 import type { Context } from 'hono';
-import { streamSSE } from 'hono/streaming';
 import type { FusionService } from '../../../../application/ports/fusion-service.js';
 import type { LoggerPort } from '../../../../domain/ports/logger-port.js';
 import { FusionError } from '../../../../domain/model/fusion-types.js';
-import { toError } from '../shared.js';
+import { toError, parseJsonBody, streamSseSafely } from '../shared.js';
 import {
   anthropicRequestToFusion,
   fusionStreamToAnthropicSSE,
@@ -12,11 +11,8 @@ import {
 
 export function createAnthropicRoute(fusionService: FusionService, logger?: LoggerPort) {
   return async (c: Context) => {
-    let body: Record<string, unknown>;
-    try {
-      body = await c.req.json<Record<string, unknown>>();
-    } catch {
-      logger?.log('warn', 'http_invalid_json', { api: 'anthropic' });
+    const body = await parseJsonBody(c, logger, 'anthropic');
+    if (body === null) {
       return c.json(
         { error: { type: 'invalid_request_error', message: 'Invalid JSON body' } },
         400,
@@ -48,21 +44,16 @@ export function createAnthropicRoute(fusionService: FusionService, logger?: Logg
     }
 
     // Streaming path (default): `stream: true` or absent → SSE
-    return streamSSE(c, async (stream) => {
-      try {
-        const events = fusionService.runFusion(fusionRequest);
-        for await (const sseString of fusionStreamToAnthropicSSE(events, model)) {
-          await stream.write(sseString);
-        }
-      } catch (err) {
-        logger?.logError('http', toError(err), { api: 'anthropic', stream: true });
+    return streamSseSafely(
+      c,
+      logger,
+      'anthropic',
+      () => fusionStreamToAnthropicSSE(fusionService.runFusion(fusionRequest), model),
+      (err) => {
         const message = err instanceof Error ? err.message : 'Internal server error';
         const errorType = err instanceof FusionError ? err.code : 'api_error';
-        const errorPayload = JSON.stringify({
-          error: { type: errorType, message },
-        });
-        await stream.write(`data: ${errorPayload}\n\n`);
-      }
-    });
+        return `data: ${JSON.stringify({ error: { type: errorType, message } })}\n\n`;
+      },
+    );
   };
 }

@@ -4,8 +4,6 @@ import { OpenAiChatAdapter } from './openai-chat-adapter.js';
 import type { ChatRequest, ChatStreamChunk } from '../../../domain/model/chat-types.js';
 import { FusionError } from '../../../domain/model/fusion-types.js';
 
-const STUB_CONFIG = { baseURL: '', apiKey: '' } as const;
-
 // ---------------------------------------------------------------------------
 // Minimal mock of the OpenAI client interface used by the adapter
 // ---------------------------------------------------------------------------
@@ -63,7 +61,7 @@ test('OpenAiChatAdapter.complete maps ChatRequest to SDK params', async () => {
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [
@@ -121,7 +119,7 @@ test('OpenAiChatAdapter handles null message content gracefully', async () => {
     usage: null,
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -162,7 +160,7 @@ test('OpenAiChatAdapter handles missing usage object', async () => {
     // usage key missing entirely
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -199,7 +197,7 @@ test('OpenAiChatAdapter passes responseFormat json_object when provided', async 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Output JSON' }],
@@ -238,7 +236,7 @@ test('OpenAiChatAdapter passes responseFormat json_schema when provided', async 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const schema = { type: 'object', properties: { answer: { type: 'string' } } };
   const request: ChatRequest = {
@@ -282,7 +280,7 @@ test('OpenAiChatAdapter completes without options', async () => {
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Yes?' }],
@@ -317,7 +315,7 @@ test('OpenAiChatAdapter does not send response_format for text type', async () =
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -345,7 +343,7 @@ test('OpenAiChatAdapter propagates SDK errors', async () => {
     throw sdkError;
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -391,7 +389,7 @@ test('OpenAiChatAdapter forwards AbortSignal to SDK', async () => {
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const controller = new AbortController();
   const request: ChatRequest = {
@@ -508,7 +506,7 @@ test('OpenAiChatAdapter.stream() yields content_delta chunks', async () => {
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -563,7 +561,7 @@ test('OpenAiChatAdapter.stream() yields content_stop from finish_reason', async 
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -599,7 +597,7 @@ test('OpenAiChatAdapter.stream() yields content_stop at end when no finish_reaso
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -635,7 +633,7 @@ test('OpenAiChatAdapter.stream() yields usage from final chunk', async () => {
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -684,7 +682,7 @@ test('OpenAiChatAdapter.stream() ignores null content delta', async () => {
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -721,7 +719,7 @@ test('OpenAiChatAdapter.stream() forwards AbortSignal to SDK', async () => {
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks, capturedOptions);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const controller = new AbortController();
   const request: ChatRequest = {
@@ -747,7 +745,7 @@ test('OpenAiChatAdapter.stream() forwards AbortSignal to SDK', async () => {
 test('OpenAiChatAdapter.stream() propagates SDK create errors', async () => {
   const sdkError = new Error('Network failure');
   const client = mockOpenAiStreamingClientReject(sdkError);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -811,7 +809,7 @@ test('OpenAiChatAdapter.stream() sets stream: true in SDK params', async () => {
     },
   } as unknown as OpenAiClientArg;
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -864,7 +862,7 @@ test('OpenAiChatAdapter.stream() sends stream_options.include_usage in params', 
     },
   } as unknown as OpenAiClientArg;
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
     model: {
@@ -925,7 +923,7 @@ test('OpenAiChatAdapter.stream() retries without stream_options on 400 error', a
     },
   } as unknown as OpenAiClientArg;
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
     model: {
@@ -973,7 +971,7 @@ test('OpenAiChatAdapter.complete() sets reasoning_effort when thinkingStrength i
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1008,7 +1006,7 @@ test('OpenAiChatAdapter.complete() sets reasoning_effort high', async () => {
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1041,7 +1039,7 @@ test('OpenAiChatAdapter.complete() passes reasoning_effort xhigh through to the 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1074,7 +1072,7 @@ test('OpenAiChatAdapter.complete() omits reasoning_effort when thinkingStrength 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1107,7 +1105,7 @@ test('OpenAiChatAdapter.complete() omits reasoning_effort when thinkingStrength 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1158,7 +1156,7 @@ test('OpenAiChatAdapter.stream() sets reasoning_effort when thinkingStrength is 
     },
   } as unknown as OpenAiClientArg;
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1212,7 +1210,7 @@ test('OpenAiChatAdapter.stream() omits reasoning_effort when thinkingStrength is
     },
   } as unknown as OpenAiClientArg;
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1272,7 +1270,7 @@ test('OpenAiChatAdapter.stream() passes responseFormat json_schema in params', a
     },
   } as unknown as OpenAiClientArg;
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const schema = { type: 'object', properties: { answer: { type: 'string' } } };
 
   const request: ChatRequest = {
@@ -1327,7 +1325,7 @@ test('OpenAiChatAdapter.stream() yields reasoning_progress for non-empty reasoni
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1377,7 +1375,7 @@ test('OpenAiChatAdapter.stream() does not yield reasoning_progress for null reas
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1418,7 +1416,7 @@ test('OpenAiChatAdapter.stream() does not yield reasoning_progress for empty-str
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1478,7 +1476,7 @@ test('OpenAiChatAdapter.complete() extracts reasoning_tokens into usage', async 
     },
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
     model: {
@@ -1511,7 +1509,7 @@ test('OpenAiChatAdapter.complete() omits reasoningTokens when details absent', a
     usage: { prompt_tokens: 10, completion_tokens: 50, total_tokens: 60 },
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
     model: {
@@ -1546,8 +1544,7 @@ test('OpenAiChatAdapter.complete() logs reasoningChars from reasoning_content', 
 
   const adapter = new OpenAiChatAdapter(
     client,
-    STUB_CONFIG,
-    capturingLogger(logs) as unknown as ConstructorParameters<typeof OpenAiChatAdapter>[2],
+    capturingLogger(logs) as unknown as ConstructorParameters<typeof OpenAiChatAdapter>[1],
   );
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1584,7 +1581,7 @@ test('OpenAiChatAdapter.stream() includes reasoning_tokens in the usage chunk', 
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
     model: {
@@ -1638,8 +1635,7 @@ test('OpenAiChatAdapter.stream() accumulates reasoningChars from reasoning_conte
   const client = mockOpenAiStreamingClient(sdkChunks);
   const adapter = new OpenAiChatAdapter(
     client,
-    STUB_CONFIG,
-    capturingLogger(logs) as unknown as ConstructorParameters<typeof OpenAiChatAdapter>[2],
+    capturingLogger(logs) as unknown as ConstructorParameters<typeof OpenAiChatAdapter>[1],
   );
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1681,7 +1677,7 @@ test('OpenAiChatAdapter.stream() yields reasoning_progress before content_delta 
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -1719,7 +1715,7 @@ test('OpenAiChatAdapter rejects a tool message missing tool_call_id instead of s
     return {};
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'tool', content: 'result payload' }],
@@ -1744,7 +1740,7 @@ test('OpenAiChatAdapter rejects a tool message missing tool_call_id instead of s
 
 test('OpenAiChatAdapter rejects a tool message with an empty tool_call_id', async () => {
   const client = mockOpenAiClient(async () => ({}));
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'tool', content: 'result payload', toolCallId: '' }],
@@ -1776,7 +1772,7 @@ test('OpenAiChatAdapter maps a valid tool message to tool_call_id', async () => 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'tool', content: 'result payload', toolCallId: 'call_abc123' }],
@@ -1815,7 +1811,7 @@ test('OpenAiChatAdapter.complete() maps tools to SDK function format', async () 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
     model: {
@@ -1862,7 +1858,7 @@ test('OpenAiChatAdapter.complete() passes toolChoice: "none"', async () => {
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -1889,7 +1885,7 @@ test('OpenAiChatAdapter.complete() passes toolChoice: "auto"', async () => {
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -1913,7 +1909,7 @@ test('OpenAiChatAdapter.complete() passes toolChoice: "required"', async () => {
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -1937,7 +1933,7 @@ test('OpenAiChatAdapter.complete() passes named toolChoice as object', async () 
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -1967,7 +1963,7 @@ test('OpenAiChatAdapter.complete() maps assistant toolCalls to SDK tool_calls wi
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   await adapter.complete({
     messages: [
       {
@@ -2027,7 +2023,7 @@ test('OpenAiChatAdapter.complete() maps SDK tool_calls in response to domain too
     usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const response = await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -2051,7 +2047,7 @@ test('OpenAiChatAdapter.complete() omits toolCalls from response when not presen
     usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const response = await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -2072,7 +2068,7 @@ test('OpenAiChatAdapter.complete() propagates finishReason from SDK', async () =
     usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const response = await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -2091,7 +2087,7 @@ test('OpenAiChatAdapter.complete() omits finishReason when finish_reason is abse
     usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
   }));
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   const response = await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
@@ -2147,7 +2143,7 @@ test('OpenAiChatAdapter.stream() emits tool_call_delta chunks for tool_calls in 
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -2203,7 +2199,7 @@ test('OpenAiChatAdapter.stream() content_stop carries finishReason', async () =>
   ];
 
   const client = mockOpenAiStreamingClient(sdkChunks);
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
 
   const request: ChatRequest = {
     messages: [{ role: 'user', content: 'Hi' }],
@@ -2241,7 +2237,7 @@ test('OpenAiChatAdapter.complete() forwards top_p and stop (stopSequences) to SD
     };
   });
 
-  const adapter = new OpenAiChatAdapter(client, STUB_CONFIG);
+  const adapter = new OpenAiChatAdapter(client);
   await adapter.complete({
     messages: [{ role: 'user', content: 'Hi' }],
     model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },

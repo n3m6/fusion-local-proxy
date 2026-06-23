@@ -24,6 +24,11 @@ export interface ModelRef {
   readonly thinkingMode?: ThinkingMode;
 }
 
+/** Coerce an unknown thrown value to an `Error` instance. */
+export function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 /**
  * Thrown with code `'all_panels_failed'` when every panel model fails
  * (i.e., Promise.allSettled produces zero fulfilled results).

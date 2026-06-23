@@ -1,4 +1,4 @@
-import type { ChatRequest } from '../../../domain/model/chat-types.js';
+import type { ChatRequest, TokenUsage } from '../../../domain/model/chat-types.js';
 import type { LogFields } from '../../../domain/ports/logger-port.js';
 import { promptChars } from '../../../domain/model/message.js';
 
@@ -40,6 +40,32 @@ export function buildBaseLogFields(request: ChatRequest, provider: string): LogF
     stage: request.options?.stage,
     label: request.options?.label,
     thinkingMode: request.model.thinkingMode,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI usage parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse an OpenAI usage object (from a non-streaming response or a streaming
+ * chunk's `usage` field) into a domain `TokenUsage`. Reads the
+ * `completion_tokens_details.reasoning_tokens` extension field that OpenAI and
+ * DeepSeek-compatible backends expose but the SDK type omits.
+ */
+export function parseOpenAiUsage(raw: {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  completion_tokens_details?: unknown;
+}): TokenUsage {
+  const details = raw.completion_tokens_details as { reasoning_tokens?: number } | undefined;
+  const reasoningTokens = details?.reasoning_tokens;
+  return {
+    promptTokens: raw.prompt_tokens,
+    completionTokens: raw.completion_tokens,
+    totalTokens: raw.total_tokens,
+    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
   };
 }
 

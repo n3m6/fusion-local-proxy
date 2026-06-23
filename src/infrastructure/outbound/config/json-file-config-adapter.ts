@@ -100,33 +100,38 @@ export class JsonFileConfigAdapter implements ConfigPort {
   }
 
   getAgentModel(): ModelRef | null {
-    const dedicated = this.config.providers.find((p) => p.role === 'agent');
-    if (dedicated) return this.toModelRef(dedicated);
-    const firstPanel = this.config.providers.find((p) => p.role === 'panel');
-    if (!firstPanel || firstPanel.type !== 'openai') return null;
-    return this.toRawModelRef(firstPanel);
+    return this.resolveFastPathModel('agent');
   }
 
   getAutocompleteModel(): ModelRef | null {
-    const dedicated = this.config.providers.find((p) => p.role === 'autocomplete');
+    return this.resolveFastPathModel('autocomplete');
+  }
+
+  /** Resolve a dedicated fast-path role, falling back to the first openai-type panel. */
+  private resolveFastPathModel(role: 'agent' | 'autocomplete'): ModelRef | null {
+    const dedicated = this.config.providers.find((p) => p.role === role);
     if (dedicated) return this.toModelRef(dedicated);
     const firstPanel = this.config.providers.find((p) => p.role === 'panel');
     if (!firstPanel || firstPanel.type !== 'openai') return null;
     return this.toRawModelRef(firstPanel);
   }
 
-  private toModelRef(entry: ProviderEntry): ModelRef {
+  private resolveApiKey(entry: ProviderEntry): string {
     const apiKey = process.env[entry.apiKeyEnv];
     if (apiKey === undefined || apiKey === '') {
       throw new Error(
         `Environment variable ${entry.apiKeyEnv} is not set (required for provider model "${entry.model}")`,
       );
     }
+    return apiKey;
+  }
+
+  private toModelRef(entry: ProviderEntry): ModelRef {
     return {
       provider: entry.type,
       model: entry.model,
       baseURL: entry.baseURL,
-      apiKey,
+      apiKey: this.resolveApiKey(entry),
       ...(entry.jsonMode !== undefined ? { jsonMode: entry.jsonMode } : {}),
       ...(entry.thinkingStrength !== undefined ? { thinkingStrength: entry.thinkingStrength } : {}),
       ...(entry.thinkingMode !== undefined ? { thinkingMode: entry.thinkingMode } : {}),
@@ -135,17 +140,11 @@ export class JsonFileConfigAdapter implements ConfigPort {
 
   /** Like toModelRef but strips thinkingMode and thinkingStrength for raw pass-through routing. */
   private toRawModelRef(entry: ProviderEntry): ModelRef {
-    const apiKey = process.env[entry.apiKeyEnv];
-    if (apiKey === undefined || apiKey === '') {
-      throw new Error(
-        `Environment variable ${entry.apiKeyEnv} is not set (required for provider model "${entry.model}")`,
-      );
-    }
     return {
       provider: entry.type,
       model: entry.model,
       baseURL: entry.baseURL,
-      apiKey,
+      apiKey: this.resolveApiKey(entry),
     };
   }
 }

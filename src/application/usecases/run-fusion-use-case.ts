@@ -12,6 +12,62 @@ import { PanelRunner } from './panel-runner.js';
 import { JudgeStep } from './judge-step.js';
 import { SynthesizeStep } from './synthesize-step.js';
 
+interface UsageSummary {
+  totalTokens: number;
+  tokensByStage: {
+    panel: { total: number; reasoning: number };
+    judge: { total: number; reasoning: number };
+    synthesis: { total: number; reasoning: number };
+  };
+  cost: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    reEncodedPanelTokens: number;
+  };
+}
+
+function summarizeUsage(
+  panelMeta: PanelMeta,
+  judgeUsage: TokenUsage | undefined,
+  synthUsage: TokenUsage | undefined,
+): UsageSummary {
+  const panelTokens = panelMeta.usage.totalTokens;
+  const judgeTokens = judgeUsage?.totalTokens ?? 0;
+  const synthTokens = synthUsage?.totalTokens ?? 0;
+
+  const panelReasoning = panelMeta.usage.reasoningTokens ?? 0;
+  const judgeReasoning = judgeUsage?.reasoningTokens ?? 0;
+  const synthReasoning = synthUsage?.reasoningTokens ?? 0;
+
+  // Cost-honest breakdown: reasoning tokens are a billed-but-invisible subset
+  // of output, and the panel's output is re-encoded as synthesis input (panel
+  // responses are embedded in the synthesizer prompt), so it is paid for twice.
+  const inputTokens =
+    panelMeta.usage.promptTokens +
+    (judgeUsage?.promptTokens ?? 0) +
+    (synthUsage?.promptTokens ?? 0);
+  const outputTokens =
+    panelMeta.usage.completionTokens +
+    (judgeUsage?.completionTokens ?? 0) +
+    (synthUsage?.completionTokens ?? 0);
+
+  return {
+    totalTokens: panelTokens + judgeTokens + synthTokens,
+    tokensByStage: {
+      panel: { total: panelTokens, reasoning: panelReasoning },
+      judge: { total: judgeTokens, reasoning: judgeReasoning },
+      synthesis: { total: synthTokens, reasoning: synthReasoning },
+    },
+    cost: {
+      inputTokens,
+      outputTokens,
+      reasoningTokens: panelReasoning + judgeReasoning + synthReasoning,
+      reEncodedPanelTokens: panelMeta.usage.completionTokens,
+    },
+  };
+}
+
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
 export class RunFusionUseCase implements FusionService {
@@ -57,25 +113,7 @@ export class RunFusionUseCase implements FusionService {
       synthError,
     } = yield* this.runSynthesis(panelMeta.results, messages, analysis, requestId, sampling);
 
-    const panelTokens = panelMeta.usage.totalTokens;
-    const judgeTokens = judgeUsage?.totalTokens ?? 0;
-    const synthTokens = synthUsage?.totalTokens ?? 0;
-
-    const panelReasoning = panelMeta.usage.reasoningTokens ?? 0;
-    const judgeReasoning = judgeUsage?.reasoningTokens ?? 0;
-    const synthReasoning = synthUsage?.reasoningTokens ?? 0;
-
-    // Cost-honest breakdown: reasoning tokens are a billed-but-invisible subset
-    // of output, and the panel's output is re-encoded as synthesis input (panel
-    // responses are embedded in the synthesizer prompt), so it is paid for twice.
-    const inputTokens =
-      panelMeta.usage.promptTokens +
-      (judgeUsage?.promptTokens ?? 0) +
-      (synthUsage?.promptTokens ?? 0);
-    const outputTokens =
-      panelMeta.usage.completionTokens +
-      (judgeUsage?.completionTokens ?? 0) +
-      (synthUsage?.completionTokens ?? 0);
+    const usageSummary = summarizeUsage(panelMeta, judgeUsage, synthUsage);
 
     this.loggerPort.log('info', 'fusion_run_end', {
       requestId,
@@ -85,18 +123,7 @@ export class RunFusionUseCase implements FusionService {
       analysisProduced: analysis !== null,
       outcome: synthError ? synthError.code : 'success',
       ...(synthModel ? { synthesizerModel: synthModel } : {}),
-      totalTokens: panelTokens + judgeTokens + synthTokens,
-      tokensByStage: {
-        panel: { total: panelTokens, reasoning: panelReasoning },
-        judge: { total: judgeTokens, reasoning: judgeReasoning },
-        synthesis: { total: synthTokens, reasoning: synthReasoning },
-      },
-      cost: {
-        inputTokens,
-        outputTokens,
-        reasoningTokens: panelReasoning + judgeReasoning + synthReasoning,
-        reEncodedPanelTokens: panelMeta.usage.completionTokens,
-      },
+      ...usageSummary,
     });
 
     if (synthError) {

@@ -5,6 +5,7 @@ import type { ModelRef, FusionRequest } from '../../domain/model/fusion-types.js
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ChatRequest } from '../../domain/model/chat-types.js';
+import { toError } from '../../domain/model/fusion-types.js';
 
 /** Single-model agent passthrough — no panel/judge/synthesis, no thinking mode injection. */
 export class RunAgentUseCase implements AgentService {
@@ -74,7 +75,7 @@ export class RunAgentUseCase implements AgentService {
         }
       }
     } catch (err) {
-      this.loggerPort.logError('agent', err instanceof Error ? err : new Error(String(err)), {
+      this.loggerPort.logError('agent', toError(err), {
         requestId,
         modelId: this.modelRef.model,
       });

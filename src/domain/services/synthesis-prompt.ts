@@ -1,7 +1,11 @@
 import type { PanelResult } from '../model/fusion-types.js';
 import type { Message } from '../model/message.js';
 import type { Analysis } from './analysis-schema.js';
-import { renderConversation, renderPanelResponses } from './prompt-sections.js';
+import {
+  renderConversation,
+  renderPanelResponses,
+  renderAnalysisSection,
+} from './prompt-sections.js';
 
 export interface SynthesisPromptOptions {
   readonly selfJudge?: boolean;
@@ -108,104 +112,7 @@ export function buildSynthesisUserPrompt(
   ];
 
   if (analysis !== null) {
-    parts.push('=== PANEL ANALYSIS ===');
-    parts.push('');
-
-    if (analysis.taskType !== undefined) {
-      parts.push(`-- Task Type --`);
-      parts.push(analysis.taskType);
-      parts.push('');
-    }
-
-    if (analysis.preferredCandidate !== undefined) {
-      parts.push('-- Preferred Candidate --');
-      parts.push(analysis.preferredCandidate);
-      parts.push('');
-    }
-
-    parts.push('-- Corrections --');
-    if (analysis.corrections !== undefined && analysis.corrections.length > 0) {
-      for (const correction of analysis.corrections) {
-        parts.push(`- ${correction}`);
-      }
-    } else {
-      parts.push('(No corrections required)');
-    }
-    parts.push('');
-
-    parts.push('-- Agreements --');
-    if (analysis.agreements.length > 0) {
-      for (const point of analysis.agreements) {
-        parts.push(`- ${point}`);
-      }
-    } else {
-      parts.push('(No agreements identified)');
-    }
-    parts.push('');
-
-    parts.push('-- Discrepancies --');
-    if (analysis.discrepancies.length > 0) {
-      for (const d of analysis.discrepancies) {
-        parts.push(`Topic: ${d.topic}`);
-        for (const p of d.positions) {
-          parts.push(`  - ${p}`);
-        }
-        parts.push(`  Assessment: ${d.assessment}`);
-      }
-    } else {
-      parts.push('(No discrepancies identified)');
-    }
-    parts.push('');
-
-    parts.push('-- Issues --');
-    if (analysis.issues.length > 0) {
-      for (const issue of analysis.issues) {
-        const triggerPart = issue.trigger !== undefined ? ` | trigger: ${issue.trigger}` : '';
-        const evidencePart = issue.evidence !== undefined ? ` | evidence: ${issue.evidence}` : '';
-        parts.push(
-          `[${issue.severity.toUpperCase()}] ${issue.candidate}: ${issue.description}${triggerPart}${evidencePart}`,
-        );
-      }
-    } else {
-      parts.push('(No issues identified)');
-    }
-    parts.push('');
-
-    parts.push('-- Gaps --');
-    if (analysis.gaps.length > 0) {
-      for (const gap of analysis.gaps) {
-        parts.push(`- ${gap}`);
-      }
-    } else {
-      parts.push('(No gaps identified)');
-    }
-    parts.push('');
-
-    parts.push('-- Requirement Coverage --');
-    if (analysis.requirementCoverage !== undefined && analysis.requirementCoverage.length > 0) {
-      for (const rc of analysis.requirementCoverage) {
-        parts.push(`Requirement: ${rc.requirement}`);
-        parts.push(`  Assessment: ${rc.assessment}`);
-      }
-    } else {
-      parts.push('(No requirement coverage provided)');
-    }
-    parts.push('');
-
-    parts.push('-- Test Results --');
-    if (analysis.testResults !== undefined && analysis.testResults.length > 0) {
-      for (const tr of analysis.testResults) {
-        parts.push(`[${tr.verdict.toUpperCase()}] ${tr.candidate}: ${tr.test} — ${tr.detail}`);
-      }
-    } else {
-      parts.push('(No test results provided)');
-    }
-    parts.push('');
-
-    parts.push('-- Recommendation --');
-    parts.push(
-      analysis.recommendation.length > 0 ? analysis.recommendation : '(No recommendation provided)',
-    );
+    parts.push(...renderAnalysisSection(analysis));
   } else if (selfJudge) {
     parts.push('=== SELF-EVALUATION DIRECTIVE ===');
     parts.push(

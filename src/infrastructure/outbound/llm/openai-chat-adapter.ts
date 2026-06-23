@@ -18,6 +18,7 @@ import {
   onReasoningDelta,
   buildStreamResponseLogFields,
   buildCompleteResponseLogFields,
+  parseOpenAiUsage,
 } from './adapter-support.js';
 
 export type { AdapterConfig };
@@ -65,10 +66,48 @@ function toSdkMessage(m: Message): OpenAI.Chat.Completions.ChatCompletionMessage
   };
 }
 
+function buildResponseFormat(
+  request: ChatRequest,
+): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming['response_format'] | undefined {
+  const rf = request.options?.responseFormat;
+  if (!rf) return undefined;
+  if (rf.type === 'json_object') return { type: 'json_object' };
+  if (rf.type === 'json_schema') {
+    return {
+      type: 'json_schema',
+      json_schema: { name: 'response', strict: true, schema: rf.schema },
+    };
+  }
+  return undefined;
+}
+
+function buildTools(
+  request: ChatRequest,
+): OpenAI.Chat.Completions.ChatCompletionTool[] | undefined {
+  const tools = request.options?.tools;
+  if (!tools || tools.length === 0) return undefined;
+  return tools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      ...(t.description !== undefined ? { description: t.description } : {}),
+      ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
+    },
+  }));
+}
+
+function buildToolChoice(
+  request: ChatRequest,
+): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming['tool_choice'] | undefined {
+  const tc = request.options?.toolChoice;
+  if (tc === undefined) return undefined;
+  if (tc === 'none' || tc === 'auto' || tc === 'required') return tc;
+  return { type: 'function', function: { name: tc.function.name } };
+}
+
 export class OpenAiChatAdapter implements ChatModelPort {
   constructor(
     private readonly client: OpenAI,
-    private readonly adapterConfig: AdapterConfig,
     private readonly logger?: LoggerPort,
   ) {}
 
@@ -87,40 +126,19 @@ export class OpenAiChatAdapter implements ChatModelPort {
       params.reasoning_effort = ts;
     }
 
-    if (request.options?.responseFormat) {
-      const rf = request.options.responseFormat;
-      if (rf.type === 'json_object') {
-        params.response_format = { type: 'json_object' };
-      } else if (rf.type === 'json_schema') {
-        params.response_format = {
-          type: 'json_schema',
-          json_schema: {
-            name: 'response',
-            strict: true,
-            schema: rf.schema,
-          },
-        };
-      }
+    const responseFormat = buildResponseFormat(request);
+    if (responseFormat !== undefined) {
+      params.response_format = responseFormat;
     }
 
-    if (request.options?.tools && request.options.tools.length > 0) {
-      params.tools = request.options.tools.map((t) => ({
-        type: 'function' as const,
-        function: {
-          name: t.name,
-          ...(t.description !== undefined ? { description: t.description } : {}),
-          ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
-        },
-      }));
+    const tools = buildTools(request);
+    if (tools !== undefined) {
+      params.tools = tools;
     }
 
-    if (request.options?.toolChoice !== undefined) {
-      const tc = request.options.toolChoice;
-      if (tc === 'none' || tc === 'auto' || tc === 'required') {
-        params.tool_choice = tc;
-      } else {
-        params.tool_choice = { type: 'function', function: { name: tc.function.name } };
-      }
+    const toolChoice = buildToolChoice(request);
+    if (toolChoice !== undefined) {
+      params.tool_choice = toolChoice;
     }
 
     return params;
@@ -138,24 +156,15 @@ export class OpenAiChatAdapter implements ChatModelPort {
     const choice = response.choices[0];
     const content = choice?.message?.content ?? '';
 
-    // The OpenAI SDK type omits reasoning fields; access them via casts. Providers
-    // that expose reasoning report a token count under
-    // `usage.completion_tokens_details.reasoning_tokens`, and DeepSeek-compatible
-    // backends also echo the reasoning text on `message.reasoning_content`.
-    const usageDetails = response.usage?.completion_tokens_details as
-      | { reasoning_tokens?: number }
-      | undefined;
-    const reasoningTokens = usageDetails?.reasoning_tokens;
+    // The OpenAI SDK type omits reasoning fields; access them via casts.
+    // DeepSeek-compatible backends echo the reasoning text on `message.reasoning_content`.
     const reasoningContent = (choice?.message as unknown as Record<string, unknown> | undefined)
       ?.reasoning_content;
     const reasoningChars = typeof reasoningContent === 'string' ? reasoningContent.length : 0;
 
-    const usage: TokenUsage = {
-      promptTokens: response.usage?.prompt_tokens ?? 0,
-      completionTokens: response.usage?.completion_tokens ?? 0,
-      totalTokens: response.usage?.total_tokens ?? 0,
-      ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
-    };
+    const usage: TokenUsage = response.usage
+      ? parseOpenAiUsage(response.usage)
+      : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     type SdkFunctionToolCall = {
       id: string;
@@ -183,7 +192,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
           prompt: usage.promptTokens,
           completion: usage.completionTokens,
           total: usage.totalTokens,
-          ...(reasoningTokens !== undefined ? { reasoning: reasoningTokens } : {}),
+          ...(usage.reasoningTokens !== undefined ? { reasoning: usage.reasoningTokens } : {}),
         },
         {
           finishReason,
@@ -282,16 +291,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
       }
 
       if (chunk.usage) {
-        const usageDetails = chunk.usage.completion_tokens_details as
-          | { reasoning_tokens?: number }
-          | undefined;
-        const reasoningTokens = usageDetails?.reasoning_tokens;
-        lastUsage = {
-          promptTokens: chunk.usage.prompt_tokens,
-          completionTokens: chunk.usage.completion_tokens,
-          totalTokens: chunk.usage.total_tokens,
-          ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
-        };
+        lastUsage = parseOpenAiUsage(chunk.usage);
         yield { type: 'usage', usage: lastUsage };
       }
     }

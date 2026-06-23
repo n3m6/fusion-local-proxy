@@ -1,9 +1,8 @@
 import type { Context } from 'hono';
-import { streamSSE } from 'hono/streaming';
 import type { TextCompletionPort } from '../../../../domain/ports/text-completion-port.js';
 import type { ModelRef } from '../../../../domain/model/fusion-types.js';
 import type { LoggerPort } from '../../../../domain/ports/logger-port.js';
-import { toError } from '../shared.js';
+import { toError, parseJsonBody, streamSseSafely } from '../shared.js';
 import {
   parseTextCompletionRequest,
   textCompletionToResponse,
@@ -16,13 +15,8 @@ export function createCompletionsRoute(
   logger?: LoggerPort,
 ) {
   return async (c: Context) => {
-    let body: Record<string, unknown>;
-    try {
-      body = await c.req.json<Record<string, unknown>>();
-    } catch {
-      logger?.log('warn', 'http_invalid_json', { api: 'openai_completions' });
-      return c.json({ error: { message: 'Invalid JSON body' } }, 400);
-    }
+    const body = await parseJsonBody(c, logger, 'openai_completions');
+    if (body === null) return c.json({ error: { message: 'Invalid JSON body' } }, 400);
 
     if (!textCompletionPort || !autocompleteModel) {
       return c.json(
@@ -48,19 +42,13 @@ export function createCompletionsRoute(
     });
 
     if (streaming) {
-      return streamSSE(c, async (stream) => {
-        try {
-          const chunks = textCompletionPort.stream(request);
-          for await (const sseString of textCompletionToSSE(chunks, autocompleteModel.model)) {
-            await stream.write(sseString);
-          }
-        } catch (err) {
-          logger?.logError('http', toError(err), { api: 'openai_completions', stream: true });
-          await stream.write(
-            `data: ${JSON.stringify({ error: { message: 'Internal server error' } })}\n\n`,
-          );
-        }
-      });
+      return streamSseSafely(
+        c,
+        logger,
+        'openai_completions',
+        () => textCompletionToSSE(textCompletionPort.stream(request), autocompleteModel.model),
+        () => `data: ${JSON.stringify({ error: { message: 'Internal server error' } })}\n\n`,
+      );
     }
 
     try {

@@ -8,7 +8,7 @@ import type { ConfigPort } from '../../domain/ports/config-port.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
 import type { ClockPort } from '../../domain/ports/clock-port.js';
 import type { Analysis } from '../../domain/services/analysis-schema.js';
-import { FusionError } from '../../domain/model/fusion-types.js';
+import { FusionError, toError } from '../../domain/model/fusion-types.js';
 import {
   buildSynthesisSystemPrompt,
   buildSynthesisUserPrompt,
@@ -102,15 +102,11 @@ export class SynthesizeStep {
           }
         }
       } catch (error) {
-        this.loggerPort.logError(
-          'synthesis',
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            requestId,
-            modelId: synthesizerModel.model,
-            latencyMs: this.clockPort.now() - startTime,
-          },
-        );
+        this.loggerPort.logError('synthesis', toError(error), {
+          requestId,
+          modelId: synthesizerModel.model,
+          latencyMs: this.clockPort.now() - startTime,
+        });
         throw error;
       }
 

@@ -16,6 +16,7 @@ import {
   buildJudgeSystemPrompt,
   buildJudgeUserPrompt,
 } from '../../domain/services/judge-prompt.js';
+import { toError } from '../../domain/model/fusion-types.js';
 
 const RAW_CONTENT_LOG_LIMIT = 1000;
 
@@ -78,7 +79,7 @@ export class JudgeStep {
     try {
       response = await this.chatPort.complete(request);
     } catch (error) {
-      this.loggerPort.logError('judge', error instanceof Error ? error : new Error(String(error)), {
+      this.loggerPort.logError('judge', toError(error), {
         requestId,
         modelId: judgeModel.model,
       });

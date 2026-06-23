@@ -39,7 +39,6 @@ export function createAnthropicClient(config: AdapterConfig): Anthropic {
 export class AnthropicChatAdapter implements ChatModelPort {
   constructor(
     private readonly client: Anthropic,
-    private readonly adapterConfig: AdapterConfig,
     private readonly logger?: LoggerPort,
   ) {}
 
