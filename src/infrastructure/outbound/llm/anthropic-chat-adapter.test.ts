@@ -1085,3 +1085,236 @@ test('stream() without message_stop yields fallback content_stop but no usage ch
   const usageChunks = chunks.filter((c) => c.type === 'usage');
   assert.equal(usageChunks.length, 0, 'no usage chunk must be emitted when message_stop is absent');
 });
+
+// ---------------------------------------------------------------------------
+// Cache token accounting — complete()
+// ---------------------------------------------------------------------------
+
+test('complete() with cache_read_input_tokens: promptTokens is inclusive and cachedPromptTokens is set', async () => {
+  const client = stubAnthropicClient(async () => ({
+    content: [{ type: 'text' as const, text: 'Hello' }],
+    // Anthropic: input_tokens EXCLUDES cache tokens
+    usage: { input_tokens: 20, output_tokens: 10, cache_read_input_tokens: 80 } as {
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_input_tokens?: number;
+    },
+    model: 'claude-3',
+  }));
+
+  const adapter = new AnthropicChatAdapter(client);
+  const response = await adapter.complete(makeRequest());
+
+  // promptTokens = 20 + 80 = 100
+  assert.equal(response.usage.promptTokens, 100);
+  assert.equal(response.usage.completionTokens, 10);
+  assert.equal(response.usage.totalTokens, 110);
+  assert.equal(response.usage.cachedPromptTokens, 80);
+  assert.equal(response.usage.cacheWritePromptTokens, undefined);
+});
+
+test('complete() with cache_creation_input_tokens: cacheWritePromptTokens is set and promptTokens is inclusive', async () => {
+  const client = stubAnthropicClient(async () => ({
+    content: [{ type: 'text' as const, text: 'Hello' }],
+    usage: { input_tokens: 30, output_tokens: 10, cache_creation_input_tokens: 50 } as {
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens?: number;
+    },
+    model: 'claude-3',
+  }));
+
+  const adapter = new AnthropicChatAdapter(client);
+  const response = await adapter.complete(makeRequest());
+
+  // promptTokens = 30 + 50 = 80
+  assert.equal(response.usage.promptTokens, 80);
+  assert.equal(response.usage.totalTokens, 90);
+  assert.equal(response.usage.cacheWritePromptTokens, 50);
+  assert.equal(response.usage.cachedPromptTokens, undefined);
+});
+
+test('complete() with both cache_read and cache_creation tokens: both fields are set', async () => {
+  const client = stubAnthropicClient(async () => ({
+    content: [{ type: 'text' as const, text: 'Hello' }],
+    usage: {
+      input_tokens: 10,
+      output_tokens: 5,
+      cache_read_input_tokens: 60,
+      cache_creation_input_tokens: 30,
+    } as {
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_input_tokens?: number;
+      cache_creation_input_tokens?: number;
+    },
+    model: 'claude-3',
+  }));
+
+  const adapter = new AnthropicChatAdapter(client);
+  const response = await adapter.complete(makeRequest());
+
+  // promptTokens = 10 + 60 + 30 = 100
+  assert.equal(response.usage.promptTokens, 100);
+  assert.equal(response.usage.totalTokens, 105);
+  assert.equal(response.usage.cachedPromptTokens, 60);
+  assert.equal(response.usage.cacheWritePromptTokens, 30);
+});
+
+test('complete() with no cache fields: cachedPromptTokens and cacheWritePromptTokens are absent', async () => {
+  const client = stubAnthropicClient(async () => ({
+    content: [{ type: 'text' as const, text: 'Hello' }],
+    usage: { input_tokens: 10, output_tokens: 5 },
+    model: 'claude-3',
+  }));
+
+  const adapter = new AnthropicChatAdapter(client);
+  const response = await adapter.complete(makeRequest());
+
+  assert.equal(response.usage.promptTokens, 10);
+  assert.equal('cachedPromptTokens' in response.usage, false);
+  assert.equal('cacheWritePromptTokens' in response.usage, false);
+});
+
+// ---------------------------------------------------------------------------
+// Cache token accounting — stream()
+// ---------------------------------------------------------------------------
+
+test('stream() with cache_read_input_tokens in message_start: cachedPromptTokens set, promptTokens inclusive', async () => {
+  const client = stubAnthropicClient(
+    async () => ({ content: [], usage: { input_tokens: 0, output_tokens: 0 }, model: 'claude-3' }),
+    () =>
+      asyncIterable([
+        {
+          type: 'message_start',
+          message: {
+            usage: { input_tokens: 20, cache_read_input_tokens: 80 },
+          },
+        },
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } },
+        { type: 'message_delta', usage: { output_tokens: 10 } },
+        { type: 'message_stop' },
+      ]),
+  );
+
+  const adapter = new AnthropicChatAdapter(client);
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(makeRequest())) {
+    chunks.push(chunk);
+  }
+
+  const usageChunk = chunks.find((c) => c.type === 'usage') as
+    | { type: 'usage'; usage: import('../../../domain/model/chat-types.js').TokenUsage }
+    | undefined;
+  assert.ok(usageChunk, 'expected a usage chunk');
+  // promptTokens = 20 + 80 = 100
+  assert.equal(usageChunk!.usage.promptTokens, 100);
+  assert.equal(usageChunk!.usage.completionTokens, 10);
+  assert.equal(usageChunk!.usage.totalTokens, 110);
+  assert.equal(usageChunk!.usage.cachedPromptTokens, 80);
+  assert.equal(usageChunk!.usage.cacheWritePromptTokens, undefined);
+});
+
+test('stream() with cache_creation_input_tokens in message_start: cacheWritePromptTokens set', async () => {
+  const client = stubAnthropicClient(
+    async () => ({ content: [], usage: { input_tokens: 0, output_tokens: 0 }, model: 'claude-3' }),
+    () =>
+      asyncIterable([
+        {
+          type: 'message_start',
+          message: {
+            usage: { input_tokens: 30, cache_creation_input_tokens: 50 },
+          },
+        },
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } },
+        { type: 'message_delta', usage: { output_tokens: 8 } },
+        { type: 'message_stop' },
+      ]),
+  );
+
+  const adapter = new AnthropicChatAdapter(client);
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(makeRequest())) {
+    chunks.push(chunk);
+  }
+
+  const usageChunk = chunks.find((c) => c.type === 'usage') as
+    | { type: 'usage'; usage: import('../../../domain/model/chat-types.js').TokenUsage }
+    | undefined;
+  assert.ok(usageChunk, 'expected a usage chunk');
+  // promptTokens = 30 + 50 = 80
+  assert.equal(usageChunk!.usage.promptTokens, 80);
+  assert.equal(usageChunk!.usage.cacheWritePromptTokens, 50);
+  assert.equal(usageChunk!.usage.cachedPromptTokens, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// Cache token accounting — explicit zero values
+// ---------------------------------------------------------------------------
+
+test('complete() with cache_read_input_tokens of zero: cachedPromptTokens is present and equals 0', async () => {
+  const client = stubAnthropicClient(async () => ({
+    content: [{ type: 'text' as const, text: 'Hello' }],
+    usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0 } as {
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_input_tokens?: number;
+    },
+    model: 'claude-3',
+  }));
+
+  const adapter = new AnthropicChatAdapter(client);
+  const response = await adapter.complete(makeRequest());
+
+  assert.equal(response.usage.cachedPromptTokens, 0);
+  assert.equal('cachedPromptTokens' in response.usage, true);
+});
+
+test('complete() with cache_creation_input_tokens of zero: cacheWritePromptTokens is present and equals 0', async () => {
+  const client = stubAnthropicClient(async () => ({
+    content: [{ type: 'text' as const, text: 'Hello' }],
+    usage: { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 0 } as {
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens?: number;
+    },
+    model: 'claude-3',
+  }));
+
+  const adapter = new AnthropicChatAdapter(client);
+  const response = await adapter.complete(makeRequest());
+
+  assert.equal(response.usage.cacheWritePromptTokens, 0);
+  assert.equal('cacheWritePromptTokens' in response.usage, true);
+});
+
+test('stream() with cache_read_input_tokens of zero: cachedPromptTokens is present and equals 0', async () => {
+  const client = stubAnthropicClient(
+    async () => ({ content: [], usage: { input_tokens: 0, output_tokens: 0 }, model: 'claude-3' }),
+    () =>
+      asyncIterable([
+        {
+          type: 'message_start',
+          message: {
+            usage: { input_tokens: 10, cache_read_input_tokens: 0 },
+          },
+        },
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } },
+        { type: 'message_delta', usage: { output_tokens: 5 } },
+        { type: 'message_stop' },
+      ]),
+  );
+
+  const adapter = new AnthropicChatAdapter(client);
+  const chunks: ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream(makeRequest())) {
+    chunks.push(chunk);
+  }
+
+  const usageChunk = chunks.find((c) => c.type === 'usage') as
+    | { type: 'usage'; usage: import('../../../domain/model/chat-types.js').TokenUsage }
+    | undefined;
+  assert.ok(usageChunk, 'expected a usage chunk');
+  assert.equal(usageChunk!.usage.cachedPromptTokens, 0);
+  assert.equal('cachedPromptTokens' in usageChunk!.usage, true);
+});

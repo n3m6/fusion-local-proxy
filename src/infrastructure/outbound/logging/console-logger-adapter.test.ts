@@ -318,3 +318,58 @@ test('parseLogLevel normalizes known values and falls back to info', () => {
   assert.equal(parseLogLevel(undefined), 'info');
   assert.equal(parseLogLevel(''), 'info');
 });
+
+// ---------------------------------------------------------------------------
+// Cache token fields in logStageEnd
+// ---------------------------------------------------------------------------
+
+test('ConsoleLoggerAdapter logStageEnd includes tokens.cached when cachedPromptTokens present', () => {
+  const logger = new ConsoleLoggerAdapter();
+  const usage: TokenUsage = {
+    promptTokens: 100,
+    completionTokens: 20,
+    totalTokens: 120,
+    cachedPromptTokens: 70,
+  };
+
+  const lines = captureConsole(() => {
+    logger.logStageEnd('synthesis', 200, usage);
+  });
+
+  const parsed = JSON.parse(lines[0]);
+  assert.equal(parsed.tokens.cached, 70);
+  // Other token fields still present
+  assert.equal(parsed.tokens.prompt, 100);
+  assert.equal(parsed.tokens.completion, 20);
+  assert.equal(parsed.tokens.total, 120);
+});
+
+test('ConsoleLoggerAdapter logStageEnd includes tokens.cacheWrite when cacheWritePromptTokens present', () => {
+  const logger = new ConsoleLoggerAdapter();
+  const usage: TokenUsage = {
+    promptTokens: 80,
+    completionTokens: 10,
+    totalTokens: 90,
+    cacheWritePromptTokens: 50,
+  };
+
+  const lines = captureConsole(() => {
+    logger.logStageEnd('panel', 100, usage);
+  });
+
+  const parsed = JSON.parse(lines[0]);
+  assert.equal(parsed.tokens.cacheWrite, 50);
+});
+
+test('ConsoleLoggerAdapter logStageEnd omits tokens.cached when cachedPromptTokens absent', () => {
+  const logger = new ConsoleLoggerAdapter();
+  const usage: TokenUsage = { promptTokens: 10, completionTokens: 5, totalTokens: 15 };
+
+  const lines = captureConsole(() => {
+    logger.logStageEnd('panel', 100, usage);
+  });
+
+  const parsed = JSON.parse(lines[0]);
+  assert.equal('cached' in parsed.tokens, false);
+  assert.equal('cacheWrite' in parsed.tokens, false);
+});

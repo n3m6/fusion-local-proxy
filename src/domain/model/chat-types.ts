@@ -80,6 +80,12 @@ export interface ChatResponse {
 }
 
 export interface TokenUsage {
+  /**
+   * Total input tokens for this call = uncached + cachedPromptTokens + cacheWritePromptTokens.
+   * Always inclusive of all cache tiers so that arithmetic across stages stays consistent.
+   * NOTE: Anthropic's `input_tokens` EXCLUDES cache tokens; adapters must reconstruct the
+   * inclusive total (input_tokens + cache_read + cache_creation) before setting this field.
+   */
   readonly promptTokens: number;
   readonly completionTokens: number;
   readonly totalTokens: number;
@@ -90,6 +96,18 @@ export interface TokenUsage {
    * auditable. Omitted when the provider does not report it.
    */
   readonly reasoningTokens?: number;
+  /**
+   * Subset of `promptTokens` served from the provider's prompt cache at a reduced rate.
+   * Maps to: DeepSeek `prompt_cache_hit_tokens`, OpenAI `prompt_tokens_details.cached_tokens`,
+   * Anthropic `cache_read_input_tokens`. Omitted when the provider does not report it.
+   */
+  readonly cachedPromptTokens?: number;
+  /**
+   * Tokens billed to *write* new entries into the provider's prompt cache, typically at a
+   * premium rate. Maps to: Anthropic `cache_creation_input_tokens`. Omitted for providers
+   * that do not have a separate cache-write billing tier (DeepSeek, OpenAI).
+   */
+  readonly cacheWritePromptTokens?: number;
 }
 
 export type ChatStreamChunk =

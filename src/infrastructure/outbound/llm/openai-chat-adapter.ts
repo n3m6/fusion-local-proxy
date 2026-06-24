@@ -193,6 +193,7 @@ export class OpenAiChatAdapter implements ChatModelPort {
           completion: usage.completionTokens,
           total: usage.totalTokens,
           ...(usage.reasoningTokens !== undefined ? { reasoning: usage.reasoningTokens } : {}),
+          ...(usage.cachedPromptTokens !== undefined ? { cached: usage.cachedPromptTokens } : {}),
         },
         {
           finishReason,
@@ -313,6 +314,9 @@ export class OpenAiChatAdapter implements ChatModelPort {
               total: lastUsage.totalTokens,
               ...(lastUsage.reasoningTokens !== undefined
                 ? { reasoning: lastUsage.reasoningTokens }
+                : {}),
+              ...(lastUsage.cachedPromptTokens !== undefined
+                ? { cached: lastUsage.cachedPromptTokens }
                 : {}),
             }
           : undefined,

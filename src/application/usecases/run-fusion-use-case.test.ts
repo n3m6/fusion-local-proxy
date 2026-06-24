@@ -1015,6 +1015,9 @@ test('fusion_run_end log includes totalTokens and tokensByStage from all stages'
     };
     cost?: {
       inputTokens: number;
+      cachedInputTokens: number;
+      cacheWriteInputTokens: number;
+      uncachedInputTokens: number;
       outputTokens: number;
       reasoningTokens: number;
       reEncodedPanelTokens: number;
@@ -1028,6 +1031,9 @@ test('fusion_run_end log includes totalTokens and tokensByStage from all stages'
   });
   assert.deepStrictEqual(fields.cost, {
     inputTokens: 65, // 10 + 5 + 50
+    cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
+    uncachedInputTokens: 65,
     outputTokens: 130, // 20 + 10 + 100
     reasoningTokens: 0,
     reEncodedPanelTokens: 20, // panel completion tokens re-billed as synthesis input

@@ -749,3 +749,119 @@ test('thinkingMode: two panelists receive independent mode-prefixed message arra
   // Arrays are independent (different references)
   assert.notEqual(sent0, sent1);
 });
+
+// ---------------------------------------------------------------------------
+// Cache token aggregation
+// ---------------------------------------------------------------------------
+
+test('cachedPromptTokens: aggregated across panelists when both report it', async () => {
+  const port0 = stubChatPort({
+    content: 'a',
+    usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120, cachedPromptTokens: 70 },
+    model: 'm0',
+  });
+  const port1 = stubChatPort({
+    content: 'b',
+    usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120, cachedPromptTokens: 50 },
+    model: 'm1',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30, 40]);
+
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'm0' }), port: port0 },
+      { modelRef: modelRef({ model: 'm1' }), port: port1 },
+    ],
+    logger,
+    clock,
+  );
+
+  const result = await runner.run([sampleMessage], 30000);
+
+  assert.equal(result.usage.cachedPromptTokens, 120); // 70 + 50
+  assert.equal(result.usage.promptTokens, 200); // inclusive
+});
+
+test('cacheWritePromptTokens: aggregated across panelists when reported', async () => {
+  const port0 = stubChatPort({
+    content: 'a',
+    usage: {
+      promptTokens: 80,
+      completionTokens: 10,
+      totalTokens: 90,
+      cacheWritePromptTokens: 40,
+    },
+    model: 'm0',
+  });
+  const port1 = stubChatPort({
+    content: 'b',
+    usage: {
+      promptTokens: 80,
+      completionTokens: 10,
+      totalTokens: 90,
+      cacheWritePromptTokens: 30,
+    },
+    model: 'm1',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30, 40]);
+
+  const runner = new PanelRunner(
+    [
+      { modelRef: modelRef({ model: 'm0' }), port: port0 },
+      { modelRef: modelRef({ model: 'm1' }), port: port1 },
+    ],
+    logger,
+    clock,
+  );
+
+  const result = await runner.run([sampleMessage], 30000);
+
+  assert.equal(result.usage.cacheWritePromptTokens, 70); // 40 + 30
+});
+
+test('cachedPromptTokens: omitted from aggregate when no panelist reports it', async () => {
+  const port0 = stubChatPort({
+    content: 'a',
+    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    model: 'm0',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30]);
+
+  const runner = new PanelRunner(
+    [{ modelRef: modelRef({ model: 'm0' }), port: port0 }],
+    logger,
+    clock,
+  );
+
+  const result = await runner.run([sampleMessage], 30000);
+
+  assert.equal('cachedPromptTokens' in result.usage, false);
+  assert.equal('cacheWritePromptTokens' in result.usage, false);
+});
+
+test('cachedPromptTokens: preserved in individual PanelResult.usage', async () => {
+  const port0 = stubChatPort({
+    content: 'a',
+    usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120, cachedPromptTokens: 80 },
+    model: 'm0',
+  });
+
+  const logger = stubLoggerPort();
+  const clock = stubClockPort([0, 10, 20, 30]);
+
+  const runner = new PanelRunner(
+    [{ modelRef: modelRef({ model: 'm0' }), port: port0 }],
+    logger,
+    clock,
+  );
+
+  const result = await runner.run([sampleMessage], 30000);
+
+  assert.equal(result.results[0].usage.cachedPromptTokens, 80);
+});

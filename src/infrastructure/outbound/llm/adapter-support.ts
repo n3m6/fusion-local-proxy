@@ -49,23 +49,46 @@ export function buildBaseLogFields(request: ChatRequest, provider: string): LogF
 
 /**
  * Parse an OpenAI usage object (from a non-streaming response or a streaming
- * chunk's `usage` field) into a domain `TokenUsage`. Reads the
- * `completion_tokens_details.reasoning_tokens` extension field that OpenAI and
- * DeepSeek-compatible backends expose but the SDK type omits.
+ * chunk's `usage` field) into a domain `TokenUsage`. Reads extension fields that
+ * OpenAI and DeepSeek-compatible backends expose but the SDK type omits:
+ *
+ * - `completion_tokens_details.reasoning_tokens` (OpenAI / DeepSeek)
+ * - `prompt_cache_hit_tokens` (DeepSeek) — preferred over `prompt_tokens_details`
+ * - `prompt_tokens_details.cached_tokens` (OpenAI) — fallback when the DeepSeek
+ *   field is absent
+ *
+ * `prompt_tokens` is already inclusive of cached tokens on both providers, so
+ * `promptTokens` is set directly from it without adjustment.
  */
 export function parseOpenAiUsage(raw: {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
   completion_tokens_details?: unknown;
+  prompt_tokens_details?: unknown;
+  prompt_cache_hit_tokens?: unknown;
 }): TokenUsage {
-  const details = raw.completion_tokens_details as { reasoning_tokens?: number } | undefined;
-  const reasoningTokens = details?.reasoning_tokens;
+  const completionDetails = raw.completion_tokens_details as
+    | { reasoning_tokens?: number }
+    | undefined;
+  const reasoningTokens = completionDetails?.reasoning_tokens;
+
+  // DeepSeek reports `prompt_cache_hit_tokens` at the top level of the usage object.
+  // OpenAI reports the equivalent under `prompt_tokens_details.cached_tokens`.
+  // Both keep `prompt_tokens` inclusive, so no adjustment to promptTokens is needed.
+  const promptDetails = raw.prompt_tokens_details as { cached_tokens?: number } | undefined;
+  const rawCached =
+    typeof raw.prompt_cache_hit_tokens === 'number'
+      ? raw.prompt_cache_hit_tokens
+      : promptDetails?.cached_tokens;
+  const cachedPromptTokens = typeof rawCached === 'number' ? rawCached : undefined;
+
   return {
     promptTokens: raw.prompt_tokens,
     completionTokens: raw.completion_tokens,
     totalTokens: raw.total_tokens,
     ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+    ...(cachedPromptTokens !== undefined ? { cachedPromptTokens } : {}),
   };
 }
 
@@ -106,7 +129,14 @@ export function onReasoningDelta(metrics: StreamMetrics, text: string): void {
 // Response log-field builders
 // ---------------------------------------------------------------------------
 
-type TokenFields = { prompt: number; completion: number; total: number; reasoning?: number };
+type TokenFields = {
+  prompt: number;
+  completion: number;
+  total: number;
+  reasoning?: number;
+  cached?: number;
+  cacheWrite?: number;
+};
 
 export function buildStreamResponseLogFields(
   request: ChatRequest,

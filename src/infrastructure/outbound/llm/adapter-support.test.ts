@@ -8,6 +8,7 @@ import {
   onReasoningDelta,
   buildStreamResponseLogFields,
   buildCompleteResponseLogFields,
+  parseOpenAiUsage,
 } from './adapter-support.js';
 import type { ChatRequest } from '../../../domain/model/chat-types.js';
 
@@ -327,4 +328,102 @@ test('buildCompleteResponseLogFields includes extra fields when provided', () =>
 
   assert.equal(fields.reasoningChars, 42);
   assert.equal(fields.finishReason, 'stop');
+});
+
+// ---------------------------------------------------------------------------
+// parseOpenAiUsage
+// ---------------------------------------------------------------------------
+
+test('parseOpenAiUsage maps basic prompt/completion/total tokens', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 10,
+    completion_tokens: 20,
+    total_tokens: 30,
+  });
+
+  assert.equal(usage.promptTokens, 10);
+  assert.equal(usage.completionTokens, 20);
+  assert.equal(usage.totalTokens, 30);
+  assert.equal(usage.reasoningTokens, undefined);
+  assert.equal(usage.cachedPromptTokens, undefined);
+});
+
+test('parseOpenAiUsage reads reasoning_tokens from completion_tokens_details', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 10,
+    completion_tokens: 20,
+    total_tokens: 30,
+    completion_tokens_details: { reasoning_tokens: 15 },
+  });
+
+  assert.equal(usage.reasoningTokens, 15);
+});
+
+test('parseOpenAiUsage omits reasoningTokens when completion_tokens_details is absent', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 10,
+    completion_tokens: 20,
+    total_tokens: 30,
+  });
+
+  assert.equal('reasoningTokens' in usage, false);
+});
+
+test('parseOpenAiUsage reads DeepSeek prompt_cache_hit_tokens into cachedPromptTokens', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 100,
+    completion_tokens: 20,
+    total_tokens: 120,
+    prompt_cache_hit_tokens: 80,
+  });
+
+  assert.equal(usage.cachedPromptTokens, 80);
+  // promptTokens stays inclusive (no subtraction)
+  assert.equal(usage.promptTokens, 100);
+});
+
+test('parseOpenAiUsage reads OpenAI prompt_tokens_details.cached_tokens into cachedPromptTokens', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 100,
+    completion_tokens: 20,
+    total_tokens: 120,
+    prompt_tokens_details: { cached_tokens: 60 },
+  });
+
+  assert.equal(usage.cachedPromptTokens, 60);
+  assert.equal(usage.promptTokens, 100);
+});
+
+test('parseOpenAiUsage prefers DeepSeek prompt_cache_hit_tokens over prompt_tokens_details when both present', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 100,
+    completion_tokens: 20,
+    total_tokens: 120,
+    prompt_cache_hit_tokens: 70,
+    prompt_tokens_details: { cached_tokens: 60 },
+  });
+
+  assert.equal(usage.cachedPromptTokens, 70);
+});
+
+test('parseOpenAiUsage omits cachedPromptTokens when no cache fields present', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 10,
+    completion_tokens: 5,
+    total_tokens: 15,
+  });
+
+  assert.equal('cachedPromptTokens' in usage, false);
+});
+
+test('parseOpenAiUsage handles prompt_cache_hit_tokens of zero without setting cachedPromptTokens', () => {
+  const usage = parseOpenAiUsage({
+    prompt_tokens: 10,
+    completion_tokens: 5,
+    total_tokens: 15,
+    prompt_cache_hit_tokens: 0,
+  });
+
+  // 0 is a valid number; the field should be present but equal 0
+  assert.equal(usage.cachedPromptTokens, 0);
 });

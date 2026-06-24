@@ -48,7 +48,13 @@ export interface PanelResult {
   readonly modelId: string;
   readonly provider: ProviderType;
   readonly content: string;
-  readonly usage: { promptTokens: number; completionTokens: number; reasoningTokens?: number };
+  readonly usage: {
+    promptTokens: number;
+    completionTokens: number;
+    reasoningTokens?: number;
+    cachedPromptTokens?: number;
+    cacheWritePromptTokens?: number;
+  };
   readonly latencyMs: number;
 }
 

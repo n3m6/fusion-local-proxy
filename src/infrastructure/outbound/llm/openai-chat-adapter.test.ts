@@ -2247,3 +2247,132 @@ test('OpenAiChatAdapter.complete() forwards top_p and stop (stopSequences) to SD
   assert.equal(capturedParams.value!.top_p, 0.9);
   assert.deepEqual(capturedParams.value!.stop, ['END', '---']);
 });
+
+// ---------------------------------------------------------------------------
+// Cache token accounting — complete()
+// ---------------------------------------------------------------------------
+
+test('OpenAiChatAdapter.complete() surfaces DeepSeek prompt_cache_hit_tokens as cachedPromptTokens', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'deepseek-v4-pro',
+    choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+    usage: {
+      prompt_tokens: 100,
+      completion_tokens: 20,
+      total_tokens: 120,
+      prompt_cache_hit_tokens: 80,
+      prompt_cache_miss_tokens: 20,
+    },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client);
+  const response = await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'deepseek-v4-pro', baseURL: '', apiKey: '' },
+  });
+
+  assert.equal(response.usage.promptTokens, 100);
+  assert.equal(response.usage.cachedPromptTokens, 80);
+  assert.equal(response.usage.cacheWritePromptTokens, undefined);
+});
+
+test('OpenAiChatAdapter.complete() surfaces OpenAI prompt_tokens_details.cached_tokens as cachedPromptTokens', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'gpt-4o',
+    choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+    usage: {
+      prompt_tokens: 100,
+      completion_tokens: 20,
+      total_tokens: 120,
+      prompt_tokens_details: { cached_tokens: 64 },
+    },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client);
+  const response = await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+  });
+
+  assert.equal(response.usage.promptTokens, 100);
+  assert.equal(response.usage.cachedPromptTokens, 64);
+});
+
+test('OpenAiChatAdapter.complete() omits cachedPromptTokens when no cache fields in usage', async () => {
+  const client = mockOpenAiClient(async () => ({
+    id: 'id',
+    object: 'chat.completion',
+    created: 1,
+    model: 'gpt-4o',
+    choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+  }));
+
+  const adapter = new OpenAiChatAdapter(client);
+  const response = await adapter.complete({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'gpt-4o', baseURL: '', apiKey: '' },
+  });
+
+  assert.equal('cachedPromptTokens' in response.usage, false);
+});
+
+// ---------------------------------------------------------------------------
+// Cache token accounting — stream()
+// ---------------------------------------------------------------------------
+
+test('OpenAiChatAdapter.stream() surfaces DeepSeek prompt_cache_hit_tokens as cachedPromptTokens in usage chunk', async () => {
+  const streamChunks = [
+    {
+      id: 'id',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [{ index: 0, delta: { content: 'Hi' }, finish_reason: null }],
+      usage: null,
+    },
+    {
+      id: 'id',
+      object: 'chat.completion.chunk',
+      created: 1,
+      model: 'deepseek-v4-pro',
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 10,
+        total_tokens: 110,
+        prompt_cache_hit_tokens: 75,
+        prompt_cache_miss_tokens: 25,
+      },
+    },
+  ];
+
+  const client = mockOpenAiClient(async () => {
+    async function* gen() {
+      for (const c of streamChunks) yield c;
+    }
+    return gen() as unknown as Record<string, unknown>;
+  });
+
+  const adapter = new OpenAiChatAdapter(client);
+  const chunks: import('../../../domain/model/chat-types.js').ChatStreamChunk[] = [];
+  for await (const chunk of adapter.stream({
+    messages: [{ role: 'user', content: 'Hi' }],
+    model: { provider: 'openai', model: 'deepseek-v4-pro', baseURL: '', apiKey: '' },
+  })) {
+    chunks.push(chunk);
+  }
+
+  const usageChunk = chunks.find((c) => c.type === 'usage') as
+    | { type: 'usage'; usage: import('../../../domain/model/chat-types.js').TokenUsage }
+    | undefined;
+  assert.ok(usageChunk, 'expected a usage chunk');
+  assert.equal(usageChunk!.usage.promptTokens, 100);
+  assert.equal(usageChunk!.usage.cachedPromptTokens, 75);
+});

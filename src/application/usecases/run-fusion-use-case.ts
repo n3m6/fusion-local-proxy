@@ -21,6 +21,9 @@ interface UsageSummary {
   };
   cost: {
     inputTokens: number;
+    cachedInputTokens: number;
+    cacheWriteInputTokens: number;
+    uncachedInputTokens: number;
     outputTokens: number;
     reasoningTokens: number;
     reEncodedPanelTokens: number;
@@ -52,6 +55,18 @@ function summarizeUsage(
     (judgeUsage?.completionTokens ?? 0) +
     (synthUsage?.completionTokens ?? 0);
 
+  // Cache-tier split: sum across all three stages. Fields are omitted on
+  // providers that do not report them, so absent means 0 for aggregation.
+  const cachedInputTokens =
+    (panelMeta.usage.cachedPromptTokens ?? 0) +
+    (judgeUsage?.cachedPromptTokens ?? 0) +
+    (synthUsage?.cachedPromptTokens ?? 0);
+  const cacheWriteInputTokens =
+    (panelMeta.usage.cacheWritePromptTokens ?? 0) +
+    (judgeUsage?.cacheWritePromptTokens ?? 0) +
+    (synthUsage?.cacheWritePromptTokens ?? 0);
+  const uncachedInputTokens = inputTokens - cachedInputTokens - cacheWriteInputTokens;
+
   return {
     totalTokens: panelTokens + judgeTokens + synthTokens,
     tokensByStage: {
@@ -61,6 +76,9 @@ function summarizeUsage(
     },
     cost: {
       inputTokens,
+      cachedInputTokens,
+      cacheWriteInputTokens,
+      uncachedInputTokens,
       outputTokens,
       reasoningTokens: panelReasoning + judgeReasoning + synthReasoning,
       reEncodedPanelTokens: panelMeta.usage.completionTokens,

@@ -645,12 +645,21 @@ automatically disabled when output is piped or redirected.
 **Token cost breakdown (`fusion_run_end`):**
 
 `fusion_run_end` carries a `tokensByStage` field reporting `{ total, reasoning }`
-per stage, and a `cost` block with `inputTokens`, `outputTokens`,
-`reasoningTokens` (the billed-but-invisible subset of output), and
-`reEncodedPanelTokens` (panel output re-billed as synthesizer input). `reasoning`
-token counts come from providers that report them (e.g. OpenAI
-`completion_tokens_details.reasoning_tokens`); Anthropic folds extended thinking
-into `output_tokens` and does not report it separately.
+per stage, and a `cost` block with the following fields:
+
+| Field                   | Description                                                                                                                                                                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inputTokens`           | Total input tokens across all stages (panel + judge + synth), inclusive of all cache tiers.                                                                                                                                                                           |
+| `cachedInputTokens`     | Subset of `inputTokens` served from the provider cache at a reduced rate. Populated from DeepSeek `prompt_cache_hit_tokens`, OpenAI `prompt_tokens_details.cached_tokens`, or Anthropic `cache_read_input_tokens`. Zero when the provider does not report cache hits. |
+| `cacheWriteInputTokens` | Tokens billed to _write_ new cache entries at a premium rate (Anthropic `cache_creation_input_tokens`). Zero for DeepSeek and OpenAI, which have no write tier.                                                                                                       |
+| `uncachedInputTokens`   | `inputTokens − cachedInputTokens − cacheWriteInputTokens` — the portion billed at the full input rate.                                                                                                                                                                |
+| `outputTokens`          | Total output tokens across all stages.                                                                                                                                                                                                                                |
+| `reasoningTokens`       | Billed-but-invisible reasoning tokens (a subset of `outputTokens`), reported by OpenAI and DeepSeek; Anthropic folds extended thinking into `output_tokens` and does not report it separately.                                                                        |
+| `reEncodedPanelTokens`  | Panel completion tokens used as a proxy for panel output re-billed as synthesizer input. This is an approximation (panel and synthesizer may use different tokenizers) and is retained for backward compatibility.                                                    |
+
+Per-stage `end` log lines also carry a `tokens` object with `cached` and `cacheWrite`
+sub-fields when the provider reported them, alongside `prompt`, `completion`, `total`,
+and `reasoning`.
 
 **`LOG_LEVEL=debug`:**
 

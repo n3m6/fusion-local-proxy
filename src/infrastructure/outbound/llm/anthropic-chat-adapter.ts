@@ -65,10 +65,26 @@ export class AnthropicChatAdapter implements ChatModelPort {
     }
     const content = textBlock.text;
 
+    // Anthropic's `input_tokens` EXCLUDES cache tokens; reconstruct the inclusive total.
+    // The SDK Usage type may not declare these fields yet — access via cast.
+    const rawUsage = response.usage as unknown as Record<string, unknown>;
+    const cacheRead =
+      typeof rawUsage.cache_read_input_tokens === 'number'
+        ? rawUsage.cache_read_input_tokens
+        : undefined;
+    const cacheWrite =
+      typeof rawUsage.cache_creation_input_tokens === 'number'
+        ? rawUsage.cache_creation_input_tokens
+        : undefined;
+    const inclusivePromptTokens =
+      response.usage.input_tokens + (cacheRead ?? 0) + (cacheWrite ?? 0);
+
     const usage: TokenUsage = {
-      promptTokens: response.usage.input_tokens,
+      promptTokens: inclusivePromptTokens,
       completionTokens: response.usage.output_tokens,
-      totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+      totalTokens: inclusivePromptTokens + response.usage.output_tokens,
+      ...(cacheRead !== undefined ? { cachedPromptTokens: cacheRead } : {}),
+      ...(cacheWrite !== undefined ? { cacheWritePromptTokens: cacheWrite } : {}),
     };
 
     this.logger?.logResponse(
@@ -76,6 +92,10 @@ export class AnthropicChatAdapter implements ChatModelPort {
         prompt: usage.promptTokens,
         completion: usage.completionTokens,
         total: usage.totalTokens,
+        ...(usage.cachedPromptTokens !== undefined ? { cached: usage.cachedPromptTokens } : {}),
+        ...(usage.cacheWritePromptTokens !== undefined
+          ? { cacheWrite: usage.cacheWritePromptTokens }
+          : {}),
       }),
     );
 
@@ -96,12 +116,27 @@ export class AnthropicChatAdapter implements ChatModelPort {
     let usageYielded = false;
     let inputTokens = 0;
     let outputTokens = 0;
+    // Cache token counts from message_start; Anthropic's input_tokens EXCLUDES these.
+    // undefined = field was absent in the response (never reported by this provider/call).
+    let cacheReadTokens: number | undefined = undefined;
+    let cacheWriteTokens: number | undefined = undefined;
 
     for await (const event of messageStream) {
       switch (event.type) {
-        case 'message_start':
+        case 'message_start': {
           inputTokens = event.message.usage.input_tokens;
+          // The SDK Usage type may not declare these fields yet — access via cast.
+          const rawUsage = event.message.usage as unknown as Record<string, unknown>;
+          cacheReadTokens =
+            typeof rawUsage.cache_read_input_tokens === 'number'
+              ? rawUsage.cache_read_input_tokens
+              : undefined;
+          cacheWriteTokens =
+            typeof rawUsage.cache_creation_input_tokens === 'number'
+              ? rawUsage.cache_creation_input_tokens
+              : undefined;
           break;
+        }
 
         case 'content_block_delta':
           if (event.delta.type === 'text_delta') {
@@ -126,12 +161,19 @@ export class AnthropicChatAdapter implements ChatModelPort {
             stopYielded = true;
           }
           if (!usageYielded) {
+            // Reconstruct inclusive prompt token count (input_tokens excludes cache).
+            const inclusivePromptTokens =
+              inputTokens + (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
             yield {
               type: 'usage',
               usage: {
-                promptTokens: inputTokens,
+                promptTokens: inclusivePromptTokens,
                 completionTokens: outputTokens,
-                totalTokens: inputTokens + outputTokens,
+                totalTokens: inclusivePromptTokens + outputTokens,
+                ...(cacheReadTokens !== undefined ? { cachedPromptTokens: cacheReadTokens } : {}),
+                ...(cacheWriteTokens !== undefined
+                  ? { cacheWritePromptTokens: cacheWriteTokens }
+                  : {}),
               },
             };
             usageYielded = true;
@@ -147,11 +189,14 @@ export class AnthropicChatAdapter implements ChatModelPort {
       yield { type: 'content_stop' };
     }
 
+    const inclusivePrompt = inputTokens + (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
     this.logger?.logResponse(
       buildStreamResponseLogFields(request, 'anthropic', metrics, startTime, {
-        prompt: inputTokens,
+        prompt: inclusivePrompt,
         completion: outputTokens,
-        total: inputTokens + outputTokens,
+        total: inclusivePrompt + outputTokens,
+        ...(cacheReadTokens !== undefined ? { cached: cacheReadTokens } : {}),
+        ...(cacheWriteTokens !== undefined ? { cacheWrite: cacheWriteTokens } : {}),
       }),
     );
   }

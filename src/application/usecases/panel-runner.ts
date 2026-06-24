@@ -103,6 +103,12 @@ export class PanelRunner {
             ...(value.usage.reasoningTokens !== undefined
               ? { reasoningTokens: value.usage.reasoningTokens }
               : {}),
+            ...(value.usage.cachedPromptTokens !== undefined
+              ? { cachedPromptTokens: value.usage.cachedPromptTokens }
+              : {}),
+            ...(value.usage.cacheWritePromptTokens !== undefined
+              ? { cacheWritePromptTokens: value.usage.cacheWritePromptTokens }
+              : {}),
           },
           latencyMs,
         });
@@ -134,13 +140,25 @@ export class PanelRunner {
     let promptTokens = 0;
     let completionTokens = 0;
     let reasoningTokens = 0;
+    let cachedPromptTokens = 0;
+    let cacheWritePromptTokens = 0;
     let anyReasoning = false;
+    let anyCached = false;
+    let anyCacheWrite = false;
     for (const result of results) {
       promptTokens += result.usage.promptTokens;
       completionTokens += result.usage.completionTokens;
       if (result.usage.reasoningTokens !== undefined) {
         anyReasoning = true;
         reasoningTokens += result.usage.reasoningTokens;
+      }
+      if (result.usage.cachedPromptTokens !== undefined) {
+        anyCached = true;
+        cachedPromptTokens += result.usage.cachedPromptTokens;
+      }
+      if (result.usage.cacheWritePromptTokens !== undefined) {
+        anyCacheWrite = true;
+        cacheWritePromptTokens += result.usage.cacheWritePromptTokens;
       }
     }
 
@@ -149,6 +167,8 @@ export class PanelRunner {
       completionTokens,
       totalTokens: promptTokens + completionTokens,
       ...(anyReasoning ? { reasoningTokens } : {}),
+      ...(anyCached ? { cachedPromptTokens } : {}),
+      ...(anyCacheWrite ? { cacheWritePromptTokens } : {}),
     };
 
     this.loggerPort.logStageEnd('panel', this.clockPort.now() - stageStart, aggregateUsage);
