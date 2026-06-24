@@ -8,6 +8,7 @@ import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { LoggerPort, LogLevel, LogFields } from '../../domain/ports/logger-port.js';
 import type { TokenUsage } from '../../domain/model/chat-types.js';
 import type { FailedModelInfo } from '../../domain/model/stream-types.js';
+import { NO_TOOLS_DIRECTIVE } from '../../domain/services/tool-conversation.js';
 
 // ---------------------------------------------------------------------------
 // Stubs
@@ -129,6 +130,32 @@ describe('AgentSynthesisUseCase — tool turn', () => {
     assert.ok(routeLog, 'must log agent_route');
     assert.equal((routeLog.fields as { mode: string }).mode, 'tool');
   });
+
+  test('routes to tool and relays preamble when content_delta precedes tool_call_delta', async () => {
+    let fusionCalled = false;
+    const fusionService: FusionService = {
+      async *runFusion(_r) {
+        fusionCalled = true;
+        yield { type: 'done' };
+      },
+    };
+
+    const agentEvents: FusionStreamEvent[] = [
+      { type: 'content_delta', delta: 'Let me check…' },
+      { type: 'tool_call_delta', index: 0, id: 'c1', name: 'get_weather' },
+      { type: 'tool_call_delta', index: 0, argumentsDelta: '{"city":"NYC"}' },
+      { type: 'content_stop', finishReason: 'tool_calls' },
+      { type: 'done' },
+    ];
+
+    const useCase = new AgentSynthesisUseCase(stubAgent(agentEvents), fusionService, stubLogger());
+    const result = await collect(useCase.runAgent(baseRequest()));
+
+    assert.equal(fusionCalled, false, 'fusion must not be called on a tool turn');
+    assert.equal(result.length, agentEvents.length, 'all agent events must be relayed');
+    assert.equal(result[0].type, 'content_delta', 'preamble content_delta must be relayed');
+    assert.equal(result[1].type, 'tool_call_delta', 'tool_call_delta must follow the preamble');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -194,6 +221,11 @@ describe('AgentSynthesisUseCase — synthesis turn (content_delta first)', () =>
     // Verify tool messages have been flattened
     const hasTool = req.messages.some((m) => m.role === 'tool');
     assert.equal(hasTool, false, 'tool role messages must be flattened');
+    // Verify the no-tools directive is injected
+    const hasDirective = req.messages.some(
+      (m) => m.role === 'system' && m.content === NO_TOOLS_DIRECTIVE,
+    );
+    assert.equal(hasDirective, true, 'no-tools directive must be present in synthesis request');
   });
 
   test('logs mode=synthesis when routing to fusion', async () => {

@@ -3,22 +3,27 @@ import type { FusionService } from '../ports/fusion-service.js';
 import type { FusionRequest } from '../../domain/model/fusion-types.js';
 import type { FusionStreamEvent } from '../../domain/model/stream-types.js';
 import type { LoggerPort } from '../../domain/ports/logger-port.js';
-import { flattenToolMessages } from '../../domain/services/tool-conversation.js';
+import {
+  flattenToolMessages,
+  withNoToolsDirective,
+} from '../../domain/services/tool-conversation.js';
 
 /**
  * AgentService wrapper that lets a single agent drive tool calls (each tool
  * fired exactly once per turn) but routes the agent's final natural-language
  * answer turn through the full fusion ensemble (panel → judge → synthesis).
  *
- * Detection strategy: first-event branching.
- * - First decisive event is tool_call_delta → tool turn: relay the agent stream
- *   verbatim (the client sees tool call chunks and executes the tool).
- * - First decisive event is content_delta, or the agent stream ends without any
- *   decisive event → answer turn: stop the agent and run fusionService instead,
- *   passing flattened messages so every panel model can handle them.
+ * Detection strategy: end-of-turn branching.
+ * - First tool_call_delta → tool turn: flush the buffered preamble and relay
+ *   the remainder of the agent stream verbatim. A content preamble before the
+ *   tool call is buffered and relayed so the client sees it too.
+ * - content_stop / done / stream end with no tool_call_delta → answer turn:
+ *   stop the agent and run fusionService instead, passing flattened messages
+ *   with a no-tools directive so panel models do not narrate tool-call syntax.
  *
- * Known trade-off: the discarded agent preflight on answer turns uses tokens
- * that are not included in the reported usage (fusion reports its own usage).
+ * Known trade-off: on answer turns the proxy waits for the agent's full first
+ * turn (until content_stop/done) before synthesis starts. The agent's preflight
+ * tokens are not included in the reported usage (fusion reports its own).
  */
 export class AgentSynthesisUseCase implements AgentService {
   constructor(
@@ -34,8 +39,10 @@ export class AgentSynthesisUseCase implements AgentService {
     let iterDone = false;
 
     try {
-      // Phase 1: peek at inner-agent stream until first decisive event.
-      peekLoop: for (;;) {
+      // Phase 1: consume inner-agent stream until a decisive boundary.
+      // content_delta / progress → buffer; tool_call_delta → tool turn immediately.
+      // content_stop / done / stream end without a tool call → synthesis turn.
+      decideLoop: for (;;) {
         const step = await iter.next();
         if (step.done) {
           iterDone = true;
@@ -48,12 +55,12 @@ export class AgentSynthesisUseCase implements AgentService {
           case 'tool_call_delta':
             mode = 'tool';
             buffer.push(event);
-            break peekLoop;
+            break decideLoop;
 
-          case 'content_delta':
-            // Answer turn: abandon the agent stream (cleaned up in finally).
+          case 'content_stop':
+          case 'done':
             mode = 'synthesis';
-            break peekLoop;
+            break decideLoop;
 
           case 'error':
             // Relay the error and stop; iterator considered done.
@@ -61,7 +68,7 @@ export class AgentSynthesisUseCase implements AgentService {
             yield event;
             return;
 
-          default:
+          default: // content_delta, progress → buffer, keep consuming
             buffer.push(event);
         }
       }
@@ -69,8 +76,8 @@ export class AgentSynthesisUseCase implements AgentService {
       this.loggerPort.log('info', 'agent_route', { mode });
 
       if (mode === 'tool') {
-        // Flush buffer (first entry is the decisive tool_call_delta) then
-        // stream the remainder of the agent verbatim.
+        // Flush buffer (any content preamble followed by the decisive
+        // tool_call_delta) then stream the remainder of the agent verbatim.
         for (const e of buffer) {
           yield e;
         }
@@ -84,11 +91,11 @@ export class AgentSynthesisUseCase implements AgentService {
         }
       } else {
         // Synthesis path: agent stream will be closed in the finally block.
-        // Flatten tool messages so Anthropic and text-only panel models can
-        // handle the conversation without needing structured tool support.
+        // Flatten tool messages and inject a no-tools directive so panel and
+        // synthesizer models do not narrate tool-call syntax.
         yield* this.fusionService.runFusion({
           ...request,
-          messages: flattenToolMessages(request.messages),
+          messages: withNoToolsDirective(flattenToolMessages(request.messages)),
           tools: undefined,
           toolChoice: undefined,
         });

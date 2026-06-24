@@ -1,5 +1,12 @@
 import type { Message, ToolCall } from '../model/message.js';
 
+export const NO_TOOLS_DIRECTIVE =
+  'Tool calling is disabled for this step and no tools are available. Answer the user directly in natural language using the conversation so far. Do not emit tool calls, function calls, or any tool-call markup or special tokens.';
+
+export function withNoToolsDirective(messages: Message[]): Message[] {
+  return [...messages, { role: 'system', content: NO_TOOLS_DIRECTIVE }];
+}
+
 function buildToolCallIndex(messages: Message[]): Map<string, string> {
   const index = new Map<string, string>();
   for (const msg of messages) {

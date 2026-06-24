@@ -1,6 +1,10 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { flattenToolMessages } from './tool-conversation.js';
+import {
+  flattenToolMessages,
+  withNoToolsDirective,
+  NO_TOOLS_DIRECTIVE,
+} from './tool-conversation.js';
 import type { Message } from '../model/message.js';
 
 // ---------------------------------------------------------------------------
@@ -155,6 +159,32 @@ describe('flattenToolMessages — consecutive same-role merging', () => {
     const messages: Message[] = [user('question'), assistant('answer')];
     const result = flattenToolMessages(messages);
     assert.equal(result.length, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// withNoToolsDirective
+// ---------------------------------------------------------------------------
+
+describe('withNoToolsDirective', () => {
+  test('appends a system message containing the no-tools directive', () => {
+    const messages: Message[] = [user('hello'), assistant('world')];
+    const result = withNoToolsDirective(messages);
+    assert.equal(result.length, 3);
+    assert.equal(result[2].role, 'system');
+    assert.equal(result[2].content, NO_TOOLS_DIRECTIVE);
+  });
+
+  test('does not mutate the input array', () => {
+    const messages: Message[] = [user('hello')];
+    withNoToolsDirective(messages);
+    assert.equal(messages.length, 1, 'input array must not be mutated');
+  });
+
+  test('returns a new array', () => {
+    const messages: Message[] = [user('hello')];
+    const result = withNoToolsDirective(messages);
+    assert.notEqual(result, messages);
   });
 });
 

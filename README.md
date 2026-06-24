@@ -453,17 +453,27 @@ applied:
 1. **Tool-call turns** — the agent model drives tool calls exactly as before.
    Tool call deltas are streamed as `choices[0].delta.tool_calls` chunks. The
    non-streaming path returns complete `message.tool_calls`. The `finish_reason`
-   reflects `"tool_calls"` as reported by the model.
+   reflects `"tool_calls"` as reported by the model. A content preamble emitted
+   before the tool call (e.g. "Let me look that up…") is buffered and relayed
+   verbatim to the client.
 2. **Final answer turn** — when the agent emits a natural-language answer (no
    tool call), that turn is routed through the full fusion ensemble
    (panel → judge → synthesis). The synthesized response is streamed back to the
    client as a normal `content_delta` stream.
 
-The routing decision is made on the **first decisive stream event**: a
-`tool_call_delta` means tool turn; a `content_delta` (or an empty stream) means
-answer turn. The agent model is called once on every answer turn and then
-discarded so the ensemble can deliberate — this costs one extra agent preflight
-whose token usage is not added to the reported usage (fusion reports its own).
+The routing decision is made on the **completed turn**: the proxy buffers the
+agent's stream and commits to tool-turn mode on the first `tool_call_delta`, or
+to answer-turn (synthesis) mode when `content_stop` or `done` arrives without
+any tool call having been seen. The agent model is called once on every answer
+turn and then discarded so the ensemble can deliberate — this costs one extra
+agent preflight whose token usage is not added to the reported usage (fusion
+reports its own).
+
+The synthesis path strips `tools` from the fusion request and injects a
+system-level directive instructing all panel and synthesizer models not to emit
+tool calls or tool-call markup. DeepSeek and other models that return structured
+`tool_calls` when `tools` is present in the request do not require a text-to-structured
+parser — the adapter maps structured calls directly to `tool_call_delta` events.
 
 ```bash
 curl -s http://localhost:3000/v1/chat/completions \
@@ -477,8 +487,9 @@ curl -s http://localhost:3000/v1/chat/completions \
   }'
 ```
 
-**Known trade-off:** a model that emits visible prose before a tool call in the
-same turn will be routed to synthesis and its tool call dropped.
+**Known trade-off:** on answer turns the proxy waits for the agent's full first
+turn (until `content_stop`/`done`) before synthesis starts. Tool turns still
+commit on the first `tool_call_delta` and remain responsive.
 
 ### Models
 
