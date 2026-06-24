@@ -239,27 +239,74 @@ test('ConsoleLoggerAdapter wraps each level in its ANSI color when useColor is o
   const logger = new ConsoleLoggerAdapter('debug', true);
 
   const lines = captureConsole(() => {
-    logger.logRequest({ stage: 'panel' }); // debug -> gray
-    logger.logStageStart('panel'); // info -> cyan
-    logger.logFailedModels([{ modelId: 'm', errorCode: 'E', errorMessage: 'boom' }]); // warn -> yellow
-    logger.logError('panel', new Error('boom')); // error -> red
+    logger.logRequest({ stage: 'panel' }); // debug panel request -> dim green
+    logger.logStageStart('panel'); // info -> bold bright cyan
+    logger.logFailedModels([{ modelId: 'm', errorCode: 'E', errorMessage: 'boom' }]); // warn -> bold bright yellow
+    logger.logError('panel', new Error('boom')); // error -> bold bright red
   });
 
-  const colorOf: Record<string, string> = {
-    debug: '\x1b[37m',
-    info: '\x1b[96m',
-    warn: '\x1b[93m',
-    error: '\x1b[91m',
+  const expectedPrefix: Record<string, string> = {
+    debug: '\x1b[2;32m', // dim + green (panel stage)
+    info: '\x1b[1;96m', // bold + bright cyan
+    warn: '\x1b[1;93m', // bold + bright yellow
+    error: '\x1b[1;91m', // bold + bright red
   };
 
   // eslint-disable-next-line no-control-regex -- intentionally matching ANSI escapes
-  const ansi = /\x1b\[[0-9]+m/g;
+  const ansi = /\x1b\[[0-9;]+m/g;
   for (const line of lines) {
     assert.ok(line.startsWith('\x1b['), 'colored line must start with an ANSI code');
     assert.ok(line.endsWith('\x1b[0m'), 'colored line must end with a reset code');
     const parsed = JSON.parse(line.replace(ansi, ''));
-    assert.equal(line.startsWith(colorOf[parsed.level as string]), true);
+    assert.ok(
+      line.startsWith(expectedPrefix[parsed.level as string]),
+      `level ${String(parsed.level)}: expected prefix ${expectedPrefix[parsed.level as string]}`,
+    );
   }
+});
+
+test('ConsoleLoggerAdapter uses per-stage hues for debug lines', () => {
+  const logger = new ConsoleLoggerAdapter('debug', true);
+
+  const lines = captureConsole(() => {
+    logger.logRequest({ stage: 'panel' }); // dim + green
+    logger.logResponse({ stage: 'panel' }); // dim + green + underline
+    logger.logRequest({ stage: 'judge' }); // dim + magenta
+    logger.logResponse({ stage: 'judge' }); // dim + magenta + underline
+    logger.logRequest({ stage: 'synthesis' }); // dim + blue
+    logger.logResponse({ stage: 'synthesis' }); // dim + blue + underline
+  });
+
+  assert.equal(lines.length, 6);
+
+  // eslint-disable-next-line no-control-regex -- intentionally matching ANSI escapes
+  const ansi = /\x1b\[[0-9;]+m/g;
+
+  assert.ok(lines[0].startsWith('\x1b[2;32m'), 'panel request: dim green');
+  assert.ok(lines[1].startsWith('\x1b[2;32;4m'), 'panel response: dim green + underline');
+  assert.ok(lines[2].startsWith('\x1b[2;35m'), 'judge request: dim magenta');
+  assert.ok(lines[3].startsWith('\x1b[2;35;4m'), 'judge response: dim magenta + underline');
+  assert.ok(lines[4].startsWith('\x1b[2;34m'), 'synthesis request: dim blue');
+  assert.ok(lines[5].startsWith('\x1b[2;34;4m'), 'synthesis response: dim blue + underline');
+
+  for (const line of lines) {
+    assert.ok(line.endsWith('\x1b[0m'), 'must end with reset');
+    assert.doesNotThrow(
+      () => JSON.parse(line.replace(ansi, '')),
+      'must be valid JSON after stripping ANSI',
+    );
+  }
+});
+
+test('ConsoleLoggerAdapter uses default debug hue for lines without a stage', () => {
+  const logger = new ConsoleLoggerAdapter('debug', true);
+
+  const lines = captureConsole(() => {
+    logger.log('debug', 'judge_skipped', { requestId: 'r1' });
+  });
+
+  assert.equal(lines.length, 1);
+  assert.ok(lines[0].startsWith('\x1b[2;37m'), 'no-stage debug line: dim white');
 });
 
 test('parseLogLevel normalizes known values and falls back to info', () => {

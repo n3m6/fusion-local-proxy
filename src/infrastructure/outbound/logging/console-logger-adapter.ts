@@ -11,17 +11,56 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 
 const RESET = '\x1b[0m';
 
+// ANSI SGR attribute codes
+const BOLD = '1';
+const DIM = '2';
+const UNDERLINE = '4';
+
 /**
- * ANSI foreground colors keyed by level, using the high-intensity (bright)
- * variants for readability on dark terminals: debug=white, info=bright cyan,
- * warn=bright yellow, error=bright red.
+ * Hue codes for non-debug levels, combined with BOLD so info/warn/error lines
+ * appear visually heavier than dim debug lines.
  */
-const LEVEL_COLOR: Record<LogLevel, string> = {
-  debug: '\x1b[37m',
-  info: '\x1b[96m',
-  warn: '\x1b[93m',
-  error: '\x1b[91m',
+const LEVEL_HUE: Record<Exclude<LogLevel, 'debug'>, string> = {
+  info: '96', // bright cyan
+  warn: '93', // bright yellow
+  error: '91', // bright red
 };
+
+/**
+ * Per-stage hue codes for debug lines. Each pipeline stage gets a distinct
+ * color so panel / judge / synthesis calls are immediately distinguishable.
+ */
+const STAGE_HUE: { [stage: string]: string | undefined } = {
+  panel: '32', // green
+  judge: '35', // magenta
+  synthesis: '34', // blue
+  agent: '36', // cyan
+};
+
+/** Fallback hue for debug lines that carry no stage (e.g. judge_skipped). */
+const DEFAULT_DEBUG_HUE = '37'; // white
+
+/** Build a single ANSI SGR escape from one or more attribute/color codes. */
+function sgr(...codes: string[]): string {
+  return `\x1b[${codes.join(';')}m`;
+}
+
+/**
+ * Select the ANSI color sequence for a log line.
+ *
+ * - Non-debug: bold + level hue → visually heavier than debug lines.
+ * - Debug: dim + stage hue (panel/judge/synthesis/agent) → lighter than info,
+ *   each stage a distinct color. Response lines additionally carry underline so
+ *   request and response are distinguishable at a glance.
+ */
+function selectColor(level: LogLevel, payload: Record<string, unknown>): string {
+  if (level !== 'debug') return sgr(BOLD, LEVEL_HUE[level]);
+  const stage = typeof payload.stage === 'string' ? payload.stage : undefined;
+  const hue = (stage !== undefined ? STAGE_HUE[stage] : undefined) ?? DEFAULT_DEBUG_HUE;
+  const attrs = [DIM, hue];
+  if (payload.event === 'response') attrs.push(UNDERLINE);
+  return sgr(...attrs);
+}
 
 /**
  * Parse a free-form level string (e.g. from `LOG_LEVEL`) into a `LogLevel`,
@@ -63,7 +102,7 @@ export class ConsoleLoggerAdapter implements LoggerPort {
       return;
     }
     const line = JSON.stringify({ ts: new Date().toISOString(), level, ...payload });
-    const out = this.useColor ? `${LEVEL_COLOR[level]}${line}${RESET}` : line;
+    const out = this.useColor ? `${selectColor(level, payload)}${line}${RESET}` : line;
     if (level === 'error') {
       console.error(out);
     } else if (level === 'warn') {
