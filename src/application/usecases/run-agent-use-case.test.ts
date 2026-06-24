@@ -115,6 +115,106 @@ describe('RunAgentUseCase', () => {
     assert.equal(first.name, 'get_weather');
   });
 
+  test('logs agent_run_end on normal completion', async () => {
+    const logged: { event: string; fields?: LogFields }[] = [];
+    const logger: LoggerPort = {
+      ...stubLoggerPort(),
+      log(_level: LogLevel, event: string, fields?: LogFields) {
+        logged.push({ event, fields });
+      },
+    };
+    const port = stubChatPort([{ type: 'content_stop', finishReason: 'stop' }]);
+    const useCase = new RunAgentUseCase(port, MODEL_REF, logger);
+    await collectEvents(useCase, makeRequest());
+
+    assert.ok(
+      logged.find((l) => l.event === 'agent_run_end'),
+      'agent_run_end must be logged on normal completion',
+    );
+  });
+
+  test('logs agent_run_end even when the consumer abandons the stream early', async () => {
+    const logged: { event: string; fields?: LogFields }[] = [];
+    const logger: LoggerPort = {
+      ...stubLoggerPort(),
+      log(_level: LogLevel, event: string, fields?: LogFields) {
+        logged.push({ event, fields });
+      },
+    };
+    // Simulates AgentSynthesisUseCase routing an answer turn to the ensemble:
+    // it pulls the first event then closes the iterator before completion.
+    const port = stubChatPort([
+      { type: 'content_delta', delta: 'partial answer' },
+      { type: 'content_stop', finishReason: 'stop' },
+    ]);
+    const useCase = new RunAgentUseCase(port, MODEL_REF, logger);
+    const iter = useCase.runAgent(makeRequest())[Symbol.asyncIterator]();
+    await iter.next();
+    await iter.return?.();
+
+    assert.ok(
+      logged.find((l) => l.event === 'agent_run_end'),
+      'agent_run_end must be logged when the stream is abandoned early',
+    );
+  });
+
+  test('does NOT log agent_run_end on adapter failure (logError is the terminal marker)', async () => {
+    const logged: { event: string; fields?: LogFields }[] = [];
+    let loggedError = false;
+    const logger: LoggerPort = {
+      ...stubLoggerPort(),
+      log(_level: LogLevel, event: string, fields?: LogFields) {
+        logged.push({ event, fields });
+      },
+      logError() {
+        loggedError = true;
+      },
+    };
+    const port: ChatModelPort = {
+      async complete(_req) {
+        return {
+          content: '',
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          model: '',
+        };
+      },
+      async *stream(_req: ChatRequest) {
+        throw new Error('upstream failure');
+      },
+    };
+    const useCase = new RunAgentUseCase(port, MODEL_REF, logger);
+    await collectEvents(useCase, makeRequest());
+
+    assert.equal(loggedError, true, 'logError must be the terminal marker on failure');
+    assert.equal(
+      logged.find((l) => l.event === 'agent_run_end'),
+      undefined,
+      'agent_run_end must not be logged on failure',
+    );
+  });
+
+  test('reuses a provided requestId across agent_run_start and agent_run_end', async () => {
+    const logged: { event: string; fields?: LogFields }[] = [];
+    const logger: LoggerPort = {
+      ...stubLoggerPort(),
+      log(_level: LogLevel, event: string, fields?: LogFields) {
+        logged.push({ event, fields });
+      },
+    };
+    const port = stubChatPort([{ type: 'content_stop', finishReason: 'stop' }]);
+    const useCase = new RunAgentUseCase(port, MODEL_REF, logger);
+
+    const events = [];
+    for await (const event of useCase.runAgent(makeRequest(), 'fixed-request-id')) {
+      events.push(event);
+    }
+
+    const start = logged.find((l) => l.event === 'agent_run_start');
+    const end = logged.find((l) => l.event === 'agent_run_end');
+    assert.equal((start?.fields as { requestId?: string }).requestId, 'fixed-request-id');
+    assert.equal((end?.fields as { requestId?: string }).requestId, 'fixed-request-id');
+  });
+
   test('ends with done event containing model and usage', async () => {
     const port = stubChatPort([
       { type: 'content_stop' },

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AgentService } from '../ports/agent-service.js';
 import type { FusionService } from '../ports/fusion-service.js';
 import type { FusionRequest } from '../../domain/model/fusion-types.js';
@@ -32,8 +33,14 @@ export class AgentSynthesisUseCase implements AgentService {
     private readonly loggerPort: LoggerPort,
   ) {}
 
-  async *runAgent(request: FusionRequest): AsyncIterable<FusionStreamEvent> {
-    const iter = this.innerAgent.runAgent(request)[Symbol.asyncIterator]();
+  async *runAgent(
+    request: FusionRequest,
+    requestId: string = randomUUID(),
+  ): AsyncIterable<FusionStreamEvent> {
+    // Honor a caller-supplied correlation id (falling back to a fresh one) so the
+    // routing decision (agent_route) and the inner agent run (agent_run_start/end)
+    // all log under the same requestId, correlated across wrapping layers.
+    const iter = this.innerAgent.runAgent(request, requestId)[Symbol.asyncIterator]();
     const buffer: FusionStreamEvent[] = [];
     let mode: 'tool' | 'synthesis' = 'synthesis';
     let iterDone = false;
@@ -73,7 +80,7 @@ export class AgentSynthesisUseCase implements AgentService {
         }
       }
 
-      this.loggerPort.log('info', 'agent_route', { mode });
+      this.loggerPort.log('info', 'agent_route', { requestId, mode });
 
       if (mode === 'tool') {
         // Flush buffer (any content preamble followed by the decisive
@@ -90,7 +97,13 @@ export class AgentSynthesisUseCase implements AgentService {
           yield step.value;
         }
       } else {
-        // Synthesis path: agent stream will be closed in the finally block.
+        // Synthesis path: close the agent preflight stream now (rather than in
+        // the finally below) so its agent_run_end marker is logged before the
+        // ensemble run begins, keeping the trace ordered and self-contained.
+        if (!iterDone) {
+          iterDone = true;
+          await iter.return?.();
+        }
         // Flatten tool messages and inject a no-tools directive so panel and
         // synthesizer models do not narrate tool-call syntax.
         yield* this.fusionService.runFusion({

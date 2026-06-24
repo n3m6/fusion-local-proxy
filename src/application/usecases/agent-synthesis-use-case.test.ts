@@ -248,6 +248,68 @@ describe('AgentSynthesisUseCase — synthesis turn (content_delta first)', () =>
     assert.ok(routeLog, 'must log agent_route');
     assert.equal((routeLog.fields as { mode: string }).mode, 'synthesis');
   });
+
+  test('logs a requestId on agent_route and forwards the same id to the inner agent', async () => {
+    let capturedRequestId: string | undefined;
+    const innerAgent: AgentService = {
+      async *runAgent(_request: FusionRequest, requestId?: string) {
+        capturedRequestId = requestId;
+        yield { type: 'content_delta', delta: 'draft' };
+      },
+    };
+    const logged: { event: string; fields?: LogFields }[] = [];
+    const logger: LoggerPort = {
+      ...stubLogger(),
+      log(_level: LogLevel, event: string, fields?: LogFields) {
+        logged.push({ event, fields });
+      },
+    };
+
+    const useCase = new AgentSynthesisUseCase(innerAgent, stubFusion([{ type: 'done' }]), logger);
+    await collect(useCase.runAgent(baseRequest()));
+
+    const routeLog = logged.find((l) => l.event === 'agent_route');
+    assert.ok(routeLog, 'must log agent_route');
+    const routeRequestId = (routeLog.fields as { requestId?: string }).requestId;
+    assert.ok(routeRequestId, 'agent_route must carry a requestId');
+    assert.equal(
+      capturedRequestId,
+      routeRequestId,
+      'inner agent must receive the same requestId logged on agent_route',
+    );
+  });
+
+  test('honors a caller-supplied requestId instead of generating its own', async () => {
+    let capturedRequestId: string | undefined;
+    const innerAgent: AgentService = {
+      async *runAgent(_request: FusionRequest, requestId?: string) {
+        capturedRequestId = requestId;
+        yield { type: 'content_delta', delta: 'draft' };
+      },
+    };
+    const logged: { event: string; fields?: LogFields }[] = [];
+    const logger: LoggerPort = {
+      ...stubLogger(),
+      log(_level: LogLevel, event: string, fields?: LogFields) {
+        logged.push({ event, fields });
+      },
+    };
+
+    const useCase = new AgentSynthesisUseCase(innerAgent, stubFusion([{ type: 'done' }]), logger);
+    await collect(useCase.runAgent(baseRequest(), 'caller-supplied-id'));
+
+    assert.equal(
+      capturedRequestId,
+      'caller-supplied-id',
+      'wrapper must forward the caller-supplied requestId to the inner agent',
+    );
+    const routeLog = logged.find((l) => l.event === 'agent_route');
+    assert.equal(
+      (routeLog?.fields as { requestId?: string }).requestId,
+      'caller-supplied-id',
+      'agent_route must log the caller-supplied requestId',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

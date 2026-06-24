@@ -15,8 +15,10 @@ export class RunAgentUseCase implements AgentService {
     private readonly loggerPort: LoggerPort,
   ) {}
 
-  async *runAgent(request: FusionRequest): AsyncIterable<FusionStreamEvent> {
-    const requestId = randomUUID();
+  async *runAgent(
+    request: FusionRequest,
+    requestId: string = randomUUID(),
+  ): AsyncIterable<FusionStreamEvent> {
     const messages = request.systemPrompt
       ? [{ role: 'system' as const, content: request.systemPrompt }, ...request.messages]
       : [...request.messages];
@@ -46,6 +48,7 @@ export class RunAgentUseCase implements AgentService {
     });
 
     let lastUsage = undefined;
+    let errored = false;
 
     try {
       for await (const chunk of this.chatPort.stream(chatRequest)) {
@@ -75,6 +78,7 @@ export class RunAgentUseCase implements AgentService {
         }
       }
     } catch (err) {
+      errored = true;
       this.loggerPort.logError('agent', toError(err), {
         requestId,
         modelId: this.modelRef.model,
@@ -85,9 +89,15 @@ export class RunAgentUseCase implements AgentService {
         message: err instanceof Error ? err.message : 'Agent call failed',
       };
       return;
+    } finally {
+      // Emit the end marker even when a consumer abandons this stream early
+      // (e.g. AgentSynthesisUseCase routes an answer turn to the ensemble), so
+      // every agent_run_start has a matching agent_run_end. The error path has
+      // its own terminal marker (logError), so skip the end log there.
+      if (!errored) {
+        this.loggerPort.log('info', 'agent_run_end', { requestId, modelId: this.modelRef.model });
+      }
     }
-
-    this.loggerPort.log('info', 'agent_run_end', { requestId, modelId: this.modelRef.model });
 
     yield {
       type: 'done',
