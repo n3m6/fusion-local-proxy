@@ -476,6 +476,23 @@ test('buildSynthesisUserPrompt instructions warn against regressions from behavi
   );
 });
 
+test('buildSynthesisSystemPrompt includes an OUTPUT CONTRACT instruction to preserve required output formats', () => {
+  const prompt = buildSynthesisSystemPrompt().toLowerCase();
+  assert.ok(prompt.includes('output contract'), 'must include an OUTPUT CONTRACT instruction');
+  assert.ok(
+    prompt.includes('format') && prompt.includes('precedence'),
+    'OUTPUT CONTRACT must require the specified output format to take precedence over default verbosity',
+  );
+});
+
+test('buildSynthesisSystemPrompt({ selfJudge: true }) also includes the OUTPUT CONTRACT instruction', () => {
+  const prompt = buildSynthesisSystemPrompt({ selfJudge: true }).toLowerCase();
+  assert.ok(
+    prompt.includes('output contract'),
+    'selfJudge mode must also include the OUTPUT CONTRACT instruction',
+  );
+});
+
 // ---------------------------------------------------------------------------
 // selfJudge mode — system prompt
 // ---------------------------------------------------------------------------
